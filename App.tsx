@@ -17,7 +17,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -479,6 +479,7 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
 type Tab = 'frequencies' | 'breath' | 'chakras';
 
 function AppContent() {
+  const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('frequencies');
 
   const [leftHz, setLeftHz] = useState(DEFAULT_LEFT);
@@ -860,11 +861,14 @@ function AppContent() {
     <View style={styles.root}>
       <WaveBackground band={activeBand} playing={isTonePlaying} />
       <StatusBar style="light" />
+      <View
+        pointerEvents="none"
+        style={[styles.lunarBar, { top: insets.top + 6 }]}
+      >
+        <Text style={styles.lunarGlyph}>{lunar.glyph}</Text>
+        <Text style={styles.lunarText}>{lunar.name}</Text>
+      </View>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.lunarBar} pointerEvents="none">
-          <Text style={styles.lunarGlyph}>{lunar.glyph}</Text>
-          <Text style={styles.lunarText}>{lunar.name}</Text>
-        </View>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
@@ -1556,7 +1560,7 @@ const styles = StyleSheet.create({
   },
   lunarBar: {
     position: 'absolute',
-    top: 8, right: 12,
+    right: 12,
     flexDirection: 'row',
     alignItems: 'center',
     zIndex: 100,
