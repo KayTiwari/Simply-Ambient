@@ -127,6 +127,52 @@ export type Dosha = {
   description: string;
 };
 
+export type Zodiac = {
+  id: string;
+  glyph: string;
+  name: string;
+  startMonth: number; startDay: number;
+  endMonth: number;   endDay: number;
+  element: 'Fire' | 'Earth' | 'Air' | 'Water';
+  qualities: string;
+  intention: string;
+  // Maps each zodiac to the chakra whose element matches.
+  // Air → Throat (Ether), Fire → Solar (Fire), Earth → Root (Earth), Water → Sacral (Water)
+  chakraId: 'cr-root' | 'cr-sacral' | 'cr-solar' | 'cr-heart' | 'cr-throat';
+  color: string;
+};
+
+export const ZODIAC: Zodiac[] = [
+  { id: 'aries',       glyph: '♈', name: 'Aries',       startMonth: 3,  startDay: 21, endMonth: 4,  endDay: 19, element: 'Fire',  qualities: 'Initiator · Bold',          intention: 'Lead with the courage that already lives in you.', chakraId: 'cr-solar',  color: '#FF5B5B' },
+  { id: 'taurus',      glyph: '♉', name: 'Taurus',      startMonth: 4,  startDay: 20, endMonth: 5,  endDay: 20, element: 'Earth', qualities: 'Steady · Sensual',          intention: 'Ground in what nourishes. Slow down to taste it.', chakraId: 'cr-root',   color: '#7FB45B' },
+  { id: 'gemini',      glyph: '♊', name: 'Gemini',      startMonth: 5,  startDay: 21, endMonth: 6,  endDay: 20, element: 'Air',   qualities: 'Curious · Versatile',       intention: 'Speak only what is true. Let the rest pass.',     chakraId: 'cr-throat', color: '#FFE078' },
+  { id: 'cancer',      glyph: '♋', name: 'Cancer',      startMonth: 6,  startDay: 21, endMonth: 7,  endDay: 22, element: 'Water', qualities: 'Nurturing · Intuitive',     intention: 'Tend to your inner home before the outer world.', chakraId: 'cr-sacral', color: '#A0D8FF' },
+  { id: 'leo',         glyph: '♌', name: 'Leo',         startMonth: 7,  startDay: 23, endMonth: 8,  endDay: 22, element: 'Fire',  qualities: 'Radiant · Generous',        intention: 'Shine without dimming for anyone.',               chakraId: 'cr-solar',  color: '#FFB05B' },
+  { id: 'virgo',       glyph: '♍', name: 'Virgo',       startMonth: 8,  startDay: 23, endMonth: 9,  endDay: 22, element: 'Earth', qualities: 'Discerning · Refined',      intention: 'Refine without becoming rigid.',                  chakraId: 'cr-root',   color: '#9affc8' },
+  { id: 'libra',       glyph: '♎', name: 'Libra',       startMonth: 9,  startDay: 23, endMonth: 10, endDay: 22, element: 'Air',   qualities: 'Harmonious · Fair',         intention: 'Balance is a verb, not a state.',                 chakraId: 'cr-throat', color: '#FFD0E1' },
+  { id: 'scorpio',     glyph: '♏', name: 'Scorpio',     startMonth: 10, startDay: 23, endMonth: 11, endDay: 21, element: 'Water', qualities: 'Deep · Transformative',     intention: 'Let what is dying complete its dying.',           chakraId: 'cr-sacral', color: '#A45BFF' },
+  { id: 'sagittarius', glyph: '♐', name: 'Sagittarius', startMonth: 11, startDay: 22, endMonth: 12, endDay: 21, element: 'Fire',  qualities: 'Seeker · Free',             intention: 'The far horizon begins under your feet.',         chakraId: 'cr-solar',  color: '#FF8A38' },
+  { id: 'capricorn',   glyph: '♑', name: 'Capricorn',   startMonth: 12, startDay: 22, endMonth: 1,  endDay: 19, element: 'Earth', qualities: 'Disciplined · Grounded',    intention: 'Build patiently. Stone by stone.',                chakraId: 'cr-root',   color: '#8A6B4A' },
+  { id: 'aquarius',    glyph: '♒', name: 'Aquarius',    startMonth: 1,  startDay: 20, endMonth: 2,  endDay: 18, element: 'Air',   qualities: 'Visionary · Independent',   intention: 'Imagine the world you wish to inhabit.',          chakraId: 'cr-throat', color: '#5BD0FF' },
+  { id: 'pisces',      glyph: '♓', name: 'Pisces',      startMonth: 2,  startDay: 19, endMonth: 3,  endDay: 20, element: 'Water', qualities: 'Dreamy · Compassionate',    intention: 'Dissolve into the larger flow.',                  chakraId: 'cr-sacral', color: '#5B6CFF' },
+];
+
+export function todaysSign(date: Date = new Date()): Zodiac {
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  for (const z of ZODIAC) {
+    if (z.startMonth === z.endMonth) {
+      if (m === z.startMonth && d >= z.startDay && d <= z.endDay) return z;
+    } else if (z.startMonth < z.endMonth) {
+      if ((m === z.startMonth && d >= z.startDay) || (m === z.endMonth && d <= z.endDay)) return z;
+    } else {
+      // wraps year (Capricorn)
+      if ((m === z.startMonth && d >= z.startDay) || (m === z.endMonth && d <= z.endDay)) return z;
+    }
+  }
+  return ZODIAC[0];
+}
+
 export const DOSHAS: Dosha[] = [
   {
     id: 'vata',
@@ -561,7 +607,15 @@ function AppContent() {
       slideTimeoutRef.current = null;
     }
     slidePendingRef.current = null;
-    try { tonePlayerRef.current?.pause(); } catch {}
+    const player = tonePlayerRef.current;
+    tonePlayerRef.current = null;
+    if (player) {
+      try { (player as any).loop = false; } catch {}
+      try { player.volume = 0; } catch {}
+      try { player.pause(); } catch {}
+      try { player.release(); } catch {}
+      try { (player as any).remove?.(); } catch {}
+    }
     setIsTonePlaying(false);
     setIsToneLoading(false);
   }
@@ -695,6 +749,20 @@ function AppContent() {
     setRightHz(r);
     setActivePresetId(`dosha-${d.id}`);
     setActiveBand('tuning');
+    if (stateRef.current.isTonePlaying) loadAndPlay(l, r);
+  }
+
+  function applyZodiac(z: Zodiac) {
+    // Pull the matching chakra and apply it, but mark the preset id with a
+    // zodiac prefix so the zodiac chip highlights instead of the chakra card.
+    const c = CHAKRAS.find(ch => ch.id === z.chakraId);
+    if (!c) return;
+    const l = clampHz(c.hz - 3);
+    const r = clampHz(c.hz + 3);
+    setLeftHz(l);
+    setRightHz(r);
+    setActivePresetId(`z-${z.id}`);
+    setActiveBand(c.band);
     if (stateRef.current.isTonePlaying) loadAndPlay(l, r);
   }
 
@@ -846,10 +914,16 @@ function AppContent() {
               <ChakrasView
                 chakras={CHAKRAS}
                 doshas={DOSHAS}
+                zodiac={ZODIAC}
+                todaySign={todaysSign()}
+                lunar={lunar}
                 activePresetId={activePresetId}
                 onApplyChakra={applyChakra}
                 onApplyDosha={applyDosha}
+                onApplyZodiac={applyZodiac}
                 toneIsPlaying={isTonePlaying}
+                toneIsLoading={isToneLoading}
+                onTogglePlay={togglePlay}
                 beatHz={beat}
                 bandName={band.name}
                 bandColor={beatColor}
@@ -1482,11 +1556,16 @@ const styles = StyleSheet.create({
   },
   lunarBar: {
     position: 'absolute',
-    top: 4, right: 14,
+    top: 8, right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    zIndex: 10,
-    opacity: 0.55,
+    zIndex: 100,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.20)',
   },
   lunarGlyph: {
     color: '#fff',
@@ -1494,7 +1573,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   lunarText: {
-    color: '#fff',
+    color: '#ffffffdd',
     fontSize: 10,
     letterSpacing: 1,
     fontStyle: 'italic',

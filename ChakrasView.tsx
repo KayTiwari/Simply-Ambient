@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -7,25 +8,36 @@ import {
   View,
 } from 'react-native';
 
-import type { Chakra, Dosha } from './App';
+import type { Chakra, Dosha, Zodiac } from './App';
 
 type Props = {
   chakras: Chakra[];
   doshas: Dosha[];
+  zodiac: Zodiac[];
+  todaySign: Zodiac;
+  lunar: { glyph: string; name: string; illum: number };
   activePresetId: string | null;
   onApplyChakra: (c: Chakra) => void;
   onApplyDosha: (d: Dosha) => void;
+  onApplyZodiac: (z: Zodiac) => void;
   toneIsPlaying: boolean;
+  toneIsLoading: boolean;
+  onTogglePlay: () => void;
   beatHz: number;
   bandColor: string;
   bandName: string;
 };
 
 export default function ChakrasView({
-  chakras, doshas, activePresetId,
-  onApplyChakra, onApplyDosha,
-  toneIsPlaying, beatHz, bandName, bandColor,
+  chakras, doshas, zodiac, todaySign, lunar, activePresetId,
+  onApplyChakra, onApplyDosha, onApplyZodiac,
+  toneIsPlaying, toneIsLoading, onTogglePlay,
+  beatHz, bandName, bandColor,
 }: Props) {
+  const dateText = new Date().toLocaleDateString(undefined, {
+    weekday: 'long', month: 'long', day: 'numeric',
+  });
+  const illumPct = Math.round(lunar.illum * 100);
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.headerWrap}>
@@ -38,20 +50,89 @@ export default function ChakrasView({
         </View>
       </View>
 
-      {toneIsPlaying ? (
-        <View style={styles.toneStrip}>
-          <View style={[styles.toneDot, { backgroundColor: bandColor }]} />
-          <Text style={styles.toneText}>
-            <Text style={{ color: bandColor, fontWeight: '700' }}>{bandName}</Text>
-            <Text style={{ color: '#ffffff99' }}> · {beatHz} Hz binaural still playing</Text>
-          </Text>
-        </View>
-      ) : null}
+      <View style={styles.controlRow}>
+        {toneIsPlaying ? (
+          <View style={[styles.toneStrip, { flex: 1, marginHorizontal: 0 }]}>
+            <View style={[styles.toneDot, { backgroundColor: bandColor }]} />
+            <Text style={styles.toneText} numberOfLines={1}>
+              <Text style={{ color: bandColor, fontWeight: '700' }}>{bandName}</Text>
+              <Text style={{ color: '#ffffff99' }}> · {beatHz} Hz</Text>
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.controlHint}>Tap a chakra, then play.</Text>
+        )}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={onTogglePlay}
+          style={[styles.playBtn, { backgroundColor: toneIsPlaying ? '#fff' : bandColor }]}
+        >
+          {toneIsLoading ? (
+            <ActivityIndicator color="#0B0B1F" />
+          ) : (
+            <Text style={styles.playBtnText}>{toneIsPlaying ? 'STOP' : 'PLAY'}</Text>
+          )}
+        </TouchableOpacity>
+      </View>
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Today widget — date, sun sign, intention, lunar */}
+        <View style={[styles.todayCard, { borderColor: todaySign.color + '55' }]}>
+          <Text style={styles.todayLabel}>TODAY · {dateText.toUpperCase()}</Text>
+          <View style={styles.todayRow}>
+            <Text style={[styles.zGlyph, { color: todaySign.color, fontSize: 38 }]}>{todaySign.glyph}</Text>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={styles.todaySignName}>{todaySign.name}</Text>
+              <Text style={[styles.metaText, { color: todaySign.color }]}>
+                {todaySign.element} · {todaySign.qualities}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.todayIntention}>“{todaySign.intention}”</Text>
+          <View style={styles.todayMoon}>
+            <Text style={styles.todayMoonGlyph}>{lunar.glyph}</Text>
+            <Text style={styles.todayMoonText}>
+              {lunar.name} · {illumPct}% illuminated
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.sectionLabel}>ZODIAC</Text>
+        <Text style={styles.sectionSub}>Tap any sign to tune to its element's chakra</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.zodiacRow}
+        >
+          {zodiac.map(z => {
+            const active = activePresetId === `z-${z.id}`;
+            return (
+              <TouchableOpacity
+                key={z.id}
+                activeOpacity={0.85}
+                onPress={() => onApplyZodiac(z)}
+                style={[
+                  styles.zodiacChip,
+                  {
+                    borderColor: active ? z.color : z.color + '55',
+                    backgroundColor: active ? z.color + '22' : 'rgba(0,0,0,0.30)',
+                  },
+                ]}
+              >
+                <Text style={[styles.zGlyph, { color: z.color }]}>{z.glyph}</Text>
+                <Text style={styles.zName}>{z.name}</Text>
+                <Text style={[styles.zElement, { color: z.color }]}>{z.element}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>CHAKRAS</Text>
+        <Text style={styles.sectionSub}>Seven energy gates of the body</Text>
+
         {chakras.map(c => {
           const active = activePresetId === c.id;
           return (
@@ -171,6 +252,35 @@ const styles = StyleSheet.create({
   },
   toneDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
   toneText: { fontSize: 12, letterSpacing: 0.5 },
+  controlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  controlHint: {
+    flex: 1,
+    color: '#ffffff77',
+    fontSize: 12,
+    fontStyle: 'italic',
+    letterSpacing: 0.5,
+  },
+  playBtn: {
+    height: 44,
+    paddingHorizontal: 22,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+    minWidth: 96,
+  },
+  playBtnText: {
+    color: '#0B0B1F',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 3,
+  },
 
   card: {
     backgroundColor: 'rgba(0,0,0,0.30)',
@@ -228,4 +338,45 @@ const styles = StyleSheet.create({
     color: '#ffffff66', fontSize: 12, textAlign: 'center',
     marginTop: 24, paddingHorizontal: 12, fontStyle: 'italic', lineHeight: 18,
   },
+
+  todayCard: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: 18, padding: 16, marginBottom: 18, borderWidth: 1,
+  },
+  todayLabel: {
+    color: '#ffffff80', fontSize: 10, letterSpacing: 2, fontWeight: '600',
+    marginBottom: 8,
+  },
+  todayRow: { flexDirection: 'row', alignItems: 'center' },
+  todaySignName: {
+    color: '#fff',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 26,
+    letterSpacing: 1,
+  },
+  todayIntention: {
+    color: '#ffffffcc', fontSize: 14, fontStyle: 'italic',
+    marginTop: 12, lineHeight: 20,
+  },
+  todayMoon: {
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: 14, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  todayMoonGlyph: { color: '#ffffffcc', fontSize: 16, marginRight: 8 },
+  todayMoonText: { color: '#ffffff99', fontSize: 12, letterSpacing: 0.5 },
+
+  zodiacRow: { paddingRight: 12, paddingVertical: 4 },
+  zodiacChip: {
+    minWidth: 84,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    marginRight: 8,
+    borderWidth: 1,
+  },
+  zGlyph: { fontSize: 26, lineHeight: 32 },
+  zName: { color: '#fff', fontSize: 12, fontWeight: '600', marginTop: 2, letterSpacing: 0.5 },
+  zElement: { fontSize: 9, letterSpacing: 1, fontWeight: '600', marginTop: 2 },
 });
