@@ -29,6 +29,12 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  useFonts,
+  CormorantGaramond_400Regular,
+  CormorantGaramond_500Medium,
+  CormorantGaramond_500Medium_Italic,
+} from '@expo-google-fonts/cormorant-garamond';
 
 import BreathworkView from './BreathworkView';
 
@@ -79,28 +85,36 @@ type TuningPreset = {
   name: string;
   intent: string;
   blurb: string;
-  origin: 'solfeggio' | 'natural';
+  origin: 'solfeggio' | 'natural' | 'cosmic' | 'archaeo' | 'scientific';
 };
 
 const PRESETS: BuiltInPreset[] = [
-  { id: 'delta', band: 'delta', name: 'Delta', range: '0.5–4 Hz',  beatHz: 2,  carrier: 200, color: '#5B6CFF', blurb: 'Surrender · Restoration' },
-  { id: 'theta', band: 'theta', name: 'Theta', range: '4–8 Hz',    beatHz: 6,  carrier: 200, color: '#8A5BFF', blurb: 'Visualize · Receive' },
-  { id: 'alpha', band: 'alpha', name: 'Alpha', range: '8–13 Hz',   beatHz: 10, carrier: 200, color: '#5BD0FF', blurb: 'Aligned focus · Allow' },
-  { id: 'beta',  band: 'beta',  name: 'Beta',  range: '13–30 Hz',  beatHz: 18, carrier: 200, color: '#FFB05B', blurb: 'Direct · Take action' },
-  { id: 'gamma', band: 'gamma', name: 'Gamma', range: '30–100 Hz', beatHz: 40, carrier: 200, color: '#FF5B9C', blurb: 'Insight · Knowing' },
+  { id: 'delta',    band: 'delta', name: 'Delta',    range: '0.5–4 Hz',  beatHz: 2,  carrier: 200, color: '#5B6CFF', blurb: 'Surrender · Restoration' },
+  { id: 'theta',    band: 'theta', name: 'Theta',    range: '4–8 Hz',    beatHz: 6,  carrier: 200, color: '#8A5BFF', blurb: 'Visualize · Receive' },
+  { id: 'schumann', band: 'theta', name: 'Schumann', range: '7.83 Hz',   beatHz: 8,  carrier: 200, color: '#9affc8', blurb: 'Earth’s heartbeat' },
+  { id: 'alpha',    band: 'alpha', name: 'Alpha',    range: '8–13 Hz',   beatHz: 10, carrier: 200, color: '#5BD0FF', blurb: 'Aligned focus · Allow' },
+  { id: 'beta',     band: 'beta',  name: 'Beta',     range: '13–30 Hz',  beatHz: 18, carrier: 200, color: '#FFB05B', blurb: 'Direct · Take action' },
+  { id: 'gamma',    band: 'gamma', name: 'Gamma',    range: '30–100 Hz', beatHz: 40, carrier: 200, color: '#FF5B9C', blurb: 'Insight · Knowing' },
+  { id: 'gamma40',  band: 'gamma', name: 'Gamma-40', range: '40 Hz',     beatHz: 40, carrier: 250, color: '#FF8FB1', blurb: 'Memory · Clarity' },
 ];
 
+type TuningOrigin = 'solfeggio' | 'natural' | 'cosmic' | 'archaeo' | 'scientific';
+
 const TUNINGS: TuningPreset[] = [
-  { id: 't174', hz: 174, name: '174 Hz', intent: 'Pain · Grounding',     blurb: 'Eases discomfort',        origin: 'solfeggio' },
-  { id: 't285', hz: 285, name: '285 Hz', intent: 'Tissue · Renewal',     blurb: 'Cellular repair',         origin: 'solfeggio' },
-  { id: 't396', hz: 396, name: '396 Hz', intent: 'Release fear',         blurb: 'Liberation from guilt',   origin: 'solfeggio' },
-  { id: 't417', hz: 417, name: '417 Hz', intent: 'Facilitate change',    blurb: 'Undoing patterns',        origin: 'solfeggio' },
-  { id: 't432', hz: 432, name: '432 Hz', intent: 'Earth resonance',      blurb: 'Calm · Grounded tuning',  origin: 'natural'   },
-  { id: 't528', hz: 528, name: '528 Hz', intent: 'Love · Miracle tone',  blurb: 'DNA repair · Heart',      origin: 'solfeggio' },
-  { id: 't639', hz: 639, name: '639 Hz', intent: 'Connection',           blurb: 'Harmonize relationships', origin: 'solfeggio' },
-  { id: 't741', hz: 741, name: '741 Hz', intent: 'Expression',           blurb: 'Awakening · Solutions',   origin: 'solfeggio' },
-  { id: 't852', hz: 852, name: '852 Hz', intent: 'Intuition',            blurb: 'Spiritual order',         origin: 'solfeggio' },
-  { id: 't963', hz: 963, name: '963 Hz', intent: 'Divine consciousness', blurb: 'Unity · Oneness',         origin: 'solfeggio' },
+  { id: 't111', hz: 111, name: '111 Hz', intent: 'Divine resonance',     blurb: 'Hypogeum cymatic tone',   origin: 'archaeo'    },
+  { id: 't136', hz: 136, name: '136 Hz', intent: 'OM · Cosmic breath',   blurb: 'Earth orbital tone',      origin: 'cosmic'     },
+  { id: 't174', hz: 174, name: '174 Hz', intent: 'Pain · Grounding',     blurb: 'Eases discomfort',        origin: 'solfeggio'  },
+  { id: 't256', hz: 256, name: '256 Hz', intent: 'Scientific C',         blurb: 'Verdi · ancient pitch',   origin: 'scientific' },
+  { id: 't285', hz: 285, name: '285 Hz', intent: 'Tissue · Renewal',     blurb: 'Cellular repair',         origin: 'solfeggio'  },
+  { id: 't396', hz: 396, name: '396 Hz', intent: 'Release fear',         blurb: 'Liberation from guilt',   origin: 'solfeggio'  },
+  { id: 't417', hz: 417, name: '417 Hz', intent: 'Facilitate change',    blurb: 'Undoing patterns',        origin: 'solfeggio'  },
+  { id: 't432', hz: 432, name: '432 Hz', intent: 'Earth resonance',      blurb: 'Calm · Grounded tuning',  origin: 'natural'    },
+  { id: 't444', hz: 444, name: '444 Hz', intent: 'Angelic tuning',       blurb: 'Companion to 528',        origin: 'natural'    },
+  { id: 't528', hz: 528, name: '528 Hz', intent: 'Love · Miracle tone',  blurb: 'DNA repair · Heart',      origin: 'solfeggio'  },
+  { id: 't639', hz: 639, name: '639 Hz', intent: 'Connection',           blurb: 'Harmonize relationships', origin: 'solfeggio'  },
+  { id: 't741', hz: 741, name: '741 Hz', intent: 'Expression',           blurb: 'Awakening · Solutions',   origin: 'solfeggio'  },
+  { id: 't852', hz: 852, name: '852 Hz', intent: 'Intuition',            blurb: 'Spiritual order',         origin: 'solfeggio'  },
+  { id: 't963', hz: 963, name: '963 Hz', intent: 'Divine consciousness', blurb: 'Unity · Oneness',         origin: 'solfeggio'  },
 ];
 
 type Palette = {
@@ -214,116 +228,97 @@ function ManifestQuote() {
 //   WaveBackground — ocean waves animated when playing
 // ---------------------------------------------------------------------------
 
-// Chameleon-style background: two huge rotating rounded shapes whose visible
-// portions morph as they slowly spin past each other, plus a slowly-pulsing
-// accent aura. Inspired by Rowno's "Chameleon background" CodePen.
+// Background: a rich base gradient plus two cross-fading gradient layers in
+// opposing diagonals. As the layers crossfade, the perceived gradient direction
+// shifts — no rotating shapes, no blobs, just a morphing color field.
 function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) {
   const palette = PALETTES[band];
-  const rot1 = useRef(new Animated.Value(0)).current;
-  const rot2 = useRef(new Animated.Value(0)).current;
   const xfade = useRef(new Animated.Value(0)).current;
-  const aura = useRef(new Animated.Value(0)).current;
-
-  // Speed up rotation while playing, slow it during idle.
-  const rotDur1 = playing ? 60000 : 130000;
-  const rotDur2 = playing ? 90000 : 180000;
+  const drift = useRef(new Animated.Value(0)).current;
+  const wash = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (!playing) {
+      xfade.stopAnimation();
+      drift.stopAnimation();
+      wash.stopAnimation();
+      return;
+    }
     const a = Animated.loop(
-      Animated.timing(rot1, { toValue: 1, duration: rotDur1, easing: Easing.linear, useNativeDriver: true }),
+      Animated.sequence([
+        Animated.timing(xfade, { toValue: 1, duration: 13000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(xfade, { toValue: 0, duration: 13000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
     );
     const b = Animated.loop(
-      Animated.timing(rot2, { toValue: 1, duration: rotDur2, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(drift, { toValue: 1, duration: 50000, easing: Easing.linear, useNativeDriver: true }),
     );
     const c = Animated.loop(
       Animated.sequence([
-        Animated.timing(xfade, { toValue: 1, duration: 14000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(xfade, { toValue: 0, duration: 14000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(wash, { toValue: 1, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(wash, { toValue: 0, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     );
-    const d = Animated.loop(
-      Animated.sequence([
-        Animated.timing(aura, { toValue: 1, duration: 7000, useNativeDriver: true }),
-        Animated.timing(aura, { toValue: 0, duration: 7000, useNativeDriver: true }),
-      ]),
-    );
-    rot1.setValue(0); rot2.setValue(0);
-    a.start(); b.start(); c.start(); d.start();
-    return () => { a.stop(); b.stop(); c.stop(); d.stop(); };
-  }, [rotDur1, rotDur2, rot1, rot2, xfade, aura]);
+    drift.setValue(0);
+    a.start(); b.start(); c.start();
+    return () => { a.stop(); b.stop(); c.stop(); };
+  }, [playing, xfade, drift, wash]);
 
-  const r1 = rot1.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  const r2 = rot2.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
-  const blob1Opacity = xfade.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0.35] });
-  const blob2Opacity = xfade.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.6] });
-  const blob3Opacity = xfade.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.55] });
-  const auraOpacity = aura.interpolate({ inputRange: [0, 1], outputRange: [0.06, 0.18] });
-
-  const blobSize = Math.max(SCREEN_W, SCREEN_H) * 1.7;
+  const op1 = xfade.interpolate({ inputRange: [0, 1], outputRange: [0.95, 0.20] });
+  const op2 = xfade.interpolate({ inputRange: [0, 1], outputRange: [0.20, 0.95] });
+  const driftY = drift.interpolate({ inputRange: [0, 1], outputRange: [0, -SCREEN_H * 0.18] });
+  const washOpacity = wash.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.7] });
 
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.base[1], overflow: 'hidden' }]} pointerEvents="none">
-      {/* Soft base gradient for depth */}
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.base[0], overflow: 'hidden' }]} pointerEvents="none">
+      {/* Static rich base — always shows even when paused */}
       <LinearGradient
-        colors={[palette.base[0], palette.base[1], palette.base[2]]}
+        colors={[palette.base[0], palette.waves[0], palette.base[1], palette.base[2]]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Blob 1 — accent color, rounded square, rotates clockwise, top-left bias */}
+      {/* Layer A — diagonal TL → BR, secondary tones with a hot accent stop */}
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: op1 }]}>
+        <LinearGradient
+          colors={[palette.waves[1], palette.base[1], palette.accent + 'cc', palette.waves[0]]}
+          locations={[0, 0.4, 0.7, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+
+      {/* Layer B — counter-diagonal TR → BL, brighter tones */}
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: op2 }]}>
+        <LinearGradient
+          colors={[palette.accent + 'cc', palette.waves[2], palette.base[1], palette.waves[0]]}
+          locations={[0, 0.3, 0.65, 1]}
+          start={{ x: 1, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+
+      {/* Slow vertical accent stripe drifting upward — adds visible motion */}
       <Animated.View
         style={{
           position: 'absolute',
-          left: SCREEN_W / 2 - blobSize / 2 - blobSize * 0.18,
-          top:  SCREEN_H / 2 - blobSize / 2 - blobSize * 0.12,
-          width: blobSize, height: blobSize,
-          borderRadius: blobSize * 0.32,
-          backgroundColor: palette.accent,
-          opacity: blob1Opacity,
-          transform: [{ rotate: r1 }],
+          left: 0, right: 0,
+          top: 0, height: SCREEN_H * 1.6,
+          opacity: washOpacity,
+          transform: [{ translateY: driftY }],
         }}
-      />
-
-      {/* Blob 2 — secondary color, more rounded, rotates counter-clockwise, bottom-right bias */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          left: SCREEN_W / 2 - blobSize / 2 + blobSize * 0.20,
-          top:  SCREEN_H / 2 - blobSize / 2 + blobSize * 0.15,
-          width: blobSize, height: blobSize,
-          borderRadius: blobSize * 0.42,
-          backgroundColor: palette.waves[1],
-          opacity: blob2Opacity,
-          transform: [{ rotate: r2 }],
-        }}
-      />
-
-      {/* Blob 3 — deepest tone, very rounded ellipse-like, rotates with blob1 but slower */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          left: SCREEN_W / 2 - blobSize / 2,
-          top:  SCREEN_H / 2 - blobSize / 2 + blobSize * 0.05,
-          width: blobSize * 1.05, height: blobSize * 0.85,
-          borderRadius: blobSize * 0.5,
-          backgroundColor: palette.waves[0],
-          opacity: blob3Opacity,
-          transform: [{ rotate: r1 }],
-        }}
-      />
-
-      {/* Subtle breathing aura — accent tint on top */}
-      <Animated.View
-        style={[
-          StyleSheet.absoluteFill,
-          { backgroundColor: palette.accent, opacity: auraOpacity },
-        ]}
-      />
-
-      {/* Soft dark vignette so foreground text stays legible */}
-      <LinearGradient
-        colors={['rgba(0,0,0,0.25)', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.35)']}
-        style={StyleSheet.absoluteFill}
-      />
+      >
+        <LinearGradient
+          colors={[palette.accent + '00', palette.accent + '55', palette.accent + '00']}
+          locations={[0, 0.5, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={{ width: '100%', height: '100%' }}
+        />
+      </Animated.View>
     </View>
   );
 }
@@ -491,18 +486,38 @@ function AppContent() {
 
   // --- Frequency commits (slider release / numpad submit) ------------------
 
+  // Set band/preset state from a candidate L/R pair. If the carrier matches a
+  // tuning frequency (within 1 Hz), light up the gold tuning theme; otherwise
+  // fall back to the brainwave band derived from the beat.
+  function applyDetection(l: number, r: number) {
+    const carrier = (l + r) / 2;
+    const tuning = TUNINGS.find(t => Math.abs(t.hz - carrier) <= 1);
+    if (tuning) {
+      setActivePresetId(tuning.id);
+      setActiveBand('tuning');
+    } else {
+      setActivePresetId(null);
+      setActiveBand(bandFor(Math.abs(l - r)).key);
+    }
+  }
+
   function onLeftSlide(v: number) {
-    liveUpdate(clampHz(v), stateRef.current.rightHz);
+    const c = clampHz(v);
+    setLeftHz(c);
+    applyDetection(c, stateRef.current.rightHz);
+    liveUpdate(c, stateRef.current.rightHz);
   }
   function onRightSlide(v: number) {
-    liveUpdate(stateRef.current.leftHz, clampHz(v));
+    const c = clampHz(v);
+    setRightHz(c);
+    applyDetection(stateRef.current.leftHz, c);
+    liveUpdate(stateRef.current.leftHz, c);
   }
 
   function commitLeft(v: number) {
     const c = clampHz(v);
     setLeftHz(c);
-    setActivePresetId(null);
-    setActiveBand('none');
+    applyDetection(c, stateRef.current.rightHz);
     if (slideTimeoutRef.current) {
       clearTimeout(slideTimeoutRef.current);
       slideTimeoutRef.current = null;
@@ -513,8 +528,7 @@ function AppContent() {
   function commitRight(v: number) {
     const c = clampHz(v);
     setRightHz(c);
-    setActivePresetId(null);
-    setActiveBand('none');
+    applyDetection(stateRef.current.leftHz, c);
     if (slideTimeoutRef.current) {
       clearTimeout(slideTimeoutRef.current);
       slideTimeoutRef.current = null;
@@ -735,9 +749,30 @@ function AppContent() {
 }
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    CormorantGaramond_400Regular,
+    CormorantGaramond_500Medium,
+    CormorantGaramond_500Medium_Italic,
+  });
+  const fadeIn = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      Animated.timing(fadeIn, {
+        toValue: 1,
+        duration: 1600,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [fontsLoaded, fadeIn]);
+
+  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: '#0B0B1F' }} />;
   return (
     <SafeAreaProvider>
-      <AppContent />
+      <Animated.View style={{ flex: 1, opacity: fadeIn }}>
+        <AppContent />
+      </Animated.View>
     </SafeAreaProvider>
   );
 }
@@ -819,7 +854,8 @@ function FrequenciesView(props: FreqViewProps) {
     >
       <View style={styles.header}>
         <View style={styles.enso} />
-        <Text style={styles.title}>Binaural{'\n'}Frequency Generator</Text>
+        <Text style={styles.ambience}>Ambience</Text>
+        <Text style={styles.title}>Binaural Frequency Generator</Text>
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />
           <Text style={styles.subtitle}>Manifest your Zen</Text>
@@ -843,9 +879,7 @@ function FrequenciesView(props: FreqViewProps) {
           <Text style={[styles.bandText, { color: beatColor }]}>
             {activeTuning
               ? `${activeTuning.name} · ${activeTuning.intent}`
-              : activeBand === 'none'
-                ? `${band.name} range`
-                : band.name}
+              : band.name}
           </Text>
         </View>
       </View>
@@ -1059,10 +1093,26 @@ function FrequencyControl({ ear, label, hz, color, onCommit, onSlide }: ControlP
         }}
         onSlidingComplete={v => onCommit(Math.round(v))}
       />
+      <View style={styles.minMaxRow}>
+        <Text style={styles.minMaxText}>{MIN_HZ} Hz</Text>
+        <Text style={styles.minMaxText}>{MAX_HZ} Hz</Text>
+      </View>
       <View style={styles.rangeRow}>
-        <Text style={styles.rangeText}>{MIN_HZ} Hz</Text>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => onCommit(hz - 1)}
+          style={[styles.adjBtn, { borderColor: color + '99' }]}
+        >
+          <Text style={[styles.adjBtnText, { color }]}>−1</Text>
+        </TouchableOpacity>
         <Text style={styles.rangeHint}>tap number to type</Text>
-        <Text style={styles.rangeText}>{MAX_HZ} Hz</Text>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => onCommit(hz + 1)}
+          style={[styles.adjBtn, { borderColor: color + '99' }]}
+        >
+          <Text style={[styles.adjBtnText, { color }]}>+1</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -1085,13 +1135,22 @@ const styles = StyleSheet.create({
   enso: {
     width: 42, height: 42, borderRadius: 21,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)',
-    marginBottom: 16,
+    marginBottom: 14,
     transform: [{ rotate: '-18deg' }],
   },
+  ambience: {
+    color: '#fff',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 46,
+    letterSpacing: 4,
+    textAlign: 'center',
+    lineHeight: 52,
+  },
   title: {
-    color: '#fff', fontSize: 18, fontWeight: '200',
-    letterSpacing: 5, textAlign: 'center', lineHeight: 26,
+    color: '#ffffff99', fontSize: 10, fontWeight: '400',
+    letterSpacing: 4, textAlign: 'center', lineHeight: 16,
     textTransform: 'uppercase',
+    marginTop: 2,
   },
   dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14 },
   dividerLine: { width: 28, height: 1, backgroundColor: 'rgba(255,255,255,0.35)' },
@@ -1156,10 +1215,22 @@ const styles = StyleSheet.create({
   slider: { width: '100%', height: 36, marginTop: 6 },
   rangeRow: {
     flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', paddingHorizontal: 4, marginTop: 2,
+    alignItems: 'center', paddingHorizontal: 4, marginTop: 6,
   },
   rangeText: { color: '#ffffff55', fontSize: 11 },
   rangeHint: { color: '#ffffff55', fontSize: 10, fontStyle: 'italic' },
+  minMaxRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    paddingHorizontal: 4, marginTop: -2,
+  },
+  minMaxText: { color: '#ffffff44', fontSize: 9, letterSpacing: 0.5 },
+  adjBtn: {
+    paddingHorizontal: 14, paddingVertical: 5,
+    borderWidth: 1, borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    minWidth: 48, alignItems: 'center',
+  },
+  adjBtnText: { fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
 
   sectionLabel: {
     color: '#ffffff80', fontSize: 11, letterSpacing: 2, fontWeight: '600',

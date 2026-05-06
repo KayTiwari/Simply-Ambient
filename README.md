@@ -2,6 +2,13 @@
 
 > A binaural frequency generator and breath-work companion for Android and iOS.
 
+<p align="center">
+  <img src="screenshots/1.jpg" width="22%" alt="Frequencies tab" />
+  <img src="screenshots/2.jpg" width="22%" alt="Tuning preset" />
+  <img src="screenshots/3.jpg" width="22%" alt="Breath techniques" />
+  <img src="screenshots/4.jpg" width="22%" alt="Breath session" />
+</p>
+
 Ambience pairs custom binaural beats with guided breath techniques. Pick a brainwave band, tune each ear independently (or type the exact Hz), layer in your own background music, save your favorite mixes, and step through breath sessions with phase-aware animation.
 
 The philosophy is rooted in **New Thought / manifestation**: tune your vibration, set your intention, let the rest follow.
@@ -14,19 +21,27 @@ The philosophy is rooted in **New Thought / manifestation**: tune your vibration
 
 - **Independent left / right ear sliders** (50–1000 Hz). Tap any displayed Hz value to type it directly with the numpad.
 - **Live audio updates as you slide** — the beat changes in real time without the old frequency overlapping the new one.
-- **5 brainwave-band presets** with manifestation-aligned blurbs:
+- **Brainwave-band presets** with manifestation-aligned blurbs:
   - **Delta** (0.5–4 Hz) — *Surrender · Restoration*
   - **Theta** (4–8 Hz) — *Visualize · Receive*
+  - **Schumann** (7.83 Hz) — *Earth's heartbeat* (the planet's electromagnetic resonance)
   - **Alpha** (8–13 Hz) — *Aligned focus · Allow*
   - **Beta** (13–30 Hz) — *Direct · Take action*
   - **Gamma** (30–100 Hz) — *Insight · Knowing*
-- **Solfeggio + natural tuning frequencies** — 174, 285, 396, 417, 432, 528, 639, 741, 852, 963 Hz. Each is wrapped in a default 6 Hz theta beat (carrier ± 3 Hz) so you get both the resonance of the famous frequency and a real binaural beat.
+  - **Gamma-40** (40 Hz @ 250 Hz carrier) — *Memory · Clarity* (the frequency studied for cognitive support)
+- **Tuning frequencies** — wrapped in a default 6 Hz theta beat so you get both the carrier's resonance and a real binaural beat:
+  - **111 Hz** — Hypogeum cymatic tone (archaeo-acoustic)
+  - **136 Hz** — OM / Cosmic Earth-orbit tone
+  - **174 Hz** — Pain · Grounding (Solfeggio)
+  - **256 Hz** — Scientific C / Verdi tuning
+  - **285, 396, 417, 432, 444, 528, 639, 741, 852, 963 Hz** — full Solfeggio + companion tunings
+- **Slide-to-tuning detection** — slide the L/R sliders so the carrier hits a tuning frequency (within 1 Hz) and the gold tuning theme + label activate automatically.
 - **Custom presets** — name and save the current L/R combination. Long-press a saved chip to delete it. Built-in presets are protected. Stored locally via AsyncStorage so they survive app restarts.
 - **Background music** — pick any audio file from your device. Plays alongside the binaural tones with its own play/pause and volume slider.
 
 ### 🌬 Breath Work tab
 
-Seven techniques across two categories:
+Sixteen techniques across two categories:
 
 | Category | Technique | Pattern |
 |---|---|---|
@@ -34,9 +49,17 @@ Seven techniques across two categories:
 | Calming | 4-7-8 | 4 in · 7 hold · 8 out |
 | Calming | Diaphragmatic | 4 in · 6 out |
 | Calming | Pursed-Lip | 2 in · 4 out |
+| Calming | Coherent (5·5) | 5 in · 5 out — resonant breathing for HRV |
+| Calming | Bhramari (Bee) | 4 in · 8 humming exhale — vagal stimulation |
+| Calming | Nadi Shodhana | 4 in · 2 hold · 4 out — alternate-nostril |
+| Calming | Sitali (Cooling) | 4 in (through tongue) · 6 out — pitta-cooling |
+| Calming | Physiological Sigh | 2 short in · long out — fastest stress reset |
 | Activating | Holotropic | 1 in · 1 out (rapid) |
 | Activating | Shamanic | 2 in · 1 out |
 | Activating | SOMA | 3 in · 1 out · 2 hold |
+| Activating | Bhastrika (Bellows) | 1 in · 1 out forceful — energizes |
+| Activating | Lion's Breath | 4 in · 4 roar-out — releases facial/throat tension |
+| Activating | Kapalabhati | passive in · forceful out — skull-shining breath |
 
 - **Two visual options**, switchable mid-session:
   - **Circle** — minimal scaling ring with phase label

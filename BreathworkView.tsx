@@ -101,6 +101,88 @@ const TECHNIQUES: Technique[] = [
     ],
     color: '#d9b35c', petalSides: 6, petalCount: 6, centerSides: 3,
   },
+  {
+    id: 'coherent', name: 'Coherent (5·5)', category: 'calming',
+    blurb: '5 in · 5 out',
+    description: 'Resonant breathing at ~6 breaths/min. Optimizes heart-rate variability and vagal tone.',
+    phases: [
+      { name: 'Inhale', seconds: 5 },
+      { name: 'Exhale', seconds: 5 },
+    ],
+    color: '#5BD0FF', petalSides: 6, petalCount: 6, centerSides: 6,
+  },
+  {
+    id: 'bhramari', name: 'Bhramari (Bee)', category: 'calming',
+    blurb: '4 in · 8 hum-out',
+    description: 'Inhale slowly, then hum like a bee on the long exhale. Stimulates the vagus nerve, raises nitric oxide, eases anxiety, insomnia, and tinnitus.',
+    phases: [
+      { name: 'Inhale', seconds: 4 },
+      { name: 'Exhale', seconds: 8 },
+    ],
+    color: '#9affc8', petalSides: 8, petalCount: 8, centerSides: 8,
+  },
+  {
+    id: 'nadi', name: 'Nadi Shodhana', category: 'calming',
+    blurb: '4 in · 2 hold · 4 out',
+    description: 'Alternate-nostril breathing. Inhale through one nostril, hold, exhale through the other, then reverse. Balances the nervous system and the brain hemispheres.',
+    phases: [
+      { name: 'Inhale', seconds: 4 },
+      { name: 'Hold',   seconds: 2 },
+      { name: 'Exhale', seconds: 4 },
+    ],
+    color: '#8A5BFF', petalSides: 5, petalCount: 6, centerSides: 5,
+  },
+  {
+    id: 'sitali', name: 'Sitali (Cooling)', category: 'calming',
+    blurb: '4 in · 6 out',
+    description: 'Curl your tongue (or purse your lips). Inhale through the tongue/mouth, exhale through the nose. Cools the body, soothes pitta heat.',
+    phases: [
+      { name: 'Inhale', seconds: 4 },
+      { name: 'Exhale', seconds: 6 },
+    ],
+    color: '#5B6CFF', petalSides: 4, petalCount: 8, centerSides: 4,
+  },
+  {
+    id: 'sigh', name: 'Physiological Sigh', category: 'calming',
+    blurb: '2 short in · long out',
+    description: 'Two short inhales through the nose, then one long exhale through the mouth. The fastest known way to down-regulate stress in real time.',
+    phases: [
+      { name: 'Inhale', seconds: 1 },
+      { name: 'Inhale', seconds: 1 },
+      { name: 'Exhale', seconds: 6 },
+    ],
+    color: '#5BD0FF', petalSides: 3, petalCount: 6, centerSides: 6,
+  },
+  {
+    id: 'bhastrika', name: 'Bhastrika (Bellows)', category: 'activating',
+    blurb: '1 in · 1 out · forceful',
+    description: 'Forceful, equal inhale and exhale through the nose using the diaphragm like a bellows. Builds heat, oxygenates, energizes — keep sessions short.',
+    phases: [
+      { name: 'Inhale', seconds: 1 },
+      { name: 'Exhale', seconds: 1 },
+    ],
+    color: '#FFB05B', petalSides: 3, petalCount: 8, centerSides: 3,
+  },
+  {
+    id: 'lions', name: "Lion's Breath", category: 'activating',
+    blurb: '4 in · 4 roar-out',
+    description: 'Inhale deeply through the nose. Exhale forcefully through the mouth with tongue out, eyes wide, making a "ha" sound. Releases facial and throat tension.',
+    phases: [
+      { name: 'Inhale', seconds: 4 },
+      { name: 'Exhale', seconds: 4 },
+    ],
+    color: '#FF5B9C', petalSides: 5, petalCount: 5, centerSides: 5,
+  },
+  {
+    id: 'kapalabhati', name: 'Kapalabhati', category: 'activating',
+    blurb: 'Passive in · forceful out',
+    description: '"Skull-shining breath." Passive inhale, sharp forceful exhale through the nose, repeated rapidly. Cleanses the lungs and energizes the mind.',
+    phases: [
+      { name: 'Inhale', seconds: 1 },
+      { name: 'Exhale', seconds: 1 },
+    ],
+    color: '#FF8FB1', petalSides: 6, petalCount: 8, centerSides: 3,
+  },
 ];
 
 type Props = {
@@ -117,6 +199,7 @@ export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandCo
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.headerWrap}>
+        <Text style={styles.ambience}>Ambience</Text>
         <Text style={styles.title}>Breath Work</Text>
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />
@@ -367,9 +450,6 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
           orbit={orbit}
           centerSpin={centerSpin}
           color={technique.color}
-          petalCount={technique.petalCount}
-          petalSides={technique.petalSides}
-          centerSides={technique.centerSides}
           phaseLabel={playing ? phase.name : 'Ready'}
           phaseCount={playing ? secondsLeft : 0}
           cycle={playing ? cycle : 0}
@@ -447,19 +527,29 @@ function polygonPoints(sides: number, radius: number, cx: number, cy: number, ro
 }
 
 function StaticPolygon({
-  sides, size, color, opacity, stroke, strokeWidth,
-}: { sides: number; size: number; color?: string; opacity?: number; stroke?: string; strokeWidth?: number }) {
+  sides, size, fill, fillOpacity, stroke, strokeOpacity, strokeWidth, startAngle,
+}: {
+  sides: number;
+  size: number;
+  fill?: string;
+  fillOpacity?: number;
+  stroke?: string;
+  strokeOpacity?: number;
+  strokeWidth?: number;
+  startAngle?: number;
+}) {
   const cx = size / 2;
   const cy = size / 2;
   const r = size / 2 - (strokeWidth ?? 0) / 2;
-  const points = polygonPoints(sides, r, cx, cy);
+  const points = polygonPoints(sides, r, cx, cy, startAngle ?? -Math.PI / 2);
   return (
     <Svg width={size} height={size}>
       <Polygon
         points={points}
-        fill={color ?? 'none'}
-        fillOpacity={opacity ?? 1}
+        fill={fill ?? 'none'}
+        fillOpacity={fillOpacity ?? 1}
         stroke={stroke ?? 'none'}
+        strokeOpacity={strokeOpacity ?? 1}
         strokeWidth={strokeWidth ?? 0}
       />
     </Svg>
@@ -471,115 +561,77 @@ type MandalaProps = {
   orbit: Animated.Value;
   centerSpin: Animated.Value;
   color: string;
-  petalCount: number;
-  petalSides: number;
-  centerSides: number;
   phaseLabel: string;
   phaseCount: number;
   cycle: number;
   active: boolean;
 };
 
+// Layers: outer triangle → octagon, stacked concentrically. Each layer rotates
+// independently; all scale together with breath.
+const POLY_LAYERS: Array<{
+  sides: number;
+  sizeRatio: number;
+  fillOpacity: number;
+  strokeOpacity: number;
+  rotateSource: 'orbit' | 'orbitReverse' | 'center';
+  startAngleDeg: number;
+}> = [
+  { sides: 3, sizeRatio: 1.00, fillOpacity: 0.05, strokeOpacity: 0.55, rotateSource: 'orbit',         startAngleDeg: 0 },
+  { sides: 4, sizeRatio: 0.86, fillOpacity: 0.07, strokeOpacity: 0.65, rotateSource: 'orbitReverse',  startAngleDeg: 30 },
+  { sides: 5, sizeRatio: 0.72, fillOpacity: 0.09, strokeOpacity: 0.75, rotateSource: 'center',        startAngleDeg: 18 },
+  { sides: 6, sizeRatio: 0.58, fillOpacity: 0.11, strokeOpacity: 0.85, rotateSource: 'orbit',         startAngleDeg: 0 },
+  { sides: 7, sizeRatio: 0.44, fillOpacity: 0.14, strokeOpacity: 0.90, rotateSource: 'orbitReverse',  startAngleDeg: 25 },
+  { sides: 8, sizeRatio: 0.30, fillOpacity: 0.18, strokeOpacity: 0.95, rotateSource: 'center',        startAngleDeg: 22 },
+];
+
 function BreathMandala({
   breath, orbit, centerSpin, color,
-  petalCount, petalSides, centerSides,
   phaseLabel, phaseCount, cycle, active,
 }: MandalaProps) {
-  const orbitRotation = orbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  const orbitRotationReverse = orbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] });
-  const centerRotation = centerSpin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const orbitFwd = orbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const orbitRev = orbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-360deg'] });
+  const centerFwd = centerSpin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
-  // Outer halo: thin ring, scales with breath.
-  const outerScale = breath.interpolate({ inputRange: [0, 1], outputRange: [0.78, 1.10] });
-  // Mid ring: scales more aggressively.
-  const midScale = breath.interpolate({ inputRange: [0, 1], outputRange: [0.66, 1.00] });
-  // Center polygon: scales modestly.
-  const centerScale = breath.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0.85] });
-  const centerOpacity = breath.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.85] });
-
-  const haloSize = MANDALA_SIZE - 30;
-  const midSize = MANDALA_SIZE - 110;
-  const centerSize = 64;
+  // All polygons grow together on inhale, contract on exhale.
+  const stackScale = breath.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1.0] });
 
   return (
     <View style={styles.mandalaWrap}>
-      {/* Outer halo ring */}
-      <Animated.View
-        style={[
-          styles.absCenter,
-          {
-            width: haloSize, height: haloSize, borderRadius: haloSize / 2,
-            borderWidth: 1,
-            borderColor: color + '33',
-            transform: [{ scale: outerScale }],
-          },
-        ]}
-      />
-
-      {/* Mid ring */}
-      <Animated.View
-        style={[
-          styles.absCenter,
-          {
-            width: midSize, height: midSize, borderRadius: midSize / 2,
-            borderWidth: 1.5,
-            borderColor: color + '77',
-            transform: [{ scale: midScale }],
-          },
-        ]}
-      />
-
-      {/* Petals — orbit around the center, expand outward on inhale */}
-      {Array.from({ length: petalCount }).map((_, i) => {
-        const angle = (360 / petalCount) * i;
+      {POLY_LAYERS.map((layer, i) => {
+        const size = layer.sizeRatio * MANDALA_SIZE;
+        const rotation =
+          layer.rotateSource === 'orbit' ? orbitFwd :
+          layer.rotateSource === 'orbitReverse' ? orbitRev :
+          centerFwd;
         return (
-          <Petal
+          <Animated.View
             key={i}
-            angle={angle}
-            breath={breath}
-            orbitRotation={orbitRotation}
-            color={color}
-            sides={petalSides}
-          />
+            pointerEvents="none"
+            style={[
+              styles.absCenter,
+              {
+                width: size,
+                height: size,
+                transform: [{ scale: stackScale }, { rotate: rotation }],
+              },
+            ]}
+          >
+            <StaticPolygon
+              sides={layer.sides}
+              size={size}
+              fill={color}
+              fillOpacity={layer.fillOpacity}
+              stroke={color}
+              strokeOpacity={layer.strokeOpacity}
+              strokeWidth={1.5}
+              startAngle={(layer.startAngleDeg * Math.PI) / 180 - Math.PI / 2}
+            />
+          </Animated.View>
         );
       })}
 
-      {/* Inner counter-rotating petal layer for depth */}
-      {Array.from({ length: petalCount }).map((_, i) => {
-        const angle = (360 / petalCount) * i + (180 / petalCount);
-        return (
-          <Petal
-            key={`inner-${i}`}
-            angle={angle}
-            breath={breath}
-            orbitRotation={orbitRotationReverse}
-            color={color}
-            sides={petalSides}
-            small
-          />
-        );
-      })}
-
-      {/* Center polygon — counter-rotates */}
-      <Animated.View
-        style={[
-          styles.absCenter,
-          {
-            width: centerSize, height: centerSize,
-            opacity: centerOpacity,
-            transform: [{ rotate: centerRotation }, { scale: centerScale }],
-          },
-        ]}
-      >
-        <StaticPolygon
-          sides={centerSides}
-          size={centerSize}
-          color={color}
-          opacity={0.85}
-        />
-      </Animated.View>
-
-      {/* Phase label overlay */}
+      {/* Phase label overlay — centered atop the stack */}
       <View pointerEvents="none" style={styles.absCenter}>
         <View style={styles.labelInner}>
           <Text style={[styles.phaseText, { color: active ? color : '#ffffff66' }]}>
@@ -597,56 +649,24 @@ function BreathMandala({
   );
 }
 
-function Petal({
-  angle, breath, orbitRotation, color, sides, small,
-}: {
-  angle: number;
-  breath: Animated.Value;
-  orbitRotation: Animated.AnimatedInterpolation<string>;
-  color: string;
-  sides: number;
-  small?: boolean;
-}) {
-  const innerR = small ? INNER_R - 22 : INNER_R;
-  const outerR = small ? OUTER_R - 30 : OUTER_R;
-  const radius = breath.interpolate({ inputRange: [0, 1], outputRange: [innerR, outerR] });
-  const negRadius = Animated.multiply(radius, -1);
-  const petalScale = breath.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.15] });
-  const petalOpacity = breath.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.0] });
-  const petalSize = small ? 14 : 22;
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.absCenter,
-        {
-          width: petalSize,
-          height: petalSize,
-          opacity: petalOpacity,
-          transform: [
-            { rotate: orbitRotation },
-            { rotate: `${angle}deg` },
-            { translateY: negRadius as unknown as number },
-            { scale: petalScale },
-          ],
-        },
-      ]}
-    >
-      <StaticPolygon sides={sides} size={petalSize} color={color} opacity={0.95} />
-    </Animated.View>
-  );
-}
-
 // ===========================================================================
 //   Styles
 // ===========================================================================
 
 const styles = StyleSheet.create({
   headerWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 14 },
+  ambience: {
+    color: '#fff',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 46,
+    letterSpacing: 4,
+    textAlign: 'center',
+    lineHeight: 52,
+  },
   title: {
-    color: '#fff', fontSize: 18, fontWeight: '200',
-    letterSpacing: 5, textTransform: 'uppercase',
+    color: '#ffffff99', fontSize: 10, fontWeight: '400',
+    letterSpacing: 4, textTransform: 'uppercase',
+    marginTop: 2,
   },
   dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
   dividerLine: { width: 28, height: 1, backgroundColor: 'rgba(255,255,255,0.35)' },
