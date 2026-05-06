@@ -38,6 +38,7 @@ import {
 
 import BreathworkView from './BreathworkView';
 import ChakrasView from './ChakrasView';
+import HoroscopesView from './HoroscopesView';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -138,25 +139,49 @@ export type Zodiac = {
   element: 'Fire' | 'Earth' | 'Air' | 'Water';
   qualities: string;
   intention: string;
+  yearAhead: string;
   // Maps each zodiac to the chakra whose element matches.
-  // Air → Throat (Ether), Fire → Solar (Fire), Earth → Root (Earth), Water → Sacral (Water)
   chakraId: 'cr-root' | 'cr-sacral' | 'cr-solar' | 'cr-heart' | 'cr-throat';
   color: string;
 };
 
 export const ZODIAC: Zodiac[] = [
-  { id: 'aries',       glyph: '♈', name: 'Aries',       startMonth: 3,  startDay: 21, endMonth: 4,  endDay: 19, element: 'Fire',  qualities: 'Initiator · Bold',          intention: 'Lead with the courage that already lives in you.', chakraId: 'cr-solar',  color: '#FF5B5B' },
-  { id: 'taurus',      glyph: '♉', name: 'Taurus',      startMonth: 4,  startDay: 20, endMonth: 5,  endDay: 20, element: 'Earth', qualities: 'Steady · Sensual',          intention: 'Ground in what nourishes. Slow down to taste it.', chakraId: 'cr-root',   color: '#7FB45B' },
-  { id: 'gemini',      glyph: '♊', name: 'Gemini',      startMonth: 5,  startDay: 21, endMonth: 6,  endDay: 20, element: 'Air',   qualities: 'Curious · Versatile',       intention: 'Speak only what is true. Let the rest pass.',     chakraId: 'cr-throat', color: '#FFE078' },
-  { id: 'cancer',      glyph: '♋', name: 'Cancer',      startMonth: 6,  startDay: 21, endMonth: 7,  endDay: 22, element: 'Water', qualities: 'Nurturing · Intuitive',     intention: 'Tend to your inner home before the outer world.', chakraId: 'cr-sacral', color: '#A0D8FF' },
-  { id: 'leo',         glyph: '♌', name: 'Leo',         startMonth: 7,  startDay: 23, endMonth: 8,  endDay: 22, element: 'Fire',  qualities: 'Radiant · Generous',        intention: 'Shine without dimming for anyone.',               chakraId: 'cr-solar',  color: '#FFB05B' },
-  { id: 'virgo',       glyph: '♍', name: 'Virgo',       startMonth: 8,  startDay: 23, endMonth: 9,  endDay: 22, element: 'Earth', qualities: 'Discerning · Refined',      intention: 'Refine without becoming rigid.',                  chakraId: 'cr-root',   color: '#9affc8' },
-  { id: 'libra',       glyph: '♎', name: 'Libra',       startMonth: 9,  startDay: 23, endMonth: 10, endDay: 22, element: 'Air',   qualities: 'Harmonious · Fair',         intention: 'Balance is a verb, not a state.',                 chakraId: 'cr-throat', color: '#FFD0E1' },
-  { id: 'scorpio',     glyph: '♏', name: 'Scorpio',     startMonth: 10, startDay: 23, endMonth: 11, endDay: 21, element: 'Water', qualities: 'Deep · Transformative',     intention: 'Let what is dying complete its dying.',           chakraId: 'cr-sacral', color: '#A45BFF' },
-  { id: 'sagittarius', glyph: '♐', name: 'Sagittarius', startMonth: 11, startDay: 22, endMonth: 12, endDay: 21, element: 'Fire',  qualities: 'Seeker · Free',             intention: 'The far horizon begins under your feet.',         chakraId: 'cr-solar',  color: '#FF8A38' },
-  { id: 'capricorn',   glyph: '♑', name: 'Capricorn',   startMonth: 12, startDay: 22, endMonth: 1,  endDay: 19, element: 'Earth', qualities: 'Disciplined · Grounded',    intention: 'Build patiently. Stone by stone.',                chakraId: 'cr-root',   color: '#8A6B4A' },
-  { id: 'aquarius',    glyph: '♒', name: 'Aquarius',    startMonth: 1,  startDay: 20, endMonth: 2,  endDay: 18, element: 'Air',   qualities: 'Visionary · Independent',   intention: 'Imagine the world you wish to inhabit.',          chakraId: 'cr-throat', color: '#5BD0FF' },
-  { id: 'pisces',      glyph: '♓', name: 'Pisces',      startMonth: 2,  startDay: 19, endMonth: 3,  endDay: 20, element: 'Water', qualities: 'Dreamy · Compassionate',    intention: 'Dissolve into the larger flow.',                  chakraId: 'cr-sacral', color: '#5B6CFF' },
+  { id: 'aries',       glyph: '♈', name: 'Aries',       startMonth: 3,  startDay: 21, endMonth: 4,  endDay: 19, element: 'Fire',  qualities: 'Initiator · Bold',          intention: 'Lead with the courage that already lives in you.',
+    yearAhead: 'This year your fire is meant to lead — but lead with patience. Begin only what you can finish, and finish what truly matters.',
+    chakraId: 'cr-solar',  color: '#FF5B5B' },
+  { id: 'taurus',      glyph: '♉', name: 'Taurus',      startMonth: 4,  startDay: 20, endMonth: 5,  endDay: 20, element: 'Earth', qualities: 'Steady · Sensual',          intention: 'Ground in what nourishes. Slow down to taste it.',
+    yearAhead: 'A year for slow, deliberate building. The pleasure is in the process, not the prize. Trust your senses.',
+    chakraId: 'cr-root',   color: '#7FB45B' },
+  { id: 'gemini',      glyph: '♊', name: 'Gemini',      startMonth: 5,  startDay: 21, endMonth: 6,  endDay: 20, element: 'Air',   qualities: 'Curious · Versatile',       intention: 'Speak only what is true. Let the rest pass.',
+    yearAhead: 'Your many threads come together this year. Choose what to weave and what to release. Less, but deeper.',
+    chakraId: 'cr-throat', color: '#FFE078' },
+  { id: 'cancer',      glyph: '♋', name: 'Cancer',      startMonth: 6,  startDay: 21, endMonth: 7,  endDay: 22, element: 'Water', qualities: 'Nurturing · Intuitive',     intention: 'Tend to your inner home before the outer world.',
+    yearAhead: 'Tend the inner home this year. Strong roots make lasting branches. Receive as readily as you give.',
+    chakraId: 'cr-sacral', color: '#A0D8FF' },
+  { id: 'leo',         glyph: '♌', name: 'Leo',         startMonth: 7,  startDay: 23, endMonth: 8,  endDay: 22, element: 'Fire',  qualities: 'Radiant · Generous',        intention: 'Shine without dimming for anyone.',
+    yearAhead: 'Step into your light without dimming for anyone. Your warmth is generous, not obligatory.',
+    chakraId: 'cr-solar',  color: '#FFB05B' },
+  { id: 'virgo',       glyph: '♍', name: 'Virgo',       startMonth: 8,  startDay: 23, endMonth: 9,  endDay: 22, element: 'Earth', qualities: 'Discerning · Refined',      intention: 'Refine without becoming rigid.',
+    yearAhead: 'Refine, don\'t perfect. Done with care beats endless polishing. Trust the simpler path.',
+    chakraId: 'cr-root',   color: '#9affc8' },
+  { id: 'libra',       glyph: '♎', name: 'Libra',       startMonth: 9,  startDay: 23, endMonth: 10, endDay: 22, element: 'Air',   qualities: 'Harmonious · Fair',         intention: 'Balance is a verb, not a state.',
+    yearAhead: 'The balance you seek is internal. Stop outsourcing your steadiness to other people\'s moods.',
+    chakraId: 'cr-throat', color: '#FFD0E1' },
+  { id: 'scorpio',     glyph: '♏', name: 'Scorpio',     startMonth: 10, startDay: 23, endMonth: 11, endDay: 21, element: 'Water', qualities: 'Deep · Transformative',     intention: 'Let what is dying complete its dying.',
+    yearAhead: 'A year of release. What completes its dying makes room for what is coming. Trust the dark.',
+    chakraId: 'cr-sacral', color: '#A45BFF' },
+  { id: 'sagittarius', glyph: '♐', name: 'Sagittarius', startMonth: 11, startDay: 22, endMonth: 12, endDay: 21, element: 'Fire',  qualities: 'Seeker · Free',             intention: 'The far horizon begins under your feet.',
+    yearAhead: 'The horizon you chase is wide enough to include rest. Travel slowly. Notice where you are.',
+    chakraId: 'cr-solar',  color: '#FF8A38' },
+  { id: 'capricorn',   glyph: '♑', name: 'Capricorn',   startMonth: 12, startDay: 22, endMonth: 1,  endDay: 19, element: 'Earth', qualities: 'Disciplined · Grounded',    intention: 'Build patiently. Stone by stone.',
+    yearAhead: 'Build patiently. The structures you raise this year will hold for decades. Don\'t skip foundations.',
+    chakraId: 'cr-root',   color: '#8A6B4A' },
+  { id: 'aquarius',    glyph: '♒', name: 'Aquarius',    startMonth: 1,  startDay: 20, endMonth: 2,  endDay: 18, element: 'Air',   qualities: 'Visionary · Independent',   intention: 'Imagine the world you wish to inhabit.',
+    yearAhead: 'Imagine larger than you\'ve allowed. The vision you withhold serves no one. Speak it.',
+    chakraId: 'cr-throat', color: '#5BD0FF' },
+  { id: 'pisces',      glyph: '♓', name: 'Pisces',      startMonth: 2,  startDay: 19, endMonth: 3,  endDay: 20, element: 'Water', qualities: 'Dreamy · Compassionate',    intention: 'Dissolve into the larger flow.',
+    yearAhead: 'Trust the current. Surrender is not weakness — it is mastery of flow. Soften the grip.',
+    chakraId: 'cr-sacral', color: '#5B6CFF' },
 ];
 
 export function todaysSign(date: Date = new Date()): Zodiac {
@@ -478,7 +503,7 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
 //   App
 // ===========================================================================
 
-type Tab = 'frequencies' | 'breath' | 'chakras';
+type Tab = 'frequencies' | 'breath' | 'chakras' | 'horoscopes';
 
 function AppContent() {
   const insets = useSafeAreaInsets();
@@ -503,42 +528,17 @@ function AppContent() {
 
   const [lunar] = useState(() => lunarPhase());
   const [mySignId, setMySignId] = useState<string | null>(null);
-  const [horoscope, setHoroscope] = useState<string | null>(null);
-  const [horoscopeLoading, setHoroscopeLoading] = useState(false);
 
   const mySign = useMemo(
     () => (mySignId && ZODIAC.find(z => z.id === mySignId)) || todaysSign(),
     [mySignId],
   );
 
-  // Load saved zodiac.
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY_ZODIAC).then(v => {
       if (v) setMySignId(v);
     }).catch(() => {});
   }, []);
-
-  // Fetch horoscope when sign changes.
-  useEffect(() => {
-    let cancelled = false;
-    setHoroscopeLoading(true);
-    setHoroscope(null);
-    fetch(
-      `https://freehoroscopeapi.com/api/v1/get-horoscope/daily?sign=${mySign.name}&day=TODAY`,
-    )
-      .then(r => (r.ok ? r.json() : null))
-      .then(json => {
-        if (cancelled) return;
-        const text =
-          json?.data?.horoscope ??
-          json?.data?.horoscope_data ??
-          null;
-        setHoroscope(text);
-      })
-      .catch(() => { if (!cancelled) setHoroscope(null); })
-      .finally(() => { if (!cancelled) setHoroscopeLoading(false); });
-    return () => { cancelled = true; };
-  }, [mySign.id]);
 
   function selectMyZodiac(z: Zodiac) {
     setMySignId(z.id);
@@ -961,21 +961,23 @@ function AppContent() {
               <ChakrasView
                 chakras={CHAKRAS}
                 doshas={DOSHAS}
-                zodiac={ZODIAC}
-                mySign={mySign}
-                horoscope={horoscope}
-                horoscopeLoading={horoscopeLoading}
-                lunar={lunar}
                 activePresetId={activePresetId}
                 onApplyChakra={applyChakra}
                 onApplyDosha={applyDosha}
-                onSelectMyZodiac={selectMyZodiac}
                 toneIsPlaying={isTonePlaying}
                 toneIsLoading={isToneLoading}
                 onTogglePlay={togglePlay}
                 beatHz={beat}
                 bandName={displayBandName}
                 bandColor={beatColor}
+              />
+            )}
+            {tab === 'horoscopes' && (
+              <HoroscopesView
+                zodiac={ZODIAC}
+                mySign={mySign}
+                lunar={lunar}
+                onSelectMyZodiac={selectMyZodiac}
               />
             )}
           </View>
@@ -1059,6 +1061,7 @@ function TabBar({ tab, onChange, accent }: { tab: Tab; onChange: (t: Tab) => voi
         <TabButton label="Frequencies" glyph="∿" active={tab === 'frequencies'} accent={accent} onPress={() => onChange('frequencies')} />
         <TabButton label="Breath"      glyph="○" active={tab === 'breath'}      accent={accent} onPress={() => onChange('breath')} />
         <TabButton label="Chakras"     glyph="✦" active={tab === 'chakras'}     accent={accent} onPress={() => onChange('chakras')} />
+        <TabButton label="Horoscopes"  glyph="☽" active={tab === 'horoscopes'}  accent={accent} onPress={() => onChange('horoscopes')} />
       </View>
     </SafeAreaView>
   );

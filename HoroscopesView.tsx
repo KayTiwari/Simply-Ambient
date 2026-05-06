@@ -1,0 +1,285 @@
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
+import type { Zodiac } from './App';
+
+type Period = 'daily' | 'monthly' | 'yearly';
+
+type Props = {
+  zodiac: Zodiac[];
+  mySign: Zodiac;
+  lunar: { glyph: string; name: string; illum: number };
+  onSelectMyZodiac: (z: Zodiac) => void;
+};
+
+export default function HoroscopesView({
+  zodiac, mySign, lunar, onSelectMyZodiac,
+}: Props) {
+  const [period, setPeriod] = useState<Period>('daily');
+  const [horoscope, setHoroscope] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    // Yearly is a static intention written into the zodiac data — no API call.
+    if (period === 'yearly') {
+      setLoading(false);
+      setHoroscope(mySign.yearAhead);
+      return;
+    }
+
+    setLoading(true);
+    setHoroscope(null);
+    const url =
+      period === 'daily'
+        ? `https://freehoroscopeapi.com/api/v1/get-horoscope/daily?sign=${mySign.name}&day=TODAY`
+        : `https://freehoroscopeapi.com/api/v1/get-horoscope/monthly?sign=${mySign.name}`;
+    fetch(url)
+      .then(r => (r.ok ? r.json() : null))
+      .then(json => {
+        if (cancelled) return;
+        const text =
+          json?.data?.horoscope ??
+          json?.data?.horoscope_data ??
+          null;
+        setHoroscope(text);
+      })
+      .catch(() => { if (!cancelled) setHoroscope(null); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [mySign.id, period, mySign.yearAhead]);
+
+  const dateText = new Date().toLocaleDateString(undefined, {
+    weekday: 'long', month: 'long', day: 'numeric',
+  });
+  const illumPct = Math.round(lunar.illum * 100);
+
+  const monthName = new Date().toLocaleDateString(undefined, { month: 'long' }).toUpperCase();
+  const yearText = new Date().getFullYear();
+  const periodLabel =
+    period === 'daily' ? 'TODAY · ' + dateText.toUpperCase() :
+    period === 'monthly' ? 'THIS MONTH · ' + monthName :
+    'YEAR AHEAD · ' + yearText;
+
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={styles.headerWrap}>
+        <Text style={styles.ambience}>Simply Ambient</Text>
+        <Text style={styles.title}>Horoscopes</Text>
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.subtitle}>As above, so below</Text>
+          <View style={styles.dividerLine} />
+        </View>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Today / week / month widget */}
+        <View style={[styles.todayCard, { borderColor: mySign.color + '55' }]}>
+          <Text style={styles.todayLabel}>{periodLabel}</Text>
+          <View style={styles.todayRow}>
+            <Text style={[styles.zGlyph, { color: mySign.color, fontSize: 44 }]}>{mySign.glyph}</Text>
+            <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={styles.todaySignName}>{mySign.name}</Text>
+              <Text style={[styles.metaText, { color: mySign.color }]}>
+                {mySign.element} · {mySign.qualities}
+              </Text>
+            </View>
+          </View>
+
+          {/* Period toggle */}
+          <View style={styles.periodRow}>
+            {(['daily', 'monthly', 'yearly'] as Period[]).map(p => {
+              const active = p === period;
+              return (
+                <TouchableOpacity
+                  key={p}
+                  activeOpacity={0.85}
+                  onPress={() => setPeriod(p)}
+                  style={[
+                    styles.periodBtn,
+                    active && {
+                      backgroundColor: mySign.color + '22',
+                      borderColor: mySign.color,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.periodText, active && { color: mySign.color }]}>
+                    {p.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {loading ? (
+            <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
+              <ActivityIndicator color={mySign.color} />
+            </View>
+          ) : horoscope ? (
+            <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
+              <Text style={styles.horoscopeText}>{horoscope}</Text>
+            </View>
+          ) : (
+            <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
+              <Text style={styles.horoscopeFallback}>“{mySign.intention}”</Text>
+              <Text style={styles.horoscopeNote}>
+                (Couldn't reach the horoscope service — showing the sign's intention.)
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.todayMoon}>
+            <Text style={styles.todayMoonGlyph}>{lunar.glyph}</Text>
+            <Text style={styles.todayMoonText}>
+              {lunar.name} · {illumPct}% illuminated
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.sectionLabel}>YOUR ZODIAC SIGN</Text>
+        <Text style={styles.sectionSub}>
+          Tap to set your sign — saved on this device
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.zodiacRow}
+        >
+          {zodiac.map(z => {
+            const active = mySign.id === z.id;
+            return (
+              <TouchableOpacity
+                key={z.id}
+                activeOpacity={0.85}
+                onPress={() => onSelectMyZodiac(z)}
+                style={[
+                  styles.zodiacChip,
+                  {
+                    borderColor: active ? z.color : z.color + '55',
+                    backgroundColor: active ? z.color + '22' : 'rgba(0,0,0,0.30)',
+                  },
+                ]}
+              >
+                <Text style={[styles.zGlyph, { color: z.color }]}>{z.glyph}</Text>
+                <Text style={styles.zName}>{z.name}</Text>
+                <Text style={[styles.zElement, { color: z.color }]}>{z.element}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        <Text style={styles.footnote}>
+          Horoscopes are fetched daily from a free public API.
+          Take what resonates, leave the rest.
+        </Text>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  headerWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 14 },
+  ambience: {
+    color: '#fff',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 38, letterSpacing: 2.5,
+    textAlign: 'center', lineHeight: 44,
+  },
+  title: {
+    color: '#ffffff99', fontSize: 10, fontWeight: '400',
+    letterSpacing: 4, textTransform: 'uppercase', marginTop: 2,
+  },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  dividerLine: { width: 28, height: 1, backgroundColor: 'rgba(255,255,255,0.35)' },
+  subtitle: {
+    color: '#ffffffaa', fontSize: 10, letterSpacing: 4,
+    marginHorizontal: 14, fontStyle: 'italic',
+  },
+
+  todayCard: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderRadius: 18, padding: 16, marginBottom: 18, borderWidth: 1,
+  },
+  todayLabel: {
+    color: '#ffffff80', fontSize: 10, letterSpacing: 2, fontWeight: '600',
+    marginBottom: 8,
+  },
+  todayRow: { flexDirection: 'row', alignItems: 'center' },
+  todaySignName: {
+    color: '#fff',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 30, letterSpacing: 1,
+  },
+  metaText: { fontSize: 11, letterSpacing: 0.5, marginTop: 2 },
+
+  periodRow: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 999, padding: 4,
+    marginTop: 14,
+    alignSelf: 'flex-start',
+  },
+  periodBtn: {
+    paddingHorizontal: 14, paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1, borderColor: 'transparent',
+  },
+  periodText: { color: '#ffffff80', fontSize: 11, letterSpacing: 1.5, fontWeight: '600' },
+
+  horoscopeBox: {
+    marginTop: 14,
+    paddingLeft: 12, paddingVertical: 6,
+    borderLeftWidth: 2,
+  },
+  horoscopeText: { color: '#ffffffdd', fontSize: 14, lineHeight: 21 },
+  horoscopeFallback: { color: '#ffffffcc', fontSize: 14, fontStyle: 'italic', lineHeight: 20 },
+  horoscopeNote: { color: '#ffffff66', fontSize: 10, fontStyle: 'italic', marginTop: 6 },
+
+  todayMoon: {
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: 14, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  todayMoonGlyph: { color: '#ffffffcc', fontSize: 16, marginRight: 8 },
+  todayMoonText: { color: '#ffffff99', fontSize: 12, letterSpacing: 0.5 },
+
+  sectionLabel: {
+    color: '#ffffff80', fontSize: 11, letterSpacing: 2, fontWeight: '600',
+    paddingHorizontal: 4, marginBottom: 4,
+  },
+  sectionSub: {
+    color: '#ffffff66', fontSize: 11, fontStyle: 'italic',
+    marginBottom: 10, paddingHorizontal: 4,
+  },
+
+  zodiacRow: { paddingRight: 12, paddingVertical: 4 },
+  zodiacChip: {
+    minWidth: 84,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    marginRight: 8,
+    borderWidth: 1,
+  },
+  zGlyph: { fontSize: 26, lineHeight: 32 },
+  zName: { color: '#fff', fontSize: 12, fontWeight: '600', marginTop: 2, letterSpacing: 0.5 },
+  zElement: { fontSize: 9, letterSpacing: 1, fontWeight: '600', marginTop: 2 },
+
+  footnote: {
+    color: '#ffffff66', fontSize: 12, textAlign: 'center',
+    marginTop: 24, paddingHorizontal: 12, fontStyle: 'italic', lineHeight: 18,
+  },
+});

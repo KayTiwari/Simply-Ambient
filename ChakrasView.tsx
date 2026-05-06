@@ -8,20 +8,14 @@ import {
   View,
 } from 'react-native';
 
-import type { Chakra, Dosha, Zodiac } from './App';
+import type { Chakra, Dosha } from './App';
 
 type Props = {
   chakras: Chakra[];
   doshas: Dosha[];
-  zodiac: Zodiac[];
-  mySign: Zodiac;
-  horoscope: string | null;
-  horoscopeLoading: boolean;
-  lunar: { glyph: string; name: string; illum: number };
   activePresetId: string | null;
   onApplyChakra: (c: Chakra) => void;
   onApplyDosha: (d: Dosha) => void;
-  onSelectMyZodiac: (z: Zodiac) => void;
   toneIsPlaying: boolean;
   toneIsLoading: boolean;
   onTogglePlay: () => void;
@@ -31,15 +25,11 @@ type Props = {
 };
 
 export default function ChakrasView({
-  chakras, doshas, zodiac, mySign, horoscope, horoscopeLoading, lunar, activePresetId,
-  onApplyChakra, onApplyDosha, onSelectMyZodiac,
+  chakras, doshas, activePresetId,
+  onApplyChakra, onApplyDosha,
   toneIsPlaying, toneIsLoading, onTogglePlay,
   beatHz, bandName, bandColor,
 }: Props) {
-  const dateText = new Date().toLocaleDateString(undefined, {
-    weekday: 'long', month: 'long', day: 'numeric',
-  });
-  const illumPct = Math.round(lunar.illum * 100);
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.headerWrap}>
@@ -77,72 +67,7 @@ export default function ChakrasView({
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Today widget — your sign + horoscope + lunar */}
-        <View style={[styles.todayCard, { borderColor: mySign.color + '55' }]}>
-          <Text style={styles.todayLabel}>TODAY · {dateText.toUpperCase()}</Text>
-          <View style={styles.todayRow}>
-            <Text style={[styles.zGlyph, { color: mySign.color, fontSize: 38 }]}>{mySign.glyph}</Text>
-            <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={styles.todaySignName}>{mySign.name}</Text>
-              <Text style={[styles.metaText, { color: mySign.color }]}>
-                {mySign.element} · {mySign.qualities}
-              </Text>
-            </View>
-          </View>
-          {horoscopeLoading ? (
-            <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
-              <ActivityIndicator color={mySign.color} />
-            </View>
-          ) : horoscope ? (
-            <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
-              <Text style={styles.horoscopeLabel}>DAILY HOROSCOPE</Text>
-              <Text style={styles.horoscopeText}>{horoscope}</Text>
-            </View>
-          ) : (
-            <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
-              <Text style={styles.horoscopeFallback}>“{mySign.intention}”</Text>
-              <Text style={styles.horoscopeNote}>(Couldn't reach the horoscope service — showing the sign's intention.)</Text>
-            </View>
-          )}
-          <View style={styles.todayMoon}>
-            <Text style={styles.todayMoonGlyph}>{lunar.glyph}</Text>
-            <Text style={styles.todayMoonText}>
-              {lunar.name} · {illumPct}% illuminated
-            </Text>
-          </View>
-        </View>
-
-        <Text style={styles.sectionLabel}>YOUR ZODIAC SIGN</Text>
-        <Text style={styles.sectionSub}>Tap to set your sign and read its daily horoscope</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.zodiacRow}
-        >
-          {zodiac.map(z => {
-            const active = mySign.id === z.id;
-            return (
-              <TouchableOpacity
-                key={z.id}
-                activeOpacity={0.85}
-                onPress={() => onSelectMyZodiac(z)}
-                style={[
-                  styles.zodiacChip,
-                  {
-                    borderColor: active ? z.color : z.color + '55',
-                    backgroundColor: active ? z.color + '22' : 'rgba(0,0,0,0.30)',
-                  },
-                ]}
-              >
-                <Text style={[styles.zGlyph, { color: z.color }]}>{z.glyph}</Text>
-                <Text style={styles.zName}>{z.name}</Text>
-                <Text style={[styles.zElement, { color: z.color }]}>{z.element}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>CHAKRAS</Text>
+        <Text style={styles.sectionLabel}>CHAKRAS</Text>
         <Text style={styles.sectionSub}>Seven energy gates of the body</Text>
 
         {chakras.map(c => {
