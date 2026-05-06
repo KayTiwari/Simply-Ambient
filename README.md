@@ -1,4 +1,4 @@
-# Ambience
+# Simply Ambient
 
 > A binaural frequency generator and breath-work companion for Android and iOS.
 
@@ -9,7 +9,7 @@
   <img src="screenshots/4.jpg" width="22%" alt="Breath session" />
 </p>
 
-Ambience pairs custom binaural beats with guided breath techniques. Pick a brainwave band, tune each ear independently (or type the exact Hz), layer in your own background music, save your favorite mixes, and step through breath sessions with phase-aware animation.
+Simply Ambient pairs custom binaural beats with guided breath techniques. Pick a brainwave band, tune each ear independently (or type the exact Hz), layer in your own background music, save your favorite mixes, and step through breath sessions with phase-aware animation.
 
 The philosophy is rooted in **New Thought / manifestation**: tune your vibration, set your intention, let the rest follow.
 

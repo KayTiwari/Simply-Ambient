@@ -854,7 +854,7 @@ function FrequenciesView(props: FreqViewProps) {
     >
       <View style={styles.header}>
         <View style={styles.enso} />
-        <Text style={styles.ambience}>Ambience</Text>
+        <Text style={styles.ambience}>Simply Ambient</Text>
         <Text style={styles.title}>Binaural Frequency Generator</Text>
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />
@@ -1141,10 +1141,10 @@ const styles = StyleSheet.create({
   ambience: {
     color: '#fff',
     fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 46,
-    letterSpacing: 4,
+    fontSize: 38,
+    letterSpacing: 2.5,
     textAlign: 'center',
-    lineHeight: 52,
+    lineHeight: 44,
   },
   title: {
     color: '#ffffff99', fontSize: 10, fontWeight: '400',

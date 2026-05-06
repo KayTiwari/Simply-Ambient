@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Binaural Frequency Generator",
-    "slug": "binaural",
+    "name": "Simply Ambient",
+    "slug": "simply-ambient",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
