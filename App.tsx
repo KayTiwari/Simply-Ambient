@@ -44,6 +44,7 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const MIN_HZ = 50;
 const MAX_HZ = 1000;
 const STORAGE_KEY = '@binaural_user_presets_v1';
+const STORAGE_KEY_ZODIAC = '@simply_ambient_zodiac_v1';
 const DEFAULT_LEFT = 200;
 const DEFAULT_RIGHT = 210;
 const TONE_FILE_PATH = `${FileSystem.cacheDirectory}binaural-tone.wav`;
@@ -209,7 +210,7 @@ export const DOSHAS: Dosha[] = [
 const PRESETS: BuiltInPreset[] = [
   { id: 'delta',    band: 'delta', name: 'Delta',    range: '0.5–4 Hz',  beatHz: 2,  carrier: 200, color: '#5B6CFF', blurb: 'Surrender · Restoration' },
   { id: 'theta',    band: 'theta', name: 'Theta',    range: '4–8 Hz',    beatHz: 6,  carrier: 200, color: '#8A5BFF', blurb: 'Visualize · Receive' },
-  { id: 'schumann', band: 'theta', name: 'Schumann', range: '7.83 Hz',   beatHz: 8,  carrier: 200, color: '#9affc8', blurb: 'Earth’s heartbeat' },
+  { id: 'schumann', band: 'alpha', name: 'Schumann', range: '7.83 Hz',   beatHz: 8,  carrier: 200, color: '#9affc8', blurb: 'Earth’s heartbeat' },
   { id: 'alpha',    band: 'alpha', name: 'Alpha',    range: '8–13 Hz',   beatHz: 10, carrier: 200, color: '#5BD0FF', blurb: 'Aligned focus · Allow' },
   { id: 'beta',     band: 'beta',  name: 'Beta',     range: '13–30 Hz',  beatHz: 18, carrier: 200, color: '#FFB05B', blurb: 'Direct · Take action' },
   { id: 'gamma',    band: 'gamma', name: 'Gamma',    range: '30–100 Hz', beatHz: 40, carrier: 200, color: '#FF5B9C', blurb: 'Insight · Knowing' },
@@ -500,6 +501,45 @@ function AppContent() {
   const [bgVolume, setBgVolume] = useState(0.5);
 
   const [lunar] = useState(() => lunarPhase());
+  const [mySignId, setMySignId] = useState<string | null>(null);
+  const [horoscope, setHoroscope] = useState<string | null>(null);
+  const [horoscopeLoading, setHoroscopeLoading] = useState(false);
+
+  const mySign = useMemo(
+    () => (mySignId && ZODIAC.find(z => z.id === mySignId)) || todaysSign(),
+    [mySignId],
+  );
+
+  // Load saved zodiac.
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY_ZODIAC).then(v => {
+      if (v) setMySignId(v);
+    }).catch(() => {});
+  }, []);
+
+  // Fetch horoscope when sign changes.
+  useEffect(() => {
+    let cancelled = false;
+    setHoroscopeLoading(true);
+    setHoroscope(null);
+    fetch(
+      `https://horoscope-app-api.vercel.app/api/v1/get-horoscope/daily?sign=${mySign.name}&day=TODAY`,
+    )
+      .then(r => (r.ok ? r.json() : null))
+      .then(json => {
+        if (cancelled) return;
+        const text = json?.data?.horoscope_data ?? null;
+        setHoroscope(text);
+      })
+      .catch(() => { if (!cancelled) setHoroscope(null); })
+      .finally(() => { if (!cancelled) setHoroscopeLoading(false); });
+    return () => { cancelled = true; };
+  }, [mySign.id]);
+
+  function selectMyZodiac(z: Zodiac) {
+    setMySignId(z.id);
+    AsyncStorage.setItem(STORAGE_KEY_ZODIAC, z.id).catch(() => {});
+  }
 
   const tonePlayerRef = useRef<AudioPlayer | null>(null);
   const tonePlayGenRef = useRef(0);
@@ -753,19 +793,18 @@ function AppContent() {
     if (stateRef.current.isTonePlaying) loadAndPlay(l, r);
   }
 
-  function applyZodiac(z: Zodiac) {
-    // Pull the matching chakra and apply it, but mark the preset id with a
-    // zodiac prefix so the zodiac chip highlights instead of the chakra card.
-    const c = CHAKRAS.find(ch => ch.id === z.chakraId);
-    if (!c) return;
-    const l = clampHz(c.hz - 3);
-    const r = clampHz(c.hz + 3);
-    setLeftHz(l);
-    setRightHz(r);
-    setActivePresetId(`z-${z.id}`);
-    setActiveBand(c.band);
-    if (stateRef.current.isTonePlaying) loadAndPlay(l, r);
-  }
+  // Computed display name for the band — prefers chakra/dosha/tuning names
+  // over the raw brainwave band when the user has tapped a specific preset.
+  const displayBandName = useMemo(() => {
+    const chakra = CHAKRAS.find(c => c.band === activeBand);
+    if (chakra) return chakra.name;
+    if (activePresetId && activePresetId.startsWith('dosha-')) {
+      const d = DOSHAS.find(dd => `dosha-${dd.id}` === activePresetId);
+      if (d) return d.name;
+    }
+    if (activeTuning) return activeTuning.name;
+    return band.name;
+  }, [activeBand, activePresetId, activeTuning, band.name]);
 
   function deleteUser(p: UserPreset) {
     Alert.alert('Delete preset?', `"${p.name}" will be removed.`, [
@@ -910,7 +949,7 @@ function AppContent() {
               <BreathworkView
                 toneIsPlaying={isTonePlaying}
                 beatHz={beat}
-                bandName={band.name}
+                bandName={displayBandName}
                 bandColor={beatColor}
               />
             )}
@@ -919,17 +958,19 @@ function AppContent() {
                 chakras={CHAKRAS}
                 doshas={DOSHAS}
                 zodiac={ZODIAC}
-                todaySign={todaysSign()}
+                mySign={mySign}
+                horoscope={horoscope}
+                horoscopeLoading={horoscopeLoading}
                 lunar={lunar}
                 activePresetId={activePresetId}
                 onApplyChakra={applyChakra}
                 onApplyDosha={applyDosha}
-                onApplyZodiac={applyZodiac}
+                onSelectMyZodiac={selectMyZodiac}
                 toneIsPlaying={isTonePlaying}
                 toneIsLoading={isToneLoading}
                 onTogglePlay={togglePlay}
                 beatHz={beat}
-                bandName={band.name}
+                bandName={displayBandName}
                 bandColor={beatColor}
               />
             )}

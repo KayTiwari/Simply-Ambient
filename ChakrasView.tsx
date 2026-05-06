@@ -14,12 +14,14 @@ type Props = {
   chakras: Chakra[];
   doshas: Dosha[];
   zodiac: Zodiac[];
-  todaySign: Zodiac;
+  mySign: Zodiac;
+  horoscope: string | null;
+  horoscopeLoading: boolean;
   lunar: { glyph: string; name: string; illum: number };
   activePresetId: string | null;
   onApplyChakra: (c: Chakra) => void;
   onApplyDosha: (d: Dosha) => void;
-  onApplyZodiac: (z: Zodiac) => void;
+  onSelectMyZodiac: (z: Zodiac) => void;
   toneIsPlaying: boolean;
   toneIsLoading: boolean;
   onTogglePlay: () => void;
@@ -29,8 +31,8 @@ type Props = {
 };
 
 export default function ChakrasView({
-  chakras, doshas, zodiac, todaySign, lunar, activePresetId,
-  onApplyChakra, onApplyDosha, onApplyZodiac,
+  chakras, doshas, zodiac, mySign, horoscope, horoscopeLoading, lunar, activePresetId,
+  onApplyChakra, onApplyDosha, onSelectMyZodiac,
   toneIsPlaying, toneIsLoading, onTogglePlay,
   beatHz, bandName, bandColor,
 }: Props) {
@@ -51,17 +53,13 @@ export default function ChakrasView({
       </View>
 
       <View style={styles.controlRow}>
-        {toneIsPlaying ? (
-          <View style={[styles.toneStrip, { flex: 1, marginHorizontal: 0 }]}>
-            <View style={[styles.toneDot, { backgroundColor: bandColor }]} />
-            <Text style={styles.toneText} numberOfLines={1}>
-              <Text style={{ color: bandColor, fontWeight: '700' }}>{bandName}</Text>
-              <Text style={{ color: '#ffffff99' }}> · {beatHz} Hz</Text>
-            </Text>
-          </View>
-        ) : (
-          <Text style={styles.controlHint}>Tap a chakra, then play.</Text>
-        )}
+        <View style={[styles.toneStrip, { flex: 1, marginHorizontal: 0 }]}>
+          <View style={[styles.toneDot, { backgroundColor: bandColor, opacity: toneIsPlaying ? 1 : 0.4 }]} />
+          <Text style={styles.toneText} numberOfLines={1}>
+            <Text style={{ color: bandColor, fontWeight: '700' }}>{bandName}</Text>
+            <Text style={{ color: '#ffffff99' }}> · {beatHz} Hz {toneIsPlaying ? '· playing' : ''}</Text>
+          </Text>
+        </View>
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={onTogglePlay}
@@ -79,19 +77,33 @@ export default function ChakrasView({
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Today widget — date, sun sign, intention, lunar */}
-        <View style={[styles.todayCard, { borderColor: todaySign.color + '55' }]}>
+        {/* Today widget — your sign + horoscope + lunar */}
+        <View style={[styles.todayCard, { borderColor: mySign.color + '55' }]}>
           <Text style={styles.todayLabel}>TODAY · {dateText.toUpperCase()}</Text>
           <View style={styles.todayRow}>
-            <Text style={[styles.zGlyph, { color: todaySign.color, fontSize: 38 }]}>{todaySign.glyph}</Text>
+            <Text style={[styles.zGlyph, { color: mySign.color, fontSize: 38 }]}>{mySign.glyph}</Text>
             <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={styles.todaySignName}>{todaySign.name}</Text>
-              <Text style={[styles.metaText, { color: todaySign.color }]}>
-                {todaySign.element} · {todaySign.qualities}
+              <Text style={styles.todaySignName}>{mySign.name}</Text>
+              <Text style={[styles.metaText, { color: mySign.color }]}>
+                {mySign.element} · {mySign.qualities}
               </Text>
             </View>
           </View>
-          <Text style={styles.todayIntention}>“{todaySign.intention}”</Text>
+          {horoscopeLoading ? (
+            <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
+              <ActivityIndicator color={mySign.color} />
+            </View>
+          ) : horoscope ? (
+            <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
+              <Text style={styles.horoscopeLabel}>DAILY HOROSCOPE</Text>
+              <Text style={styles.horoscopeText}>{horoscope}</Text>
+            </View>
+          ) : (
+            <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
+              <Text style={styles.horoscopeFallback}>“{mySign.intention}”</Text>
+              <Text style={styles.horoscopeNote}>(Couldn't reach the horoscope service — showing the sign's intention.)</Text>
+            </View>
+          )}
           <View style={styles.todayMoon}>
             <Text style={styles.todayMoonGlyph}>{lunar.glyph}</Text>
             <Text style={styles.todayMoonText}>
@@ -100,20 +112,20 @@ export default function ChakrasView({
           </View>
         </View>
 
-        <Text style={styles.sectionLabel}>ZODIAC</Text>
-        <Text style={styles.sectionSub}>Tap any sign to tune to its element's chakra</Text>
+        <Text style={styles.sectionLabel}>YOUR ZODIAC SIGN</Text>
+        <Text style={styles.sectionSub}>Tap to set your sign and read its daily horoscope</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.zodiacRow}
         >
           {zodiac.map(z => {
-            const active = activePresetId === `z-${z.id}`;
+            const active = mySign.id === z.id;
             return (
               <TouchableOpacity
                 key={z.id}
                 activeOpacity={0.85}
-                onPress={() => onApplyZodiac(z)}
+                onPress={() => onSelectMyZodiac(z)}
                 style={[
                   styles.zodiacChip,
                   {
@@ -358,6 +370,19 @@ const styles = StyleSheet.create({
     color: '#ffffffcc', fontSize: 14, fontStyle: 'italic',
     marginTop: 12, lineHeight: 20,
   },
+  horoscopeBox: {
+    marginTop: 14,
+    paddingLeft: 12,
+    paddingVertical: 6,
+    borderLeftWidth: 2,
+  },
+  horoscopeLabel: {
+    color: '#ffffff80', fontSize: 10, letterSpacing: 2, fontWeight: '600',
+    marginBottom: 4,
+  },
+  horoscopeText: { color: '#ffffffcc', fontSize: 13, lineHeight: 19 },
+  horoscopeFallback: { color: '#ffffffcc', fontSize: 14, fontStyle: 'italic', lineHeight: 20 },
+  horoscopeNote: { color: '#ffffff66', fontSize: 10, fontStyle: 'italic', marginTop: 6 },
   todayMoon: {
     flexDirection: 'row', alignItems: 'center',
     marginTop: 14, paddingTop: 12,
