@@ -21,9 +21,11 @@ type Technique = {
   phases: Phase[];
   color: string;
   // Visual character
-  petalSides: 3 | 4 | 5 | 6 | 8;     // number of sides on each petal polygon
-  petalCount: 3 | 4 | 5 | 6 | 8;     // how many petals orbit
-  centerSides: 3 | 4 | 5 | 6 | 8;    // sides of central polygon
+  petalSides: 3 | 4 | 5 | 6 | 8;
+  petalCount: 3 | 4 | 5 | 6 | 8;
+  centerSides: 3 | 4 | 5 | 6 | 8;
+  // Mudra (hand position) suggestion
+  mudra: { name: string; instruction: string };
 };
 
 const TECHNIQUES: Technique[] = [
@@ -38,6 +40,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Hold',   seconds: 4 },
     ],
     color: '#5BD0FF', petalSides: 4, petalCount: 4, centerSides: 4,
+    mudra: { name: 'Gyan Mudra', instruction: 'Touch thumb and index fingertip; rest hands palms-up on knees.' },
   },
   {
     id: '478', name: '4-7-8', category: 'calming',
@@ -49,6 +52,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 8 },
     ],
     color: '#8A5BFF', petalSides: 6, petalCount: 6, centerSides: 6,
+    mudra: { name: 'Anjali Mudra', instruction: 'Press palms together at the heart center; relax the shoulders.' },
   },
   {
     id: 'diaphragmatic', name: 'Diaphragmatic', category: 'calming',
@@ -59,6 +63,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 6 },
     ],
     color: '#5B6CFF', petalSides: 8, petalCount: 8, centerSides: 8,
+    mudra: { name: 'Hakini Mudra', instruction: 'Touch all five fingertips of one hand to the opposite hand in front of the chest.' },
   },
   {
     id: 'pursed', name: 'Pursed-Lip', category: 'calming',
@@ -69,6 +74,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 4 },
     ],
     color: '#9affc8', petalSides: 5, petalCount: 5, centerSides: 5,
+    mudra: { name: 'Vayu Mudra', instruction: 'Curl the index finger to the base of the thumb; thumb covers the index. Rest other fingers extended.' },
   },
   {
     id: 'holotropic', name: 'Holotropic', category: 'activating',
@@ -79,6 +85,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 1 },
     ],
     color: '#FF5B9C', petalSides: 3, petalCount: 6, centerSides: 3,
+    mudra: { name: 'Open palms', instruction: 'Lay hands palms-up on knees, fingers softly extended — receiving and surrender.' },
   },
   {
     id: 'shamanic', name: 'Shamanic', category: 'activating',
@@ -89,6 +96,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 1 },
     ],
     color: '#FFB05B', petalSides: 3, petalCount: 8, centerSides: 6,
+    mudra: { name: 'Power fists', instruction: 'Loose fists at the solar plexus, knuckles facing each other — gathering inner fire.' },
   },
   {
     id: 'soma', name: 'SOMA', category: 'activating',
@@ -100,6 +108,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Hold',   seconds: 2 },
     ],
     color: '#d9b35c', petalSides: 6, petalCount: 6, centerSides: 3,
+    mudra: { name: 'Apana Mudra', instruction: 'Tip of thumb touches tips of middle and ring fingers; index and pinky extended.' },
   },
   {
     id: 'coherent', name: 'Coherent (5·5)', category: 'calming',
@@ -110,6 +119,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 5 },
     ],
     color: '#5BD0FF', petalSides: 6, petalCount: 6, centerSides: 6,
+    mudra: { name: 'Apana Vayu Mudra', instruction: 'Index curls to base of thumb; tips of middle and ring touch thumb; pinky extended. Heart-opening.' },
   },
   {
     id: 'bhramari', name: 'Bhramari (Bee)', category: 'calming',
@@ -120,6 +130,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 8 },
     ],
     color: '#9affc8', petalSides: 8, petalCount: 8, centerSides: 8,
+    mudra: { name: 'Shanmukhi Mudra', instruction: 'Use thumbs to gently close ears; index over closed eyes; middle fingers beside nostrils; ring + pinky around lips.' },
   },
   {
     id: 'nadi', name: 'Nadi Shodhana', category: 'calming',
@@ -131,6 +142,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 4 },
     ],
     color: '#8A5BFF', petalSides: 5, petalCount: 6, centerSides: 5,
+    mudra: { name: 'Vishnu Mudra', instruction: 'Right hand: fold index and middle fingers into palm. Use thumb to close right nostril, ring + pinky to close left.' },
   },
   {
     id: 'sitali', name: 'Sitali (Cooling)', category: 'calming',
@@ -141,6 +153,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 6 },
     ],
     color: '#5B6CFF', petalSides: 4, petalCount: 8, centerSides: 4,
+    mudra: { name: 'Bhairava Mudra', instruction: 'Right hand resting in left palm, both palms facing up in lap.' },
   },
   {
     id: 'sigh', name: 'Physiological Sigh', category: 'calming',
@@ -152,6 +165,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 6 },
     ],
     color: '#5BD0FF', petalSides: 3, petalCount: 6, centerSides: 6,
+    mudra: { name: 'Pran Mudra', instruction: 'Tips of thumb, ring, and pinky touch; index and middle extended. Activates life force.' },
   },
   {
     id: 'bhastrika', name: 'Bhastrika (Bellows)', category: 'activating',
@@ -162,6 +176,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 1 },
     ],
     color: '#FFB05B', petalSides: 3, petalCount: 8, centerSides: 3,
+    mudra: { name: 'Knee grip', instruction: 'Sit upright, grasp the knees firmly with thumbs out. Anchors the diaphragmatic effort.' },
   },
   {
     id: 'lions', name: "Lion's Breath", category: 'activating',
@@ -172,6 +187,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 4 },
     ],
     color: '#FF5B9C', petalSides: 5, petalCount: 5, centerSides: 5,
+    mudra: { name: 'Lion claws', instruction: 'Stretch fingers wide on the knees like claws, palms down — opens the throat and chest.' },
   },
   {
     id: 'kapalabhati', name: 'Kapalabhati', category: 'activating',
@@ -182,6 +198,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 1 },
     ],
     color: '#FF8FB1', petalSides: 6, petalCount: 8, centerSides: 3,
+    mudra: { name: 'Chin Mudra', instruction: 'Touch tip of thumb and index together; rest hands palms-up on knees, other fingers extended.' },
   },
 ];
 
@@ -271,6 +288,7 @@ function TechniqueCard({ technique, onPress }: { technique: Technique; onPress: 
         <Text style={styles.cardChevron}>›</Text>
       </View>
       <Text style={styles.cardDescription}>{technique.description}</Text>
+      <Text style={[styles.cardMudra, { color: technique.color }]}>mudra · {technique.mudra.name}</Text>
     </TouchableOpacity>
   );
 }
@@ -466,6 +484,13 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
       </TouchableOpacity>
 
       <Text style={styles.sessionDescription}>{technique.description}</Text>
+
+      <View style={[styles.mudraBlock, { borderColor: technique.color + '55' }]}>
+        <Text style={[styles.mudraLabel, { color: technique.color }]}>
+          MUDRA · {technique.mudra.name.toUpperCase()}
+        </Text>
+        <Text style={styles.mudraText}>{technique.mudra.instruction}</Text>
+      </View>
     </View>
   );
 }
@@ -703,6 +728,7 @@ const styles = StyleSheet.create({
   cardBlurb: { fontSize: 11, marginTop: 2, letterSpacing: 1 },
   cardChevron: { color: '#ffffff66', fontSize: 22 },
   cardDescription: { color: '#ffffff88', fontSize: 12, marginTop: 8, lineHeight: 17 },
+  cardMudra: { fontSize: 10, marginTop: 6, letterSpacing: 1, fontStyle: 'italic' },
 
   footnote: {
     color: '#ffffff66', fontSize: 12, textAlign: 'center',
@@ -776,4 +802,12 @@ const styles = StyleSheet.create({
     color: '#ffffff88', fontSize: 13, textAlign: 'center',
     marginTop: 22, paddingHorizontal: 12, lineHeight: 19,
   },
+  mudraBlock: {
+    borderWidth: 1, borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 12,
+    marginTop: 16,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  mudraLabel: { fontSize: 10, letterSpacing: 2, fontWeight: '700', marginBottom: 4 },
+  mudraText: { color: '#ffffffaa', fontSize: 12, lineHeight: 17 },
 });

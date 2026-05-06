@@ -37,6 +37,7 @@ import {
 } from '@expo-google-fonts/cormorant-garamond';
 
 import BreathworkView from './BreathworkView';
+import ChakrasView from './ChakrasView';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -48,7 +49,9 @@ const DEFAULT_RIGHT = 210;
 const TONE_FILE_PATH = `${FileSystem.cacheDirectory}binaural-tone.wav`;
 const SLIDE_THROTTLE_MS = 220;
 
-type BandKey = 'none' | 'delta' | 'theta' | 'alpha' | 'beta' | 'gamma' | 'tuning';
+type BandKey =
+  | 'none' | 'delta' | 'theta' | 'alpha' | 'beta' | 'gamma' | 'tuning'
+  | 'root' | 'sacral' | 'solar' | 'heart' | 'throat' | 'thirdEye' | 'crown';
 
 const QUOTES = [
   'Thoughts become things',
@@ -87,6 +90,75 @@ type TuningPreset = {
   blurb: string;
   origin: 'solfeggio' | 'natural' | 'cosmic' | 'archaeo' | 'scientific';
 };
+
+export type Chakra = {
+  id: string;
+  band: BandKey;
+  number: number;
+  name: string;
+  sanskrit: string;
+  bija: string;
+  hz: number;
+  element: string;
+  location: string;
+  color: string;
+  governs: string;
+  blocked: string;
+};
+
+export const CHAKRAS: Chakra[] = [
+  { id: 'cr-root',     band: 'root',     number: 1, name: 'Root',         sanskrit: 'Muladhara',   bija: 'LAM', hz: 396, element: 'Earth',         location: 'Base of spine',     color: '#FF3838', governs: 'Safety · Stability · Survival',         blocked: 'Fear · Anxiety · Ungroundedness' },
+  { id: 'cr-sacral',   band: 'sacral',   number: 2, name: 'Sacral',       sanskrit: 'Svadhisthana',bija: 'VAM', hz: 417, element: 'Water',         location: 'Lower abdomen',     color: '#FF8A38', governs: 'Creativity · Sensuality · Pleasure',     blocked: 'Emotional repression · Stagnant flow' },
+  { id: 'cr-solar',    band: 'solar',    number: 3, name: 'Solar Plexus', sanskrit: 'Manipura',    bija: 'RAM', hz: 528, element: 'Fire',          location: 'Upper abdomen',     color: '#FFD000', governs: 'Will · Confidence · Personal power',     blocked: 'Low self-esteem · Control patterns' },
+  { id: 'cr-heart',    band: 'heart',    number: 4, name: 'Heart',        sanskrit: 'Anahata',     bija: 'YAM', hz: 639, element: 'Air',           location: 'Center of chest',   color: '#3FE07F', governs: 'Love · Compassion · Connection',         blocked: 'Grief · Resentment · Isolation' },
+  { id: 'cr-throat',   band: 'throat',   number: 5, name: 'Throat',       sanskrit: 'Vishuddha',   bija: 'HAM', hz: 741, element: 'Ether',         location: 'Throat',            color: '#3FB6FF', governs: 'Truth · Expression · Voice',             blocked: 'Suppressed truth · Fear of judgment' },
+  { id: 'cr-thirdEye', band: 'thirdEye', number: 6, name: 'Third Eye',    sanskrit: 'Ajna',        bija: 'OM',  hz: 852, element: 'Light',         location: 'Between brows',     color: '#5B6CFF', governs: 'Intuition · Insight · Inner vision',     blocked: 'Disconnect from inner knowing' },
+  { id: 'cr-crown',    band: 'crown',    number: 7, name: 'Crown',        sanskrit: 'Sahasrara',   bija: 'AUM', hz: 963, element: 'Consciousness', location: 'Top of head',       color: '#A45BFF', governs: 'Unity · Spirituality · Divine connection', blocked: 'Spiritual disconnect · Materialism' },
+];
+
+export type Dosha = {
+  id: 'vata' | 'pitta' | 'kapha';
+  name: string;
+  element: string;
+  qualities: string;
+  balanceHz: number;
+  balanceTechnique: string;
+  color: string;
+  description: string;
+};
+
+export const DOSHAS: Dosha[] = [
+  {
+    id: 'vata',
+    name: 'Vata',
+    element: 'Air + Ether',
+    qualities: 'Light · Cold · Mobile · Dry',
+    balanceHz: 432,
+    balanceTechnique: 'Nadi Shodhana',
+    color: '#9aa0e0',
+    description: 'Governs movement, breath, nervous system. Imbalanced: anxiety, insomnia, restlessness. Soothe with grounding warmth and slow, steady breath.',
+  },
+  {
+    id: 'pitta',
+    name: 'Pitta',
+    element: 'Fire + Water',
+    qualities: 'Hot · Sharp · Intense',
+    balanceHz: 528,
+    balanceTechnique: 'Sitali (Cooling)',
+    color: '#FFB05B',
+    description: 'Governs digestion, transformation, intellect. Imbalanced: irritability, inflammation, burnout. Cool with the breath, soften the gaze.',
+  },
+  {
+    id: 'kapha',
+    name: 'Kapha',
+    element: 'Earth + Water',
+    qualities: 'Heavy · Slow · Stable · Cool',
+    balanceHz: 741,
+    balanceTechnique: 'Bhastrika (Bellows)',
+    color: '#9affc8',
+    description: 'Governs structure, immunity, lubrication. Imbalanced: lethargy, attachment, stagnation. Energize with heat, motion, and clear expression.',
+  },
+];
 
 const PRESETS: BuiltInPreset[] = [
   { id: 'delta',    band: 'delta', name: 'Delta',    range: '0.5–4 Hz',  beatHz: 2,  carrier: 200, color: '#5B6CFF', blurb: 'Surrender · Restoration' },
@@ -130,6 +202,14 @@ const PALETTES: Record<BandKey, Palette> = {
   beta:   { base: ['#3a1a0a', '#76402a', '#3a1a0a'], waves: ['#502a14', '#965a3a', '#FFB05B'], accent: '#FFB05B' },
   gamma:  { base: ['#3a0a1a', '#76124a', '#3a0a1a'], waves: ['#5a0e2a', '#962060', '#FF5B9C'], accent: '#FF5B9C' },
   tuning: { base: ['#2a200a', '#5a4218', '#2a200a'], waves: ['#3a2c14', '#7a5e2a', '#d9b35c'], accent: '#d9b35c' },
+  // Chakra palettes — saturated, rainbow progression
+  root:     { base: ['#1a0a0a', '#3a1a14', '#1a0a0a'], waves: ['#2a1018', '#5a2030', '#FF3838'], accent: '#FF3838' },
+  sacral:   { base: ['#1a1208', '#3a2a14', '#1a1208'], waves: ['#2a1c10', '#5a3a20', '#FF8A38'], accent: '#FF8A38' },
+  solar:    { base: ['#1a1808', '#3a3214', '#1a1808'], waves: ['#2a2410', '#5a4a20', '#FFD000'], accent: '#FFD000' },
+  heart:    { base: ['#0a1a14', '#143a2a', '#0a1a14'], waves: ['#102a20', '#205a3a', '#3FE07F'], accent: '#3FE07F' },
+  throat:   { base: ['#0a1418', '#143040', '#0a1418'], waves: ['#10202a', '#205070', '#3FB6FF'], accent: '#3FB6FF' },
+  thirdEye: { base: ['#0a0a1a', '#141a3a', '#0a0a1a'], waves: ['#101020', '#202a5a', '#5B6CFF'], accent: '#5B6CFF' },
+  crown:    { base: ['#10081a', '#1a103a', '#10081a'], waves: ['#181020', '#3a205a', '#A45BFF'], accent: '#A45BFF' },
 };
 
 function bandFor(beat: number): { name: string; color: string; key: BandKey } {
@@ -142,6 +222,29 @@ function bandFor(beat: number): { name: string; color: string; key: BandKey } {
 
 function clampHz(n: number) {
   return Math.max(MIN_HZ, Math.min(MAX_HZ, Math.round(n)));
+}
+
+// ---------------------------------------------------------------------------
+//   Lunar phase — Conway's algorithm, ~99% accurate
+// ---------------------------------------------------------------------------
+
+function lunarPhase(date: Date = new Date()): { glyph: string; name: string; illum: number } {
+  let y = date.getFullYear();
+  let m = date.getMonth() + 1;
+  const d = date.getDate();
+  if (m < 3) { y -= 1; m += 12; }
+  const j = Math.floor(365.25 * y) + Math.floor(30.6001 * (m + 1)) + d - 694039.09;
+  const ip = (j / 29.5305882) % 1; // age fraction 0..1
+  const age = ip < 0 ? ip + 1 : ip;
+  const illum = (1 - Math.cos(age * 2 * Math.PI)) / 2; // 0..1
+  if (age < 0.0625 || age >= 0.9375) return { glyph: '●', name: 'New', illum };
+  if (age < 0.1875)  return { glyph: '◐', name: 'Waxing crescent', illum };
+  if (age < 0.3125)  return { glyph: '◐', name: 'First quarter', illum };
+  if (age < 0.4375)  return { glyph: '◑', name: 'Waxing gibbous', illum };
+  if (age < 0.5625)  return { glyph: '○', name: 'Full', illum };
+  if (age < 0.6875)  return { glyph: '◑', name: 'Waning gibbous', illum };
+  if (age < 0.8125)  return { glyph: '◑', name: 'Last quarter', illum };
+  return                  { glyph: '◐', name: 'Waning crescent', illum };
 }
 
 // ---------------------------------------------------------------------------
@@ -327,7 +430,7 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
 //   App
 // ===========================================================================
 
-type Tab = 'frequencies' | 'breath';
+type Tab = 'frequencies' | 'breath' | 'chakras';
 
 function AppContent() {
   const [tab, setTab] = useState<Tab>('frequencies');
@@ -349,6 +452,8 @@ function AppContent() {
   const [isBgPlaying, setIsBgPlaying] = useState(false);
   const [bgVolume, setBgVolume] = useState(0.5);
 
+  const [lunar] = useState(() => lunarPhase());
+
   const tonePlayerRef = useRef<AudioPlayer | null>(null);
   const tonePlayGenRef = useRef(0);
   const bgPlayerRef = useRef<AudioPlayer | null>(null);
@@ -368,10 +473,14 @@ function AppContent() {
   const activeTuning = activeBand === 'tuning'
     ? TUNINGS.find(t => t.id === activePresetId) ?? null
     : null;
+  const activeChakra = activePresetId && activePresetId.startsWith('cr-')
+    ? CHAKRAS.find(c => c.id === activePresetId) ?? null
+    : null;
   const beatColor =
     activeBand === 'none' ? '#9aa0b4' :
+    activeChakra ? activeChakra.color :
     activeBand === 'tuning' ? PALETTES.tuning.accent :
-    band.color;
+    PALETTES[activeBand]?.accent ?? band.color;
 
   // Mount: audio mode + load saved presets.
   useEffect(() => {
@@ -569,6 +678,26 @@ function AppContent() {
     if (stateRef.current.isTonePlaying) loadAndPlay(l, r);
   }
 
+  function applyChakra(c: Chakra) {
+    const l = clampHz(c.hz - 3);
+    const r = clampHz(c.hz + 3);
+    setLeftHz(l);
+    setRightHz(r);
+    setActivePresetId(c.id);
+    setActiveBand(c.band);
+    if (stateRef.current.isTonePlaying) loadAndPlay(l, r);
+  }
+
+  function applyDosha(d: Dosha) {
+    const l = clampHz(d.balanceHz - 3);
+    const r = clampHz(d.balanceHz + 3);
+    setLeftHz(l);
+    setRightHz(r);
+    setActivePresetId(`dosha-${d.id}`);
+    setActiveBand('tuning');
+    if (stateRef.current.isTonePlaying) loadAndPlay(l, r);
+  }
+
   function deleteUser(p: UserPreset) {
     Alert.alert('Delete preset?', `"${p.name}" will be removed.`, [
       { text: 'Cancel', style: 'cancel' },
@@ -664,18 +793,23 @@ function AppContent() {
       <WaveBackground band={activeBand} playing={isTonePlaying} />
       <StatusBar style="light" />
       <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.lunarBar} pointerEvents="none">
+          <Text style={styles.lunarGlyph}>{lunar.glyph}</Text>
+          <Text style={styles.lunarText}>{lunar.name}</Text>
+        </View>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
           <View style={{ flex: 1 }}>
-            {tab === 'frequencies' ? (
+            {tab === 'frequencies' && (
               <FrequenciesView
                 leftHz={leftHz} rightHz={rightHz}
                 beat={beat}
                 band={band}
                 activeBand={activeBand}
                 activeTuning={activeTuning}
+                activeChakra={activeChakra}
                 activePresetId={activePresetId}
                 isTonePlaying={isTonePlaying}
                 isToneLoading={isToneLoading}
@@ -699,8 +833,22 @@ function AppContent() {
                 onChangeBgVolume={changeBgVolume}
                 onClearBg={clearBg}
               />
-            ) : (
+            )}
+            {tab === 'breath' && (
               <BreathworkView
+                toneIsPlaying={isTonePlaying}
+                beatHz={beat}
+                bandName={band.name}
+                bandColor={beatColor}
+              />
+            )}
+            {tab === 'chakras' && (
+              <ChakrasView
+                chakras={CHAKRAS}
+                doshas={DOSHAS}
+                activePresetId={activePresetId}
+                onApplyChakra={applyChakra}
+                onApplyDosha={applyDosha}
                 toneIsPlaying={isTonePlaying}
                 beatHz={beat}
                 bandName={band.name}
@@ -786,7 +934,8 @@ function TabBar({ tab, onChange, accent }: { tab: Tab; onChange: (t: Tab) => voi
     <SafeAreaView edges={['bottom']} style={styles.tabBarSafe}>
       <View style={styles.tabBar}>
         <TabButton label="Frequencies" glyph="∿" active={tab === 'frequencies'} accent={accent} onPress={() => onChange('frequencies')} />
-        <TabButton label="Breath" glyph="○" active={tab === 'breath'} accent={accent} onPress={() => onChange('breath')} />
+        <TabButton label="Breath"      glyph="○" active={tab === 'breath'}      accent={accent} onPress={() => onChange('breath')} />
+        <TabButton label="Chakras"     glyph="✦" active={tab === 'chakras'}     accent={accent} onPress={() => onChange('chakras')} />
       </View>
     </SafeAreaView>
   );
@@ -814,6 +963,7 @@ type FreqViewProps = {
   band: { name: string; color: string; key: BandKey };
   activeBand: BandKey;
   activeTuning: TuningPreset | null;
+  activeChakra: Chakra | null;
   activePresetId: string | null;
   isTonePlaying: boolean;
   isToneLoading: boolean;
@@ -840,7 +990,7 @@ type FreqViewProps = {
 
 function FrequenciesView(props: FreqViewProps) {
   const {
-    leftHz, rightHz, beat, band, activeBand, activeTuning, activePresetId,
+    leftHz, rightHz, beat, band, activeBand, activeTuning, activeChakra, activePresetId,
     isTonePlaying, isToneLoading, userPresets,
     bgFileName, isBgPlaying, bgVolume, beatColor,
   } = props;
@@ -877,9 +1027,11 @@ function FrequenciesView(props: FreqViewProps) {
         <View style={[styles.bandPill, { backgroundColor: beatColor + '22', borderColor: beatColor }]}>
           <View style={[styles.bandDot, { backgroundColor: beatColor }]} />
           <Text style={[styles.bandText, { color: beatColor }]}>
-            {activeTuning
-              ? `${activeTuning.name} · ${activeTuning.intent}`
-              : band.name}
+            {activeChakra
+              ? `${activeChakra.name} · ${activeChakra.bija} · ${activeChakra.element}`
+              : activeTuning
+                ? `${activeTuning.name} · ${activeTuning.intent}`
+                : band.name}
           </Text>
         </View>
       </View>
@@ -1327,6 +1479,25 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  lunarBar: {
+    position: 'absolute',
+    top: 4, right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
+    opacity: 0.55,
+  },
+  lunarGlyph: {
+    color: '#fff',
+    fontSize: 14,
+    marginRight: 6,
+  },
+  lunarText: {
+    color: '#fff',
+    fontSize: 10,
+    letterSpacing: 1,
+    fontStyle: 'italic',
   },
   tabBar: {
     flexDirection: 'row',

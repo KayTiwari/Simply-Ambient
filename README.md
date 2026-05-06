@@ -73,6 +73,31 @@ Sixteen techniques across two categories:
 - Two huge rotating rounded shapes in the band's accent and secondary tones — the visible color morphs as they slowly spin past one another. Inspired by Rowno's [Chameleon background](https://codepen.io/Rowno/pen/EVEgJb) CodePen.
 - Snaps to a new palette when you choose a different preset.
 
+### 🔯 Chakras tab
+
+Seven chakras with full attribution:
+- **Root** (Muladhara · LAM · Earth · 396 Hz)
+- **Sacral** (Svadhisthana · VAM · Water · 417 Hz)
+- **Solar Plexus** (Manipura · RAM · Fire · 528 Hz)
+- **Heart** (Anahata · YAM · Air · 639 Hz)
+- **Throat** (Vishuddha · HAM · Ether · 741 Hz)
+- **Third Eye** (Ajna · OM · Light · 852 Hz)
+- **Crown** (Sahasrara · AUM · Consciousness · 963 Hz)
+
+Each card shows the bija mantra, element, body location, what it governs, and what blocks look like. Tap to tune both ears around its carrier frequency with a 6 Hz theta beat — the whole app theme shifts to that chakra's color.
+
+### 🌿 Doshas (Ayurveda)
+
+Three constitutions on the chakra tab — **Vata**, **Pitta**, **Kapha** — each with its qualities, recommended balancing frequency, and recommended breath technique. Tap to apply.
+
+### 🤲 Mudras
+
+Every breath technique includes a paired hand mudra (Gyan, Anjali, Hakini, Shanmukhi, Vishnu, Bhairava, Pran, Apana, Chin, etc.) with placement instructions, shown in the breath session screen.
+
+### 🌙 Lunar phase
+
+A subtle indicator in the corner of the app shows the current moon phase (computed from Conway's algorithm) — passive ambient awareness.
+
 ### 💭 Manifestation language
 
 A rotating set of New Thought aphorisms drifts across the top of the screen:
