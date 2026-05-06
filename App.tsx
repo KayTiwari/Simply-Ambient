@@ -99,6 +99,7 @@ export type Chakra = {
   name: string;
   sanskrit: string;
   bija: string;
+  symbol: string;            // Devanagari bija glyph
   hz: number;
   element: string;
   location: string;
@@ -108,13 +109,13 @@ export type Chakra = {
 };
 
 export const CHAKRAS: Chakra[] = [
-  { id: 'cr-root',     band: 'root',     number: 1, name: 'Root',         sanskrit: 'Muladhara',   bija: 'LAM', hz: 396, element: 'Earth',         location: 'Base of spine',     color: '#FF3838', governs: 'Safety · Stability · Survival',         blocked: 'Fear · Anxiety · Ungroundedness' },
-  { id: 'cr-sacral',   band: 'sacral',   number: 2, name: 'Sacral',       sanskrit: 'Svadhisthana',bija: 'VAM', hz: 417, element: 'Water',         location: 'Lower abdomen',     color: '#FF8A38', governs: 'Creativity · Sensuality · Pleasure',     blocked: 'Emotional repression · Stagnant flow' },
-  { id: 'cr-solar',    band: 'solar',    number: 3, name: 'Solar Plexus', sanskrit: 'Manipura',    bija: 'RAM', hz: 528, element: 'Fire',          location: 'Upper abdomen',     color: '#FFD000', governs: 'Will · Confidence · Personal power',     blocked: 'Low self-esteem · Control patterns' },
-  { id: 'cr-heart',    band: 'heart',    number: 4, name: 'Heart',        sanskrit: 'Anahata',     bija: 'YAM', hz: 639, element: 'Air',           location: 'Center of chest',   color: '#3FE07F', governs: 'Love · Compassion · Connection',         blocked: 'Grief · Resentment · Isolation' },
-  { id: 'cr-throat',   band: 'throat',   number: 5, name: 'Throat',       sanskrit: 'Vishuddha',   bija: 'HAM', hz: 741, element: 'Ether',         location: 'Throat',            color: '#3FB6FF', governs: 'Truth · Expression · Voice',             blocked: 'Suppressed truth · Fear of judgment' },
-  { id: 'cr-thirdEye', band: 'thirdEye', number: 6, name: 'Third Eye',    sanskrit: 'Ajna',        bija: 'OM',  hz: 852, element: 'Light',         location: 'Between brows',     color: '#5B6CFF', governs: 'Intuition · Insight · Inner vision',     blocked: 'Disconnect from inner knowing' },
-  { id: 'cr-crown',    band: 'crown',    number: 7, name: 'Crown',        sanskrit: 'Sahasrara',   bija: 'AUM', hz: 963, element: 'Consciousness', location: 'Top of head',       color: '#A45BFF', governs: 'Unity · Spirituality · Divine connection', blocked: 'Spiritual disconnect · Materialism' },
+  { id: 'cr-root',     band: 'root',     number: 1, name: 'Root',         sanskrit: 'Muladhara',   bija: 'LAM', symbol: 'लं', hz: 396, element: 'Earth',         location: 'Base of spine',     color: '#FF3838', governs: 'Safety · Stability · Survival',         blocked: 'Fear · Anxiety · Ungroundedness' },
+  { id: 'cr-sacral',   band: 'sacral',   number: 2, name: 'Sacral',       sanskrit: 'Svadhisthana',bija: 'VAM', symbol: 'वं', hz: 417, element: 'Water',         location: 'Lower abdomen',     color: '#FF8A38', governs: 'Creativity · Sensuality · Pleasure',     blocked: 'Emotional repression · Stagnant flow' },
+  { id: 'cr-solar',    band: 'solar',    number: 3, name: 'Solar Plexus', sanskrit: 'Manipura',    bija: 'RAM', symbol: 'रं', hz: 528, element: 'Fire',          location: 'Upper abdomen',     color: '#FFD000', governs: 'Will · Confidence · Personal power',     blocked: 'Low self-esteem · Control patterns' },
+  { id: 'cr-heart',    band: 'heart',    number: 4, name: 'Heart',        sanskrit: 'Anahata',     bija: 'YAM', symbol: 'यं', hz: 639, element: 'Air',           location: 'Center of chest',   color: '#3FE07F', governs: 'Love · Compassion · Connection',         blocked: 'Grief · Resentment · Isolation' },
+  { id: 'cr-throat',   band: 'throat',   number: 5, name: 'Throat',       sanskrit: 'Vishuddha',   bija: 'HAM', symbol: 'हं', hz: 741, element: 'Ether',         location: 'Throat',            color: '#3FB6FF', governs: 'Truth · Expression · Voice',             blocked: 'Suppressed truth · Fear of judgment' },
+  { id: 'cr-thirdEye', band: 'thirdEye', number: 6, name: 'Third Eye',    sanskrit: 'Ajna',        bija: 'OM',  symbol: 'ॐ',  hz: 852, element: 'Light',         location: 'Between brows',     color: '#5B6CFF', governs: 'Intuition · Insight · Inner vision',     blocked: 'Disconnect from inner knowing' },
+  { id: 'cr-crown',    band: 'crown',    number: 7, name: 'Crown',        sanskrit: 'Sahasrara',   bija: 'AUM', symbol: 'ॐ',  hz: 963, element: 'Consciousness', location: 'Top of head',       color: '#A45BFF', governs: 'Unity · Spirituality · Divine connection', blocked: 'Spiritual disconnect · Materialism' },
 ];
 
 export type Dosha = {
@@ -523,12 +524,15 @@ function AppContent() {
     setHoroscopeLoading(true);
     setHoroscope(null);
     fetch(
-      `https://horoscope-app-api.vercel.app/api/v1/get-horoscope/daily?sign=${mySign.name}&day=TODAY`,
+      `https://freehoroscopeapi.com/api/v1/get-horoscope/daily?sign=${mySign.name}&day=TODAY`,
     )
       .then(r => (r.ok ? r.json() : null))
       .then(json => {
         if (cancelled) return;
-        const text = json?.data?.horoscope_data ?? null;
+        const text =
+          json?.data?.horoscope ??
+          json?.data?.horoscope_data ??
+          null;
         setHoroscope(text);
       })
       .catch(() => { if (!cancelled) setHoroscope(null); })

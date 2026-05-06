@@ -161,8 +161,8 @@ export default function ChakrasView({
               ]}
             >
               <View style={styles.cardTopRow}>
-                <View style={styles.numAndDot}>
-                  <View style={[styles.colorDot, { backgroundColor: c.color }]} />
+                <View style={[styles.symbolBox, { borderColor: c.color + '55' }]}>
+                  <Text style={[styles.chakraSymbol, { color: c.color }]}>{c.symbol}</Text>
                   <Text style={styles.numText}>{c.number}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
@@ -306,6 +306,20 @@ const styles = StyleSheet.create({
   },
   colorDot: { width: 14, height: 14, borderRadius: 7, marginBottom: 4 },
   numText: { color: '#ffffff66', fontSize: 10, letterSpacing: 1, fontWeight: '600' },
+  symbolBox: {
+    width: 52, height: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 14,
+  },
+  chakraSymbol: {
+    fontSize: 26,
+    lineHeight: 30,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
   cardName: { color: '#fff', fontSize: 17, fontWeight: '600' },
   sanskrit: {
     color: '#ffffff88',
