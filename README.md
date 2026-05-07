@@ -15,14 +15,15 @@ The philosophy is rooted in **New Thought / manifestation**: tune your vibration
 
 ---
 
-## Four tabs
+## Five tabs
 
 | Tab | Glyph | Contents |
 |---|---|---|
-| **Frequencies** | ∿ | L/R sliders, brainwave & tuning presets, custom presets, background music |
-| **Breath** | ○ | 16 breath techniques, circle / polygonal-mandala visualizations, mudras |
+| **Frequencies** | ∿ | L/R sliders, brainwave & tuning presets, custom presets, background music, sleep timer |
+| **Breath** | ○ | Mala counter (108), 16 breath techniques, circle / polygonal-mandala visualizations, mudras |
 | **Chakras** | ✦ | 7 chakras with Devanagari bija glyphs, doshas (Vata/Pitta/Kapha) |
-| **Horoscopes** | ☽ | Daily / monthly / yearly horoscopes, zodiac picker, lunar phase |
+| **Horoscopes** | ☽ | Daily / monthly / yearly horoscopes, zodiac picker, tarot card draw, lunar phase |
+| **More** | ⋯ | Daily affirmation + opt-in push, mood check-in, gratitude journal, 5-4-3-2-1 grounding, support, bug report |
 
 Plus a small **lunar-phase chip** in the top-right corner of every screen.
 
@@ -109,6 +110,30 @@ Three Ayurvedic constitutions on the chakra tab — **Vata** (Air + Ether), **Pi
 - **Lunar phase + percent illumination** at the bottom of the widget (also computed locally from Conway's algorithm).
 - **Full 12-zodiac picker** — tap to set your sign. Persisted in local storage.
 
+### ⋯ More tab
+
+- **Daily affirmation** — fetched from `affirmations.dev` (free public API), refreshable.
+- **Opt-in push notifications** for affirmations:
+  - Off / 1× per day (9 a.m.) / 3× per day (9 a.m., 1 p.m., 6 p.m.)
+  - Scheduled locally via `expo-notifications`
+- **Mood check-in** — 1–5 buttons, color-coded, stores up to 60 entries locally.
+- **Gratitude journal** — multi-line text input + persistent log of entries.
+- **5-4-3-2-1 grounding** — sensory anxiety reset reference.
+- **Support the developer** — opens Buy Me a Coffee link.
+- **Report a bug** — in-app form that sends straight to the developer's inbox via FormSubmit (email obfuscated, never shown in the UI).
+
+### 💤 Sleep timer
+
+On the Frequencies tab, just below the Play button. Off / 5m / 10m / 15m / 30m / 60m. When the timer fires, audio is gracefully released.
+
+### 📿 Mala counter
+
+On the Breath tab. Tap-to-count to 108 with a progress bar, "Reset" button, and a "✓ Complete" state. Pairs naturally with the breath techniques and bija mantras.
+
+### 🃏 Tarot
+
+On the Horoscopes tab. Pulls a single random card from the public Tarot API on first open, with a refresh button to draw again. Shows the card name, upright meaning, and a snippet of description.
+
 ### 🎨 Living background
 
 - Rich diagonal base gradient + two cross-fading diagonal gradient layers in opposing directions, plus a slow vertical accent stripe drifting upward.
@@ -136,6 +161,8 @@ A rotating set of New Thought aphorisms drifts across the top of the Frequencies
 - **expo-linear-gradient** — gradient layers for the living background
 - **react-native-svg** — polygons for the mandala visualization
 - **react-native-safe-area-context**
+- **expo-notifications** — local-only scheduled push notifications for affirmations
+- **expo-linking** — opening external donation URLs
 
 ### How the binaural audio works
 
@@ -171,7 +198,8 @@ Then either:
 ├── App.tsx                  # Tabs, state, audio, frequencies UI, animated background, zodiac/lunar data
 ├── BreathworkView.tsx       # 16 breath techniques + circle and polygonal-mandala visuals + mudras
 ├── ChakrasView.tsx          # 7 chakras (Devanagari bijas) + doshas
-├── HoroscopesView.tsx       # Today widget, daily/monthly/yearly horoscopes, zodiac picker, lunar
+├── HoroscopesView.tsx       # Today widget, daily/monthly/yearly horoscopes, zodiac picker, tarot, lunar
+├── MoreView.tsx             # Affirmations, mood, gratitude, grounding, support, bug report
 ├── app.json                 # Expo config (icon, splash, plugins)
 ├── assets/                  # Icons + splash (minimal green leaf on white)
 ├── screenshots/             # README screenshots

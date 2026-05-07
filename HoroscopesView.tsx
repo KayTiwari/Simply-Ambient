@@ -19,12 +19,39 @@ type Props = {
   onSelectMyZodiac: (z: Zodiac) => void;
 };
 
+type TarotCard = {
+  name: string;
+  meaning_up?: string;
+  meaning_rev?: string;
+  desc?: string;
+};
+
 export default function HoroscopesView({
   zodiac, mySign, lunar, onSelectMyZodiac,
 }: Props) {
   const [period, setPeriod] = useState<Period>('daily');
   const [horoscope, setHoroscope] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const [tarot, setTarot] = useState<TarotCard | null>(null);
+  const [tarotLoading, setTarotLoading] = useState(false);
+
+  function drawTarot() {
+    setTarotLoading(true);
+    fetch('https://freehoroscopeapi.com/api/v1/tarot/cards/random?n=1')
+      .then(r => (r.ok ? r.json() : null))
+      .then(json => {
+        const c = json?.cards?.[0];
+        if (c) setTarot(c);
+      })
+      .catch(() => {})
+      .finally(() => setTarotLoading(false));
+  }
+
+  // Draw a tarot card on first load.
+  useEffect(() => {
+    drawTarot();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -180,8 +207,33 @@ export default function HoroscopesView({
           })}
         </ScrollView>
 
+        {/* TAROT CARD OF THE DAY */}
+        <View style={[styles.tarotCard, { borderColor: '#A45BFF55' }]}>
+          <View style={styles.tarotHeaderRow}>
+            <Text style={styles.cardLabel}>CARD OF THE MOMENT</Text>
+            <TouchableOpacity onPress={drawTarot} style={styles.tarotRefreshBtn}>
+              <Text style={styles.tarotRefreshText}>↻</Text>
+            </TouchableOpacity>
+          </View>
+          {tarotLoading ? (
+            <ActivityIndicator color="#A45BFF" style={{ marginVertical: 24 }} />
+          ) : tarot ? (
+            <>
+              <Text style={styles.tarotName}>{tarot.name}</Text>
+              {tarot.meaning_up ? (
+                <Text style={styles.tarotMeaning}>{tarot.meaning_up}</Text>
+              ) : null}
+              {tarot.desc ? (
+                <Text style={styles.tarotDesc} numberOfLines={4}>{tarot.desc}</Text>
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.tarotMeaning}>Pull a card and pause for a moment.</Text>
+          )}
+        </View>
+
         <Text style={styles.footnote}>
-          Horoscopes are fetched daily from a free public API.
+          Horoscopes and tarot are fetched from a free public API.
           Take what resonates, leave the rest.
         </Text>
       </ScrollView>
@@ -282,4 +334,23 @@ const styles = StyleSheet.create({
     color: '#ffffff66', fontSize: 12, textAlign: 'center',
     marginTop: 24, paddingHorizontal: 12, fontStyle: 'italic', lineHeight: 18,
   },
+  cardLabel: { color: '#ffffff80', fontSize: 11, letterSpacing: 2, fontWeight: '600' },
+  tarotCard: {
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 18, padding: 16, marginTop: 22, borderWidth: 1,
+  },
+  tarotHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  tarotRefreshBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  tarotRefreshText: { color: '#fff', fontSize: 16 },
+  tarotName: {
+    color: '#A45BFF',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 26, letterSpacing: 1, marginBottom: 6,
+  },
+  tarotMeaning: { color: '#ffffffdd', fontSize: 13, lineHeight: 19, marginBottom: 8 },
+  tarotDesc: { color: '#ffffff88', fontSize: 12, lineHeight: 17, fontStyle: 'italic' },
 });

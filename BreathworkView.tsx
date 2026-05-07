@@ -244,6 +244,40 @@ export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandCo
   );
 }
 
+function MalaCounter() {
+  const [count, setCount] = useState(0);
+  const target = 108;
+  const ratio = Math.min(1, count / target);
+  return (
+    <View style={styles.malaCard}>
+      <View style={styles.malaTopRow}>
+        <Text style={styles.cardName}>Mala Counter</Text>
+        <Text style={styles.malaCountText}>{count} / {target}</Text>
+      </View>
+      <View style={styles.malaBar}>
+        <View style={[styles.malaBarFill, { width: `${ratio * 100}%` }]} />
+      </View>
+      <View style={styles.malaActions}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => setCount(0)}
+          style={styles.malaResetBtn}
+        >
+          <Text style={styles.malaResetText}>Reset</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => setCount(c => Math.min(target, c + 1))}
+          style={styles.malaCountBtn}
+        >
+          <Text style={styles.malaCountBtnText}>{count >= target ? '✓ Complete' : 'TAP'}</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={styles.malaHint}>Tap on each breath, mantra, or bead.</Text>
+    </View>
+  );
+}
+
 function TechniqueList({ onPick }: { onPick: (t: Technique) => void }) {
   const calming = TECHNIQUES.filter(t => t.category === 'calming');
   const activating = TECHNIQUES.filter(t => t.category === 'activating');
@@ -253,6 +287,8 @@ function TechniqueList({ onPick }: { onPick: (t: Technique) => void }) {
       contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20 }}
       showsVerticalScrollIndicator={false}
     >
+      <MalaCounter />
+
       <Text style={styles.sectionLabel}>CALMING</Text>
       <Text style={styles.sectionSub}>Slow the body. Soften the mind.</Text>
       {calming.map(t => (
@@ -729,6 +765,33 @@ const styles = StyleSheet.create({
   cardChevron: { color: '#ffffff66', fontSize: 22 },
   cardDescription: { color: '#ffffff88', fontSize: 12, marginTop: 8, lineHeight: 17 },
   cardMudra: { fontSize: 10, marginTop: 6, letterSpacing: 1, fontStyle: 'italic' },
+
+  malaCard: {
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 18, padding: 16, marginTop: 8, marginBottom: 14,
+    borderWidth: 1, borderColor: '#d9b35c55',
+  },
+  malaTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  malaCountText: { color: '#d9b35c', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
+  malaBar: {
+    height: 4, marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 2, overflow: 'hidden',
+  },
+  malaBarFill: { height: '100%', backgroundColor: '#d9b35c' },
+  malaActions: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 10 },
+  malaResetBtn: {
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  malaResetText: { color: '#ffffffaa', fontSize: 12, fontWeight: '600', letterSpacing: 1 },
+  malaCountBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: 999,
+    backgroundColor: '#d9b35c', alignItems: 'center',
+  },
+  malaCountBtnText: { color: '#0B0B1F', fontSize: 14, fontWeight: '800', letterSpacing: 4 },
+  malaHint: { color: '#ffffff66', fontSize: 11, fontStyle: 'italic', marginTop: 10, textAlign: 'center' },
 
   footnote: {
     color: '#ffffff66', fontSize: 12, textAlign: 'center',

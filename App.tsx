@@ -29,6 +29,7 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import {
   useFonts,
   CormorantGaramond_400Regular,
@@ -39,6 +40,7 @@ import {
 import BreathworkView from './BreathworkView';
 import ChakrasView from './ChakrasView';
 import HoroscopesView from './HoroscopesView';
+import MoreView, { type NotifPref } from './MoreView';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -297,6 +299,41 @@ function clampHz(n: number) {
   return Math.max(MIN_HZ, Math.min(MAX_HZ, Math.round(n)));
 }
 
+// Show notifications even when the app is in the foreground.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
+
+async function scheduleAffirmationNotifs(pref: NotifPref) {
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    if (pref === 'off') return;
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') return;
+    const times = pref === 'daily'
+      ? [{ hour: 9, minute: 0 }]
+      : [{ hour: 9, minute: 0 }, { hour: 13, minute: 0 }, { hour: 18, minute: 0 }];
+    for (const t of times) {
+      const aff = NOTIF_AFFIRMATIONS[Math.floor(Math.random() * NOTIF_AFFIRMATIONS.length)];
+      await Notifications.scheduleNotificationAsync({
+        content: { title: 'Simply Ambient', body: aff },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour: t.hour,
+          minute: t.minute,
+        },
+      });
+    }
+  } catch (e) {
+    console.warn('notification scheduling failed', e);
+  }
+}
+
 // ---------------------------------------------------------------------------
 //   Lunar phase — Conway's algorithm, ~99% accurate
 // ---------------------------------------------------------------------------
@@ -503,7 +540,30 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
 //   App
 // ===========================================================================
 
-type Tab = 'frequencies' | 'breath' | 'chakras' | 'horoscopes';
+type Tab = 'frequencies' | 'breath' | 'chakras' | 'horoscopes' | 'more';
+
+const STORAGE_KEY_NOTIF = '@simply_ambient_notif_pref_v1';
+const SLEEP_TIMER_OPTIONS = [0, 5, 10, 15, 30, 60] as const; // minutes
+
+// Static pool used when scheduling local push notifications (we can't fetch
+// at notification trigger time; the body is set when scheduled).
+const NOTIF_AFFIRMATIONS = [
+  'You are exactly where you need to be.',
+  'Every breath is a fresh beginning.',
+  'What you seek is seeking you.',
+  'Your presence is enough.',
+  'Energy flows where attention goes.',
+  'You attract what you vibrate.',
+  'Be still, and know.',
+  'The mind quiets when the body softens.',
+  'You are allowed to take your time.',
+  'Trust the next step, even if you cannot see it.',
+  'As within, so without.',
+  'Today is a small piece of a larger unfolding.',
+  'Soften. Listen. Receive.',
+  'Your worth is not contingent on output.',
+  'Breathe in. Breathe out. Begin again.',
+];
 
 function AppContent() {
   const insets = useSafeAreaInsets();
@@ -529,6 +589,16 @@ function AppContent() {
   const [lunar] = useState(() => lunarPhase());
   const [mySignId, setMySignId] = useState<string | null>(null);
 
+  // More-tab state
+  const [notifPref, setNotifPref] = useState<NotifPref>('off');
+  const [affirmation, setAffirmation] = useState<string | null>(null);
+  const [affLoading, setAffLoading] = useState(false);
+
+  // Sleep timer
+  const [sleepMinutes, setSleepMinutes] = useState(0);
+  const sleepTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sleepEndsAt, setSleepEndsAt] = useState<number | null>(null);
+
   const mySign = useMemo(
     () => (mySignId && ZODIAC.find(z => z.id === mySignId)) || todaysSign(),
     [mySignId],
@@ -544,6 +614,61 @@ function AppContent() {
     setMySignId(z.id);
     AsyncStorage.setItem(STORAGE_KEY_ZODIAC, z.id).catch(() => {});
   }
+
+  // Affirmations
+  async function refreshAffirmation() {
+    setAffLoading(true);
+    try {
+      const res = await fetch('https://www.affirmations.dev');
+      if (!res.ok) throw new Error('bad response');
+      const json = await res.json();
+      setAffirmation(json?.affirmation ?? null);
+    } catch {
+      // Fallback to static pool
+      setAffirmation(NOTIF_AFFIRMATIONS[Math.floor(Math.random() * NOTIF_AFFIRMATIONS.length)]);
+    } finally {
+      setAffLoading(false);
+    }
+  }
+
+  // Load notification preference + initial affirmation on mount.
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY_NOTIF).then(v => {
+      if (v === 'daily' || v === 'thrice') setNotifPref(v);
+    }).catch(() => {});
+    refreshAffirmation();
+  }, []);
+
+  function changeNotifPref(pref: NotifPref) {
+    setNotifPref(pref);
+    AsyncStorage.setItem(STORAGE_KEY_NOTIF, pref).catch(() => {});
+    scheduleAffirmationNotifs(pref);
+  }
+
+  // Sleep timer: when minutes > 0, schedule a stop. Resets if play state changes.
+  function setSleepTimer(minutes: number) {
+    if (sleepTimeoutRef.current) {
+      clearTimeout(sleepTimeoutRef.current);
+      sleepTimeoutRef.current = null;
+    }
+    setSleepMinutes(minutes);
+    if (minutes > 0) {
+      setSleepEndsAt(Date.now() + minutes * 60 * 1000);
+      sleepTimeoutRef.current = setTimeout(() => {
+        sleepTimeoutRef.current = null;
+        setSleepMinutes(0);
+        setSleepEndsAt(null);
+        if (stateRef.current.isTonePlaying) stopTones();
+      }, minutes * 60 * 1000);
+    } else {
+      setSleepEndsAt(null);
+    }
+  }
+
+  // Cancel sleep timer when component unmounts.
+  useEffect(() => () => {
+    if (sleepTimeoutRef.current) clearTimeout(sleepTimeoutRef.current);
+  }, []);
 
   const tonePlayerRef = useRef<AudioPlayer | null>(null);
   const tonePlayGenRef = useRef(0);
@@ -926,6 +1051,8 @@ function AppContent() {
                 activeTuning={activeTuning}
                 activeChakra={activeChakra}
                 activePresetId={activePresetId}
+                sleepMinutes={sleepMinutes}
+                onSetSleepTimer={setSleepTimer}
                 isTonePlaying={isTonePlaying}
                 isToneLoading={isToneLoading}
                 userPresets={userPresets}
@@ -978,6 +1105,15 @@ function AppContent() {
                 mySign={mySign}
                 lunar={lunar}
                 onSelectMyZodiac={selectMyZodiac}
+              />
+            )}
+            {tab === 'more' && (
+              <MoreView
+                notifPref={notifPref}
+                onChangeNotifPref={changeNotifPref}
+                affirmation={affirmation}
+                affirmationLoading={affLoading}
+                onRefreshAffirmation={refreshAffirmation}
               />
             )}
           </View>
@@ -1062,6 +1198,7 @@ function TabBar({ tab, onChange, accent }: { tab: Tab; onChange: (t: Tab) => voi
         <TabButton label="Breath"      glyph="○" active={tab === 'breath'}      accent={accent} onPress={() => onChange('breath')} />
         <TabButton label="Chakras"     glyph="✦" active={tab === 'chakras'}     accent={accent} onPress={() => onChange('chakras')} />
         <TabButton label="Horoscopes"  glyph="☽" active={tab === 'horoscopes'}  accent={accent} onPress={() => onChange('horoscopes')} />
+        <TabButton label="More"        glyph="⋯" active={tab === 'more'}        accent={accent} onPress={() => onChange('more')} />
       </View>
     </SafeAreaView>
   );
@@ -1091,6 +1228,8 @@ type FreqViewProps = {
   activeTuning: TuningPreset | null;
   activeChakra: Chakra | null;
   activePresetId: string | null;
+  sleepMinutes: number;
+  onSetSleepTimer: (m: number) => void;
   isTonePlaying: boolean;
   isToneLoading: boolean;
   userPresets: UserPreset[];
@@ -1117,6 +1256,7 @@ type FreqViewProps = {
 function FrequenciesView(props: FreqViewProps) {
   const {
     leftHz, rightHz, beat, band, activeBand, activeTuning, activeChakra, activePresetId,
+    sleepMinutes, onSetSleepTimer,
     isTonePlaying, isToneLoading, userPresets,
     bgFileName, isBgPlaying, bgVolume, beatColor,
   } = props;
@@ -1255,6 +1395,29 @@ function FrequenciesView(props: FreqViewProps) {
           <Text style={styles.playText}>{isTonePlaying ? 'STOP' : 'PLAY'}</Text>
         )}
       </TouchableOpacity>
+
+      <View style={styles.sleepRow}>
+        <Text style={styles.sleepLabel}>SLEEP TIMER</Text>
+        <View style={styles.sleepPills}>
+          {SLEEP_TIMER_OPTIONS.map(m => {
+            const active = m === sleepMinutes;
+            const label = m === 0 ? 'Off' : `${m}m`;
+            return (
+              <TouchableOpacity
+                key={m}
+                activeOpacity={0.85}
+                onPress={() => onSetSleepTimer(m)}
+                style={[
+                  styles.sleepPill,
+                  active && { borderColor: beatColor, backgroundColor: beatColor + '22' },
+                ]}
+              >
+                <Text style={[styles.sleepPillText, active && { color: beatColor }]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
       <View style={styles.bgCard}>
         <Text style={styles.sectionLabel}>BACKGROUND MUSIC</Text>
@@ -1535,6 +1698,16 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 }, elevation: 8,
   },
   playText: { fontSize: 18, fontWeight: '700', letterSpacing: 4, color: '#0B0B1F' },
+
+  sleepRow: { marginTop: 14, marginHorizontal: 8 },
+  sleepLabel: { color: '#ffffff80', fontSize: 10, letterSpacing: 2, fontWeight: '600', marginBottom: 8 },
+  sleepPills: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  sleepPill: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  sleepPillText: { color: '#ffffff99', fontSize: 11, fontWeight: '600', letterSpacing: 1 },
 
   bgCard: {
     marginTop: 22,
