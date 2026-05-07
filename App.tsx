@@ -499,10 +499,9 @@ function ManifestQuote() {
 //   WaveBackground — ocean waves animated when playing
 // ---------------------------------------------------------------------------
 
-// Background: a rich base gradient plus two cross-fading gradient layers in
-// opposing diagonals. As the layers crossfade, the perceived gradient direction
-// shifts — no rotating shapes, no blobs, just a morphing color field.
-function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) {
+// Renders one palette as a full background. Used by WaveBackground to
+// crossfade between palettes when the band changes.
+function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
   const palette = PALETTES[band];
   const xfade = useRef(new Animated.Value(0)).current;
   const drift = useRef(new Animated.Value(0)).current;
@@ -594,6 +593,51 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
   );
 }
 
+// Wrapper that crossfades between palettes when the active band changes.
+// Old palette stays mounted at full opacity until the new one finishes fading
+// in over the top, then the old one is dropped.
+function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) {
+  type LayerSpec = { band: BandKey; key: number; opacity: Animated.Value };
+  const counter = useRef(0);
+  const [active, setActive] = useState<LayerSpec>(() => ({
+    band, key: 0, opacity: new Animated.Value(1),
+  }));
+  const [incoming, setIncoming] = useState<LayerSpec | null>(null);
+
+  useEffect(() => {
+    if (band === active.band || (incoming && incoming.band === band)) return;
+    counter.current += 1;
+    const layer: LayerSpec = {
+      band,
+      key: counter.current,
+      opacity: new Animated.Value(0),
+    };
+    setIncoming(layer);
+    Animated.timing(layer.opacity, {
+      toValue: 1,
+      duration: 900,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => {
+      setActive(layer);
+      setIncoming(null);
+    });
+  }, [band, active.band, incoming]);
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: active.opacity }]}>
+        <PaletteLayer band={active.band} playing={playing} />
+      </Animated.View>
+      {incoming ? (
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: incoming.opacity }]}>
+          <PaletteLayer band={incoming.band} playing={playing} />
+        </Animated.View>
+      ) : null}
+    </View>
+  );
+}
+
 // ===========================================================================
 //   App
 // ===========================================================================
@@ -626,6 +670,21 @@ const NOTIF_AFFIRMATIONS = [
 function AppContent() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('frequencies');
+  const tabFade = useRef(new Animated.Value(1)).current;
+  const lastTab = useRef<Tab>(tab);
+
+  useEffect(() => {
+    if (lastTab.current !== tab) {
+      lastTab.current = tab;
+      tabFade.setValue(0);
+      Animated.timing(tabFade, {
+        toValue: 1,
+        duration: 320,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [tab, tabFade]);
 
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -1114,7 +1173,7 @@ function AppContent() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
-          <View style={{ flex: 1 }}>
+          <Animated.View style={{ flex: 1, opacity: tabFade }}>
             {tab === 'frequencies' && (
               <FrequenciesView
                 leftHz={leftHz} rightHz={rightHz}
@@ -1190,7 +1249,7 @@ function AppContent() {
                 isExpoGo={IS_EXPO_GO}
               />
             )}
-          </View>
+          </Animated.View>
         </KeyboardAvoidingView>
 
         <TabBar tab={tab} onChange={setTab} accent={beatColor} />

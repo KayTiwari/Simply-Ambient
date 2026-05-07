@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ArrowsClockwise } from 'phosphor-react-native';
 
 import type { Zodiac } from './App';
 
@@ -271,7 +272,7 @@ export default function HoroscopesView({
           <View style={styles.tarotHeaderRow}>
             <Text style={styles.cardLabel}>CARD OF THE MOMENT</Text>
             <TouchableOpacity onPress={() => drawTarot()} style={styles.tarotRefreshBtn}>
-              <Text style={styles.tarotRefreshText}>↻</Text>
+              <ArrowsClockwise size={16} color="#fff" weight="regular" />
             </TouchableOpacity>
           </View>
           {tarotLoading ? (

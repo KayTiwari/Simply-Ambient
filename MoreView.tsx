@@ -15,6 +15,13 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
+import {
+  CaretLeft,
+  CaretRight,
+  ArrowsClockwise,
+  X,
+  Plus,
+} from 'phosphor-react-native';
 
 import { recordActivity, getStreak } from './App';
 
@@ -457,7 +464,7 @@ function HubItem({
       {extra ? (
         <Text style={[styles.hubExtra, { color: extraColor ?? '#ffffff99' }]}>{extra}</Text>
       ) : null}
-      <Text style={styles.hubChevron}>›</Text>
+      <CaretRight size={20} color="#ffffff66" weight="thin" />
     </TouchableOpacity>
   );
 }
@@ -470,7 +477,7 @@ function SubHeader({ title, accent, onBack }: { title: string; accent: string; o
   return (
     <View style={styles.subHeader}>
       <TouchableOpacity onPress={onBack} style={styles.subBackBtn} activeOpacity={0.7}>
-        <Text style={[styles.subBackText, { color: accent }]}>‹</Text>
+        <CaretLeft size={26} color={accent} weight="thin" />
       </TouchableOpacity>
       <Text style={styles.subTitle}>{title}</Text>
       <View style={{ width: 36 }} />
@@ -511,7 +518,10 @@ function AffirmationsPage({
             <Text style={styles.bigAffirmText}>“{affirmation ?? 'You are exactly where you need to be.'}”</Text>
           )}
           <TouchableOpacity onPress={onRefresh} style={styles.bigRefreshBtn} activeOpacity={0.85}>
-            <Text style={styles.bigRefreshText}>↻  ANOTHER</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <ArrowsClockwise size={14} color="#9affc8" weight="regular" />
+              <Text style={[styles.bigRefreshText, { marginLeft: 8 }]}>ANOTHER</Text>
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -837,7 +847,7 @@ function GratitudePage({
                   <View style={styles.gratItemBar} />
                   <Text style={styles.gratItemText}>{g.text}</Text>
                   <TouchableOpacity onPress={() => onDelete(g.ts)} style={styles.gratDelBtn}>
-                    <Text style={styles.gratDelText}>✕</Text>
+                    <X size={14} color="#ffffff66" weight="thin" />
                   </TouchableOpacity>
                 </View>
               ))}
