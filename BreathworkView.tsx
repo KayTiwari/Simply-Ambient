@@ -222,7 +222,7 @@ export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandCo
     <View style={[{ flex: 1 }, styles.tabScrim]}>
       <View style={styles.headerWrap}>
         <Text style={styles.ambience}>Simply Ambient</Text>
-        <Text style={styles.title}>Breath Work</Text>
+        <Text style={styles.title}>Breath Work Visualizer</Text>
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />
           <Text style={styles.subtitle}>Breath is the bridge</Text>
