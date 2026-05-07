@@ -16,6 +16,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 
+import { recordActivity, getStreak } from './App';
+
 const { width: SCREEN_W } = Dimensions.get('window');
 
 const STORAGE_MOOD = '@simply_ambient_mood_log_v1';
@@ -47,12 +49,27 @@ type Props = {
 
 type SubPage =
   | null
+  | 'profile'
+  | 'compatibility'
+  | 'insights'
   | 'affirmations'
   | 'mood'
   | 'gratitude'
   | 'grounding'
   | 'support'
   | 'bug';
+
+const STORAGE_PROFILE = '@simply_ambient_profile_v1';
+const STORAGE_PARTNER = '@simply_ambient_partner_v1';
+const STORAGE_GEMINI_KEY = '@simply_ambient_gemini_key_v1';
+
+type Profile = {
+  name?: string;
+  birthDate?: string; // YYYY-MM-DD
+  birthTime?: string; // HH:MM
+  birthLocation?: string;
+  mbti?: string;      // e.g. 'INFJ'
+};
 
 const MOOD_COLORS = ['#FF5B5B', '#FF8A38', '#FFD000', '#9affc8', '#5BD0FF'];
 const MOOD_LABELS = ['Low', 'Off', 'OK', 'Good', 'Great'];
@@ -64,16 +81,19 @@ export default function MoreView({
 }: Props) {
   const [moodLog, setMoodLog] = useState<MoodEntry[]>([]);
   const [gratitude, setGratitude] = useState<GratEntry[]>([]);
+  const [streak, setStreak] = useState(0);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_MOOD).then(v => v && setMoodLog(JSON.parse(v))).catch(() => {});
     AsyncStorage.getItem(STORAGE_GRAT).then(v => v && setGratitude(JSON.parse(v))).catch(() => {});
+    getStreak().then(setStreak);
   }, []);
 
   function saveMood(value: number) {
     const next = [{ ts: Date.now(), value }, ...moodLog].slice(0, 365);
     setMoodLog(next);
     AsyncStorage.setItem(STORAGE_MOOD, JSON.stringify(next)).catch(() => {});
+    recordActivity().then(() => getStreak().then(setStreak)).catch(() => {});
   }
 
   function saveGratitude(text: string) {
@@ -82,6 +102,7 @@ export default function MoreView({
     const next = [{ ts: Date.now(), text: t }, ...gratitude].slice(0, 1000);
     setGratitude(next);
     AsyncStorage.setItem(STORAGE_GRAT, JSON.stringify(next)).catch(() => {});
+    recordActivity().then(() => getStreak().then(setStreak)).catch(() => {});
   }
 
   function deleteGratitude(ts: number) {
@@ -128,6 +149,7 @@ export default function MoreView({
           affirmationPreview={affirmation}
           moodToday={moodToday}
           gratitudeCount={gratitude.length}
+          streak={streak}
           onOpen={open}
         />
       </Animated.View>
@@ -139,6 +161,15 @@ export default function MoreView({
             { transform: [{ translateX: subTranslateX }], backgroundColor: '#0B0B1F' },
           ]}
         >
+          {page === 'profile' && (
+            <ProfilePage onBack={close} />
+          )}
+          {page === 'compatibility' && (
+            <CompatibilityPage onBack={close} />
+          )}
+          {page === 'insights' && (
+            <InsightsPage onBack={close} />
+          )}
           {page === 'affirmations' && (
             <AffirmationsPage
               affirmation={affirmation}
@@ -184,15 +215,22 @@ export default function MoreView({
 //   Hub
 // ===========================================================================
 
+type SubPageWithProfile =
+  | Exclude<SubPage, null>
+  | 'profile'
+  | 'compatibility'
+  | 'insights';
+
 type HubProps = {
   notifPref: NotifPref;
   affirmationPreview: string | null;
   moodToday: MoodEntry | undefined;
   gratitudeCount: number;
+  streak: number;
   onOpen: (p: Exclude<SubPage, null>) => void;
 };
 
-function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, onOpen }: HubProps) {
+function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak, onOpen }: HubProps) {
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.headerWrap}>
@@ -203,12 +241,41 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, onOpen 
           <Text style={styles.subtitle}>Tools for the practice</Text>
           <View style={styles.dividerLine} />
         </View>
+        {streak > 0 ? (
+          <View style={styles.streakBadge}>
+            <Text style={styles.streakFire}>🔥</Text>
+            <Text style={styles.streakText}>
+              {streak}-day streak
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
+        <HubItem
+          glyph="◯"
+          color="#A45BFF"
+          label="Profile"
+          preview="Birth details · MBTI · personality"
+          onPress={() => onOpen('profile')}
+        />
+        <HubItem
+          glyph="∞"
+          color="#FF8FB1"
+          label="Compatibility"
+          preview="Match your sign with another"
+          onPress={() => onOpen('compatibility')}
+        />
+        <HubItem
+          glyph="✧"
+          color="#5BD0FF"
+          label="AI Insights"
+          preview="Reflections on your journal & tarot"
+          onPress={() => onOpen('insights')}
+        />
         <HubItem
           glyph="✦"
           color="#9affc8"
@@ -698,30 +765,61 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
       return;
     }
     setSending(true);
+
+    const email = decodeReportEmail();
+    const fullSubject = `[Simply Ambient] ${subject || 'Bug report'}`;
+
+    // 1) Try the silent FormSubmit AJAX endpoint first.
+    let sentSilently = false;
     try {
-      const url = `https://formsubmit.co/ajax/${decodeReportEmail()}`;
+      const url = `https://formsubmit.co/ajax/${email}`;
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': 'https://simply-ambient.app',
+        },
         body: JSON.stringify({
-          _subject: `[Simply Ambient] ${subject || 'Bug report'}`,
+          _subject: fullSubject,
           _captcha: 'false',
+          _template: 'box',
           subject,
           message: body,
         }),
       });
       if (res.ok) {
-        Alert.alert('Sent', 'Thank you. The developer will see it soon.');
-        setSubject('');
-        setBody('');
-      } else {
-        Alert.alert('Could not send', 'Please try again later.');
+        const json = await res.json().catch(() => ({} as any));
+        sentSilently = json?.success === true || json?.success === 'true';
       }
-    } catch {
-      Alert.alert('Could not send', 'Check your connection and try again.');
-    } finally {
+    } catch {}
+
+    if (sentSilently) {
+      Alert.alert('Sent', 'Thank you. The developer will see it soon.');
+      setSubject('');
+      setBody('');
       setSending(false);
+      return;
     }
+
+    // 2) Fallback: open the user's mail app pre-filled. Reliable on every
+    // device and doesn't depend on a third-party service activating an email.
+    const mailto =
+      `mailto:${email}` +
+      `?subject=${encodeURIComponent(fullSubject)}` +
+      `&body=${encodeURIComponent(body || '')}`;
+    try {
+      await Linking.openURL(mailto);
+      Alert.alert(
+        'One more tap',
+        'Your mail app is opening with the report pre-filled. Tap Send there to complete.',
+      );
+      setSubject('');
+      setBody('');
+    } catch {
+      Alert.alert('Could not send', 'No mail app available on this device.');
+    }
+    setSending(false);
   }
 
   return (
@@ -759,6 +857,378 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
             <Text style={styles.bugSendText}>SEND REPORT</Text>
           )}
         </TouchableOpacity>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Profile sub-page (birth details + MBTI mini-quiz)
+// ===========================================================================
+
+const MBTI_QUESTIONS: Array<{
+  q: string;
+  letters: [string, string]; // [first option letter, second option letter]
+  options: [string, string];
+}> = [
+  { q: 'At a gathering, you',           letters: ['E', 'I'], options: ['energise from interacting',  'recharge by stepping back'] },
+  { q: 'When solving a problem, you',   letters: ['S', 'N'], options: ['focus on facts and details', 'see patterns and possibilities'] },
+  { q: 'When deciding, you weigh',      letters: ['T', 'F'], options: ['logic and consistency',      'values and people'] },
+  { q: 'You prefer to live',            letters: ['J', 'P'], options: ['planned and structured',     'flexible and spontaneous'] },
+];
+
+const MBTI_GROUPS: Record<string, { name: string; blurb: string }> = {
+  NT: { name: 'Analyst',   blurb: 'Strategic, objective, big-picture.' },
+  NF: { name: 'Diplomat',  blurb: 'Empathetic, idealistic, meaning-driven.' },
+  SJ: { name: 'Sentinel',  blurb: 'Practical, dedicated, structured.' },
+  SP: { name: 'Explorer',  blurb: 'Adventurous, hands-on, present-tense.' },
+};
+
+function mbtiGroupFor(type: string) {
+  if (type.length !== 4) return null;
+  const key = type[1] + (type[1] === 'N' ? type[2] : type[3]);
+  return MBTI_GROUPS[key] ?? null;
+}
+
+function ProfilePage({ onBack }: { onBack: () => void }) {
+  const [profile, setProfile] = useState<Profile>({});
+  const [answers, setAnswers] = useState<Array<0 | 1 | null>>([null, null, null, null]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_PROFILE).then(v => v && setProfile(JSON.parse(v))).catch(() => {});
+  }, []);
+
+  function update<K extends keyof Profile>(key: K, value: Profile[K]) {
+    const next = { ...profile, [key]: value };
+    setProfile(next);
+    AsyncStorage.setItem(STORAGE_PROFILE, JSON.stringify(next)).catch(() => {});
+  }
+
+  function setAnswer(qIdx: number, choice: 0 | 1) {
+    const next = answers.slice() as Array<0 | 1 | null>;
+    next[qIdx] = choice;
+    setAnswers(next);
+    if (next.every(a => a !== null)) {
+      const type = next.map((a, i) => MBTI_QUESTIONS[i].letters[a as 0 | 1]).join('');
+      update('mbti', type);
+    }
+  }
+
+  const mbtiGroup = profile.mbti ? mbtiGroupFor(profile.mbti) : null;
+
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Profile" accent="#A45BFF" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionLabel}>YOU</Text>
+        <Text style={styles.sectionSub}>Stored only on this device.</Text>
+
+        <Text style={styles.fieldLabel}>Name</Text>
+        <TextInput
+          style={styles.fieldInput}
+          placeholder="Your name"
+          placeholderTextColor="#ffffff55"
+          value={profile.name ?? ''}
+          onChangeText={t => update('name', t)}
+          maxLength={60}
+        />
+        <Text style={styles.fieldLabel}>Birth date</Text>
+        <TextInput
+          style={styles.fieldInput}
+          placeholder="YYYY-MM-DD"
+          placeholderTextColor="#ffffff55"
+          value={profile.birthDate ?? ''}
+          onChangeText={t => update('birthDate', t)}
+          maxLength={10}
+        />
+        <Text style={styles.fieldLabel}>Birth time (optional, for natal chart)</Text>
+        <TextInput
+          style={styles.fieldInput}
+          placeholder="HH:MM"
+          placeholderTextColor="#ffffff55"
+          value={profile.birthTime ?? ''}
+          onChangeText={t => update('birthTime', t)}
+          maxLength={5}
+        />
+        <Text style={styles.fieldLabel}>Birth location</Text>
+        <TextInput
+          style={styles.fieldInput}
+          placeholder="City, country"
+          placeholderTextColor="#ffffff55"
+          value={profile.birthLocation ?? ''}
+          onChangeText={t => update('birthLocation', t)}
+          maxLength={120}
+        />
+
+        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>MBTI · 16 PERSONALITIES</Text>
+        <Text style={styles.sectionSub}>
+          Four quick questions. Not a clinical assessment — just an indicator.
+        </Text>
+        {MBTI_QUESTIONS.map((q, i) => (
+          <View key={i} style={styles.mbtiCard}>
+            <Text style={styles.mbtiQuestion}>{q.q}</Text>
+            {[0, 1].map(idx => {
+              const active = answers[i] === idx;
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  activeOpacity={0.85}
+                  onPress={() => setAnswer(i, idx as 0 | 1)}
+                  style={[
+                    styles.mbtiOption,
+                    active && { borderColor: '#A45BFF', backgroundColor: '#A45BFF22' },
+                  ]}
+                >
+                  <Text style={[styles.mbtiOptionText, active && { color: '#fff' }]}>
+                    {q.options[idx]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ))}
+
+        {profile.mbti ? (
+          <View style={styles.mbtiResult}>
+            <Text style={styles.mbtiResultType}>{profile.mbti}</Text>
+            {mbtiGroup ? (
+              <>
+                <Text style={styles.mbtiResultGroup}>{mbtiGroup.name}</Text>
+                <Text style={styles.mbtiResultBlurb}>{mbtiGroup.blurb}</Text>
+              </>
+            ) : null}
+          </View>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Compatibility scaffold
+// ===========================================================================
+
+function CompatibilityPage({ onBack }: { onBack: () => void }) {
+  const [self, setSelf] = useState<Profile>({});
+  const [partner, setPartner] = useState<Profile>({});
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_PROFILE).then(v => v && setSelf(JSON.parse(v))).catch(() => {});
+    AsyncStorage.getItem(STORAGE_PARTNER).then(v => v && setPartner(JSON.parse(v))).catch(() => {});
+  }, []);
+
+  function updatePartner<K extends keyof Profile>(key: K, value: Profile[K]) {
+    const next = { ...partner, [key]: value };
+    setPartner(next);
+    AsyncStorage.setItem(STORAGE_PARTNER, JSON.stringify(next)).catch(() => {});
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Compatibility" accent="#FF8FB1" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody}>
+        <Text style={styles.sectionLabel}>YOUR PROFILE</Text>
+        {self.name || self.birthDate ? (
+          <View style={styles.compatCard}>
+            <Text style={styles.compatName}>{self.name ?? '—'}</Text>
+            <Text style={styles.compatMeta}>
+              {self.birthDate ?? 'No birth date set'}
+              {self.birthTime ? ` · ${self.birthTime}` : ''}
+            </Text>
+            {self.birthLocation ? <Text style={styles.compatMeta}>{self.birthLocation}</Text> : null}
+            {self.mbti ? <Text style={styles.compatMbti}>{self.mbti}</Text> : null}
+          </View>
+        ) : (
+          <Text style={styles.emptyText}>
+            Set your details on the Profile page first.
+          </Text>
+        )}
+
+        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>OTHER PERSON</Text>
+        <Text style={styles.sectionSub}>Their birth details, stored only on this device.</Text>
+        <Text style={styles.fieldLabel}>Name</Text>
+        <TextInput
+          style={styles.fieldInput}
+          placeholder="Their name"
+          placeholderTextColor="#ffffff55"
+          value={partner.name ?? ''}
+          onChangeText={t => updatePartner('name', t)}
+          maxLength={60}
+        />
+        <Text style={styles.fieldLabel}>Birth date</Text>
+        <TextInput
+          style={styles.fieldInput}
+          placeholder="YYYY-MM-DD"
+          placeholderTextColor="#ffffff55"
+          value={partner.birthDate ?? ''}
+          onChangeText={t => updatePartner('birthDate', t)}
+          maxLength={10}
+        />
+        <Text style={styles.fieldLabel}>Birth time</Text>
+        <TextInput
+          style={styles.fieldInput}
+          placeholder="HH:MM"
+          placeholderTextColor="#ffffff55"
+          value={partner.birthTime ?? ''}
+          onChangeText={t => updatePartner('birthTime', t)}
+          maxLength={5}
+        />
+        <Text style={styles.fieldLabel}>Birth location</Text>
+        <TextInput
+          style={styles.fieldInput}
+          placeholder="City, country"
+          placeholderTextColor="#ffffff55"
+          value={partner.birthLocation ?? ''}
+          onChangeText={t => updatePartner('birthLocation', t)}
+          maxLength={120}
+        />
+
+        <View style={styles.compatComingSoon}>
+          <Text style={styles.compatComingTitle}>Synastry chart — coming soon</Text>
+          <Text style={styles.compatComingText}>
+            Full synastry (planet-by-planet alignment between two natal charts) will be added once
+            the natal-chart pipeline is wired in. Your details are saved locally so the moment that
+            ships, the analysis is one tap away.
+          </Text>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   AI Insights (Gemini)
+// ===========================================================================
+
+function InsightsPage({ onBack }: { onBack: () => void }) {
+  const [apiKey, setApiKey] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [output, setOutput] = useState<string | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_GEMINI_KEY).then(v => v && setApiKey(v)).catch(() => {});
+  }, []);
+
+  function saveKey(value: string) {
+    setApiKey(value);
+    AsyncStorage.setItem(STORAGE_GEMINI_KEY, value).catch(() => {});
+  }
+
+  async function runAnalysis(kind: 'journal' | 'tarot') {
+    if (!apiKey.trim()) {
+      Alert.alert('Add your Gemini API key', 'Get a free key from aistudio.google.com and paste it above.');
+      return;
+    }
+    setLoading(true);
+    setOutput(null);
+    try {
+      let prompt = '';
+      if (kind === 'journal') {
+        const moodRaw = await AsyncStorage.getItem(STORAGE_MOOD);
+        const gratRaw = await AsyncStorage.getItem(STORAGE_GRAT);
+        const moods: MoodEntry[] = moodRaw ? JSON.parse(moodRaw) : [];
+        const grats: GratEntry[] = gratRaw ? JSON.parse(gratRaw) : [];
+        const moodLines = moods.slice(0, 30).map(m =>
+          `${new Date(m.ts).toISOString().slice(0, 10)} · mood ${m.value}/5 (${MOOD_LABELS[m.value - 1]})`,
+        ).join('\n');
+        const gratLines = grats.slice(0, 30).map(g =>
+          `${new Date(g.ts).toISOString().slice(0, 10)}: ${g.text}`,
+        ).join('\n');
+        prompt =
+          'You are a thoughtful, grounded reflection companion. The user has shared their recent ' +
+          'mood log and gratitude journal. Identify 3-5 themes you notice, gently. Be specific. ' +
+          'Avoid clichés, woo, or diagnoses. Keep it under 220 words.\n\n' +
+          'MOOD ENTRIES (newest first):\n' + (moodLines || '(no entries)') +
+          '\n\nGRATITUDE ENTRIES (newest first):\n' + (gratLines || '(no entries)');
+      } else {
+        const tarotRaw = await AsyncStorage.getItem('@simply_ambient_tarot_v1');
+        const card = tarotRaw ? JSON.parse(tarotRaw)?.card : null;
+        if (!card) {
+          Alert.alert('No card drawn', 'Open the Horoscopes tab and draw a card first.');
+          setLoading(false);
+          return;
+        }
+        prompt =
+          'You are a thoughtful tarot interpreter. The user drew the following card. ' +
+          'Give a calm, grounded interpretation in plain language — what it might invite ' +
+          'them to notice today. Avoid clichés or fortune-telling claims. Under 180 words.\n\n' +
+          `Card: ${card.name}\n` +
+          `Upright meaning: ${card.meaning_up ?? ''}\n` +
+          `Description: ${(card.desc ?? '').slice(0, 600)}`;
+      }
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey.trim()}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      });
+      const json = await res.json();
+      const text =
+        json?.candidates?.[0]?.content?.parts?.[0]?.text ??
+        json?.error?.message ??
+        'No response.';
+      setOutput(text);
+    } catch (e) {
+      setOutput('Could not reach the AI service. Check your network and API key.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="AI Insights" accent="#5BD0FF" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionLabel}>GEMINI API KEY</Text>
+        <Text style={styles.sectionSub}>
+          Free at aistudio.google.com. Saved on this device only.
+        </Text>
+        <TextInput
+          style={styles.fieldInput}
+          placeholder="paste your key here"
+          placeholderTextColor="#ffffff55"
+          value={apiKey}
+          onChangeText={saveKey}
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry
+        />
+
+        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>WHAT TO ANALYSE</Text>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => runAnalysis('journal')}
+          style={[styles.aiBtn, { backgroundColor: '#5BD0FF' }]}
+          disabled={loading}
+        >
+          <Text style={styles.aiBtnText}>JOURNAL THEMES (mood + gratitude)</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => runAnalysis('tarot')}
+          style={[styles.aiBtn, { backgroundColor: '#A45BFF' }]}
+          disabled={loading}
+        >
+          <Text style={styles.aiBtnText}>INTERPRET TODAY'S TAROT</Text>
+        </TouchableOpacity>
+
+        {loading ? (
+          <View style={styles.aiOutput}>
+            <ActivityIndicator color="#5BD0FF" />
+          </View>
+        ) : output ? (
+          <View style={styles.aiOutput}>
+            <Text style={styles.aiOutputText}>{output}</Text>
+          </View>
+        ) : null}
+
+        <Text style={styles.aiFootnote}>
+          Powered by Google Gemini. Your prompts and journal data leave the app only when you press
+          a button above. No analysis is shared without your initiation.
+        </Text>
       </ScrollView>
     </View>
   );
@@ -804,6 +1274,17 @@ const styles = StyleSheet.create({
   hubPreview: { color: '#ffffff88', fontSize: 12, marginTop: 2, lineHeight: 16 },
   hubExtra: { fontSize: 12, fontWeight: '700', letterSpacing: 1, marginRight: 10 },
   hubChevron: { color: '#ffffff66', fontSize: 22 },
+
+  streakBadge: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 176, 91, 0.15)',
+    borderWidth: 1, borderColor: '#FFB05B55',
+    marginTop: 14,
+  },
+  streakFire: { fontSize: 14, marginRight: 6 },
+  streakText: { color: '#FFB05B', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
 
   // Sub-page
   subHeader: {
@@ -987,4 +1468,79 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF5B9C', alignItems: 'center',
   },
   bugSendText: { color: '#0B0B1F', fontWeight: '700', letterSpacing: 2, fontSize: 14 },
+
+  fieldLabel: { color: '#ffffff80', fontSize: 11, letterSpacing: 1, fontWeight: '600', marginTop: 12, marginBottom: 6 },
+  fieldInput: {
+    color: '#fff', fontSize: 14,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+  },
+
+  // MBTI
+  mbtiCard: {
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 14, padding: 14, marginTop: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+  },
+  mbtiQuestion: { color: '#fff', fontSize: 14, marginBottom: 10, fontWeight: '500' },
+  mbtiOption: {
+    paddingVertical: 10, paddingHorizontal: 12,
+    borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    marginBottom: 6,
+  },
+  mbtiOptionText: { color: '#ffffffcc', fontSize: 13 },
+  mbtiResult: {
+    marginTop: 18,
+    backgroundColor: '#A45BFF22',
+    borderWidth: 1, borderColor: '#A45BFF',
+    borderRadius: 14, padding: 18, alignItems: 'center',
+  },
+  mbtiResultType: {
+    color: '#fff',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 36, letterSpacing: 4, fontWeight: '600',
+  },
+  mbtiResultGroup: { color: '#A45BFF', fontSize: 14, marginTop: 4, fontWeight: '700', letterSpacing: 1 },
+  mbtiResultBlurb: { color: '#ffffffcc', fontSize: 12, marginTop: 4, fontStyle: 'italic', textAlign: 'center' },
+
+  // Compatibility
+  compatCard: {
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 14, padding: 14, marginTop: 4,
+    borderWidth: 1, borderColor: 'rgba(255,143,177,0.30)',
+  },
+  compatName: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  compatMeta: { color: '#ffffffaa', fontSize: 12, marginTop: 2 },
+  compatMbti: {
+    color: '#A45BFF', fontSize: 13, fontWeight: '700', letterSpacing: 2,
+    marginTop: 6,
+  },
+  compatComingSoon: {
+    marginTop: 28, padding: 16,
+    borderRadius: 14, borderStyle: 'dashed',
+    borderWidth: 1, borderColor: '#FF8FB155',
+    backgroundColor: 'rgba(0,0,0,0.20)',
+  },
+  compatComingTitle: { color: '#FF8FB1', fontSize: 13, fontWeight: '700', letterSpacing: 1, marginBottom: 6 },
+  compatComingText: { color: '#ffffffaa', fontSize: 12, lineHeight: 17 },
+
+  // AI Insights
+  aiBtn: {
+    paddingVertical: 14, borderRadius: 12, marginTop: 10, alignItems: 'center',
+  },
+  aiBtnText: { color: '#0B0B1F', fontSize: 13, fontWeight: '800', letterSpacing: 1.5 },
+  aiOutput: {
+    marginTop: 16, padding: 14,
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 14, borderWidth: 1,
+    borderColor: 'rgba(91,208,255,0.30)',
+    minHeight: 60, alignItems: 'center', justifyContent: 'center',
+  },
+  aiOutputText: { color: '#ffffffdd', fontSize: 13, lineHeight: 19 },
+  aiFootnote: {
+    color: '#ffffff66', fontSize: 11, fontStyle: 'italic',
+    marginTop: 18, lineHeight: 16, textAlign: 'center',
+  },
 });

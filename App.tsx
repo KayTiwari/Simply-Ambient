@@ -47,6 +47,7 @@ import BreathworkView from './BreathworkView';
 import ChakrasView from './ChakrasView';
 import HoroscopesView from './HoroscopesView';
 import MoreView, { type NotifPref } from './MoreView';
+import OnboardingView from './OnboardingView';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -54,6 +55,51 @@ const MIN_HZ = 50;
 const MAX_HZ = 1000;
 const STORAGE_KEY = '@binaural_user_presets_v1';
 const STORAGE_KEY_ZODIAC = '@simply_ambient_zodiac_v1';
+const STORAGE_KEY_STREAK = '@simply_ambient_streak_v1';
+export const STORAGE_KEY_PROFILE = '@simply_ambient_profile_v1';
+export const STORAGE_KEY_PARTNER = '@simply_ambient_partner_v1';
+export const STORAGE_KEY_GEMINI = '@simply_ambient_gemini_key_v1';
+export const STORAGE_KEY_ONBOARDED = '@simply_ambient_onboarded_v1';
+
+function todayKey(d: Date = new Date()): string {
+  return d.toISOString().slice(0, 10);
+}
+
+// Record any kind of practice / engagement so the streak counter updates.
+// No-op if already recorded today.
+export async function recordActivity() {
+  try {
+    const today = todayKey();
+    const raw = await AsyncStorage.getItem(STORAGE_KEY_STREAK);
+    let lastDate = '';
+    let count = 0;
+    if (raw) {
+      try { ({ lastDate, count } = JSON.parse(raw)); } catch {}
+    }
+    if (lastDate === today) return;
+    const y = new Date();
+    y.setDate(y.getDate() - 1);
+    const yKey = todayKey(y);
+    const next = { lastDate: today, count: lastDate === yKey ? count + 1 : 1 };
+    await AsyncStorage.setItem(STORAGE_KEY_STREAK, JSON.stringify(next));
+  } catch {}
+}
+
+// Returns the current streak (0 if last activity was before yesterday).
+export async function getStreak(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY_STREAK);
+    if (!raw) return 0;
+    const { lastDate, count } = JSON.parse(raw) as { lastDate: string; count: number };
+    const today = todayKey();
+    const y = new Date();
+    y.setDate(y.getDate() - 1);
+    const yKey = todayKey(y);
+    return lastDate === today || lastDate === yKey ? count : 0;
+  } catch {
+    return 0;
+  }
+}
 const DEFAULT_LEFT = 200;
 const DEFAULT_RIGHT = 210;
 const TONE_FILE_PATH = `${FileSystem.cacheDirectory}binaural-tone.wav`;
@@ -581,6 +627,21 @@ function AppContent() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('frequencies');
 
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY_ONBOARDED).then(v => {
+      if (!v) setShowOnboarding(true);
+      setOnboardingChecked(true);
+    }).catch(() => setOnboardingChecked(true));
+  }, []);
+
+  function dismissOnboarding() {
+    AsyncStorage.setItem(STORAGE_KEY_ONBOARDED, '1').catch(() => {});
+    setShowOnboarding(false);
+  }
+
   const [leftHz, setLeftHz] = useState(DEFAULT_LEFT);
   const [rightHz, setRightHz] = useState(DEFAULT_RIGHT);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
@@ -804,7 +865,10 @@ function AppContent() {
 
   function togglePlay() {
     if (isTonePlaying || isToneLoading) stopTones();
-    else loadAndPlay(leftHz, rightHz);
+    else {
+      loadAndPlay(leftHz, rightHz);
+      recordActivity().catch(() => {});
+    }
   }
 
   // Fire-rate-limited live update used while sliders are being dragged.
@@ -1134,6 +1198,12 @@ function AppContent() {
 
         <TabBar tab={tab} onChange={setTab} accent={beatColor} />
       </SafeAreaView>
+
+      {onboardingChecked && showOnboarding ? (
+        <View style={StyleSheet.absoluteFill}>
+          <OnboardingView onDone={dismissOnboarding} />
+        </View>
+      ) : null}
 
       <Modal visible={showSaveModal} transparent animationType="fade" onRequestClose={() => setShowSaveModal(false)}>
         <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); setShowSaveModal(false); }}>

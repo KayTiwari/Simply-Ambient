@@ -112,14 +112,30 @@ Three Ayurvedic constitutions on the chakra tab — **Vata** (Air + Ether), **Pi
 
 ### ⋯ More tab
 
-The More tab is a hub menu — tapping any item slides a dedicated sub-page in from the right.
+The More tab is a hub menu — tapping any item slides a dedicated sub-page in from the right. A 🔥 streak badge appears at the top once you have any activity logged.
 
+- **Profile** sub-page — name, birth date, birth time, birth location, plus a **4-question MBTI mini-quiz** (16-personalities style). Auto-computes your 4-letter type and shows the temperament group (Analyst / Diplomat / Sentinel / Explorer).
+- **Compatibility** sub-page — your profile plus a separate "other person" entry form (name, birth date, time, location). Synastry analysis is scaffolded; full natal-chart matching ships in a follow-up.
+- **AI Insights** sub-page — paste a free Gemini API key (from aistudio.google.com), then get **AI thematic analysis of your mood + gratitude journal** or an **AI tarot interpretation** of the current card. Prompts and journal data only leave the device when you tap a button.
 - **Daily Affirmation** sub-page — large rotating affirmation card (live from `affirmations.dev`) plus opt-in notification settings: Off / 1× per day (9 a.m.) / 3× per day (9 a.m., 1 p.m., 6 p.m.), scheduled locally via `expo-notifications`.
 - **Mood** sub-page — 1–5 color-coded buttons + a **14-day SVG line graph** of daily-average mood + a scrollable history list (up to 365 entries persisted).
 - **Gratitude** sub-page — multi-line entry box + dedicated journal grouped by date. Up to 1000 entries persisted locally.
-- **5-4-3-2-1 Grounding** sub-page — full sensory walk-through, one card per sense (5 see, 4 touch, 3 hear, 2 smell, 1 taste).
+- **5-4-3-2-1 Grounding** sub-page — full sensory walk-through, one card per sense.
 - **Support** sub-page — opens Buy Me a Coffee link with a hero card.
-- **Report a Bug** sub-page — in-app form (subject + body) that POSTs to FormSubmit. The developer's email is base64-encoded in the source so it doesn't appear as plaintext in the bundle and is never displayed in the UI.
+- **Report a Bug** sub-page — tries the FormSubmit silent submission first, then falls back to opening the user's mail app pre-filled. The developer's email is base64-encoded in the source so it doesn't appear as plaintext in the bundle and is never displayed in the UI.
+
+### Streaks
+
+Any activity (binaural session, breath session, mood check-in, gratitude entry) registers as a "practice day". The streak counter on the More hub shows your consecutive-day count and resets to zero if you skip more than one day.
+
+### First-launch onboarding
+
+A 3-step welcome on first launch:
+1. Welcome + tagline
+2. "What brings you here?" — Sleep / Focus / Calm / Energy
+3. Tailored recommendations: one frequency preset + one breath technique + one chakra, with reasons.
+
+The onboarded flag is stored in AsyncStorage so it only shows once.
 
 ### 💤 Sleep timer
 
@@ -158,10 +174,12 @@ A rotating set of New Thought aphorisms drifts across the top of the Frequencies
 - **@react-native-async-storage/async-storage** — persisting custom presets, user's zodiac
 - **@react-native-community/slider**
 - **expo-linear-gradient** — gradient layers for the living background
-- **react-native-svg** — polygons for the mandala visualization
+- **react-native-svg** — polygons for the mandala visualization, mood graph
 - **react-native-safe-area-context**
 - **expo-notifications** — local-only scheduled push notifications for affirmations
-- **expo-linking** — opening external donation URLs
+- **expo-linking** — opening external donation URLs and `mailto:` for bug reports
+- **expo-constants** — Expo Go vs standalone build detection (notifications gate)
+- **Gemini API** (Google) — optional, user-supplied API key for AI insights
 
 ### How the binaural audio works
 
@@ -180,6 +198,20 @@ npm install
 npx expo start
 ```
 
+### Standalone build (EAS)
+
+`eas.json` is included with three profiles:
+
+```bash
+npm install -g eas-cli
+eas login
+eas build --platform android --profile preview   # APK you can sideload
+eas build --platform ios --profile development     # iOS dev client
+eas build --platform all --profile production      # store-ready
+```
+
+Required for: notifications to actually fire (Expo Go can't do them in SDK 53+), the leaf icon to replace Expo Go's icon, and Apple Health / Google Fit when those land.
+
 Then either:
 
 - **Phone (easiest)**: install **Expo Go**, scan the QR code that prints in the terminal. Phone and computer must be on the same Wi-Fi.
@@ -197,8 +229,11 @@ Then either:
 ├── App.tsx                  # Tabs, state, audio, frequencies UI, animated background, zodiac/lunar data
 ├── BreathworkView.tsx       # 16 breath techniques + circle and polygonal-mandala visuals + mudras
 ├── ChakrasView.tsx          # 7 chakras (Devanagari bijas) + doshas
-├── HoroscopesView.tsx       # Today widget, daily/monthly/yearly horoscopes, zodiac picker, tarot, lunar
-├── MoreView.tsx             # Affirmations, mood, gratitude, grounding, support, bug report
+├── HoroscopesView.tsx       # Today widget, daily/monthly/yearly horoscopes (cached), zodiac picker, tarot
+├── MoreView.tsx             # Hub: Profile (MBTI), Compatibility, AI Insights, Affirmations, Mood + graph,
+│                            #      Gratitude, Grounding, Support, Bug report
+├── OnboardingView.tsx       # First-launch 3-step welcome → intent → recommendations
+├── eas.json                 # EAS build profiles (development / preview / production)
 ├── app.json                 # Expo config (icon, splash, plugins)
 ├── assets/                  # Icons + splash (minimal green leaf on white)
 ├── screenshots/             # README screenshots

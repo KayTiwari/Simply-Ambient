@@ -7,8 +7,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { Zodiac } from './App';
+
+const HOROSCOPE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+function horoscopeCacheKey(signId: string, period: string) {
+  return `@simply_ambient_horo_${signId}_${period}_v1`;
+}
+const TAROT_CACHE_KEY = '@simply_ambient_tarot_v1';
+const TAROT_TTL_MS = 24 * 60 * 60 * 1000;
 
 type Period = 'daily' | 'monthly' | 'yearly';
 
@@ -36,21 +44,39 @@ export default function HoroscopesView({
   const [tarot, setTarot] = useState<TarotCard | null>(null);
   const [tarotLoading, setTarotLoading] = useState(false);
 
-  function drawTarot() {
+  function drawTarot(force = false) {
     setTarotLoading(true);
     fetch('https://freehoroscopeapi.com/api/v1/tarot/cards/random?n=1')
       .then(r => (r.ok ? r.json() : null))
       .then(json => {
         const c = json?.cards?.[0];
-        if (c) setTarot(c);
+        if (c) {
+          setTarot(c);
+          AsyncStorage.setItem(TAROT_CACHE_KEY, JSON.stringify({ ts: Date.now(), card: c })).catch(() => {});
+        }
       })
       .catch(() => {})
       .finally(() => setTarotLoading(false));
   }
 
-  // Draw a tarot card on first load.
+  // On first open: show the cached card immediately, refresh once a day.
   useEffect(() => {
-    drawTarot();
+    let cancelled = false;
+    AsyncStorage.getItem(TAROT_CACHE_KEY).then(raw => {
+      if (cancelled) return;
+      let stale = true;
+      if (raw) {
+        try {
+          const cached = JSON.parse(raw) as { ts: number; card: TarotCard };
+          if (cached?.card) {
+            setTarot(cached.card);
+            stale = Date.now() - cached.ts >= TAROT_TTL_MS;
+          }
+        } catch {}
+      }
+      if (stale) drawTarot();
+    }).catch(() => drawTarot());
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -63,24 +89,57 @@ export default function HoroscopesView({
       return;
     }
 
-    setLoading(true);
-    setHoroscope(null);
+    const cacheKey = horoscopeCacheKey(mySign.id, period);
+
+    // Show cached value instantly, then refetch in the background if stale.
+    AsyncStorage.getItem(cacheKey).then(raw => {
+      if (cancelled || !raw) return;
+      try {
+        const cached = JSON.parse(raw) as { ts: number; text: string };
+        if (cached?.text) setHoroscope(cached.text);
+      } catch {}
+    }).catch(() => {});
+
     const url =
       period === 'daily'
         ? `https://freehoroscopeapi.com/api/v1/get-horoscope/daily?sign=${mySign.name}&day=TODAY`
         : `https://freehoroscopeapi.com/api/v1/get-horoscope/monthly?sign=${mySign.name}`;
-    fetch(url)
-      .then(r => (r.ok ? r.json() : null))
-      .then(json => {
-        if (cancelled) return;
+
+    (async () => {
+      const raw = await AsyncStorage.getItem(cacheKey).catch(() => null);
+      let needsFetch = true;
+      if (raw) {
+        try {
+          const cached = JSON.parse(raw) as { ts: number; text: string };
+          if (cached?.text && Date.now() - cached.ts < HOROSCOPE_TTL_MS) {
+            needsFetch = false;
+          }
+        } catch {}
+      }
+
+      if (needsFetch) setLoading(true);
+      try {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error('bad response');
+        const json = await r.json();
         const text =
           json?.data?.horoscope ??
           json?.data?.horoscope_data ??
           null;
-        setHoroscope(text);
-      })
-      .catch(() => { if (!cancelled) setHoroscope(null); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+        if (cancelled) return;
+        if (text) {
+          setHoroscope(text);
+          AsyncStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), text })).catch(() => {});
+        } else if (!raw) {
+          setHoroscope(null);
+        }
+      } catch {
+        // If we already had a cached value, just keep it.
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
     return () => { cancelled = true; };
   }, [mySign.id, period, mySign.yearAhead]);
 
@@ -211,7 +270,7 @@ export default function HoroscopesView({
         <View style={[styles.tarotCard, { borderColor: '#A45BFF55' }]}>
           <View style={styles.tarotHeaderRow}>
             <Text style={styles.cardLabel}>CARD OF THE MOMENT</Text>
-            <TouchableOpacity onPress={drawTarot} style={styles.tarotRefreshBtn}>
+            <TouchableOpacity onPress={() => drawTarot()} style={styles.tarotRefreshBtn}>
               <Text style={styles.tarotRefreshText}>↻</Text>
             </TouchableOpacity>
           </View>
