@@ -376,7 +376,7 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
           glyph="✦"
           color="#9affc8"
           label="Daily Affirmation"
-          preview={affirmationPreview ? `“${affirmationPreview}”` : 'Tap for a fresh thought'}
+          preview={affirmationPreview ? `“${affirmationPreview}”` : 'Anchor a single thought for the day'}
           extra={notifPref === 'off' ? null : notifPref === 'daily' ? '1×/day' : '3×/day'}
           onPress={() => onOpen('affirmations')}
         />
@@ -386,8 +386,8 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
           label="Mood Check-in"
           preview={
             moodToday
-              ? `Today: ${MOOD_LABELS[moodToday.value - 1]}`
-              : 'How are you feeling?'
+              ? `Today: ${MOOD_LABELS[moodToday.value - 1]} · keep the streak`
+              : 'See patterns in what lifts and drains you'
           }
           extra={moodToday ? String(moodToday.value) : null}
           extraColor={moodToday ? MOOD_COLORS[moodToday.value - 1] : undefined}
@@ -399,8 +399,8 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
           label="Gratitude"
           preview={
             gratitudeCount === 0
-              ? 'What do you appreciate?'
-              : `${gratitudeCount} ${gratitudeCount === 1 ? 'entry' : 'entries'} saved`
+              ? 'Rewire attention toward what works'
+              : `${gratitudeCount} ${gratitudeCount === 1 ? 'entry' : 'entries'} · positive psychology`
           }
           onPress={() => onOpen('gratitude')}
         />
@@ -408,7 +408,7 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
           glyph="◊"
           color="#5B6CFF"
           label="5-4-3-2-1 Grounding"
-          preview="Senses-based anxiety reset"
+          preview="Anxiety reset through the five senses"
           onPress={() => onOpen('grounding')}
         />
         <HubItem
@@ -497,7 +497,14 @@ function AffirmationsPage({
     <View style={{ flex: 1 }}>
       <SubHeader title="Daily Affirmation" accent="#9affc8" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
-        <View style={[styles.bigAffirmCard, { borderColor: '#9affc855' }]}>
+        <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
+        <Text style={styles.sectionSub}>
+          A single intention, repeated, becomes a frame for the day. The affirmation isn't magic —
+          it's a small mental anchor that biases what you notice, what you say yes to, and how
+          you read your own moods. Read it once, then carry on.
+        </Text>
+
+        <View style={[styles.bigAffirmCard, { borderColor: '#9affc855', marginTop: 14 }]}>
           {loading ? (
             <ActivityIndicator color="#9affc8" />
           ) : (
@@ -858,8 +865,15 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
     <View style={{ flex: 1 }}>
       <SubHeader title="5-4-3-2-1 Grounding" accent="#5B6CFF" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody}>
-        <Text style={styles.groundIntro}>
-          When anxiety rises, return to the senses. Move slowly. Breathe between each.
+        <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
+        <Text style={styles.sectionSub}>
+          When anxiety spikes, the mind loops on what isn't here. This exercise pulls attention
+          back into the body's actual sensory data — sight, touch, hearing, smell, taste —
+          short-circuiting the rumination. It's a standard tool in trauma-informed therapy and
+          works in 60–90 seconds.
+        </Text>
+        <Text style={[styles.groundIntro, { marginTop: 16 }]}>
+          Move slowly. Breathe between each.
         </Text>
         {items.map(it => (
           <View key={it.num} style={styles.groundCard}>
