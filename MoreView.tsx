@@ -38,11 +38,13 @@ type Props = {
   affirmation: string | null;
   affirmationLoading: boolean;
   onRefreshAffirmation: () => void;
+  isExpoGo: boolean;
 };
 
 export default function MoreView({
   notifPref, onChangeNotifPref,
   affirmation, affirmationLoading, onRefreshAffirmation,
+  isExpoGo,
 }: Props) {
   const [moodLog, setMoodLog] = useState<MoodEntry[]>([]);
   const [gratitude, setGratitude] = useState<GratEntry[]>([]);
@@ -172,6 +174,11 @@ export default function MoreView({
             {notifPref !== 'off' ? (
               <Text style={styles.notifHint}>
                 {notifPref === 'daily' ? 'A gentle nudge at 9 a.m.' : 'Nudges at 9 a.m., 1 p.m., 6 p.m.'}
+              </Text>
+            ) : null}
+            {isExpoGo ? (
+              <Text style={styles.notifWarn}>
+                Notifications require a standalone build (EAS / TestFlight / Play Store). They are inactive in Expo Go.
               </Text>
             ) : null}
           </View>
@@ -372,6 +379,7 @@ const styles = StyleSheet.create({
   },
   notifPillText: { color: '#ffffff99', fontSize: 12, fontWeight: '600', letterSpacing: 1 },
   notifHint: { color: '#ffffff66', fontSize: 11, marginTop: 8, fontStyle: 'italic' },
+  notifWarn: { color: '#FFB05B', fontSize: 11, marginTop: 8, fontStyle: 'italic', lineHeight: 16 },
 
   moodRow: { flexDirection: 'row', gap: 6, marginTop: 12 },
   moodBtn: {

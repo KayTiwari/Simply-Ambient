@@ -30,6 +30,12 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
+
+// expo-notifications was removed from Expo Go in SDK 53. We can still call its
+// APIs in a development / standalone build, but in Expo Go we soft no-op so
+// the user can still toggle the preference without errors.
+const IS_EXPO_GO = Constants.appOwnership === 'expo';
 import {
   useFonts,
   CormorantGaramond_400Regular,
@@ -299,17 +305,23 @@ function clampHz(n: number) {
   return Math.max(MIN_HZ, Math.min(MAX_HZ, Math.round(n)));
 }
 
-// Show notifications even when the app is in the foreground.
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
-});
+// Configure foreground display only outside Expo Go, where this raises a
+// removed-API warning under SDK 53+.
+if (!IS_EXPO_GO) {
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      }),
+    });
+  } catch {}
+}
 
 async function scheduleAffirmationNotifs(pref: NotifPref) {
+  if (IS_EXPO_GO) return; // No real scheduling in Expo Go on SDK 53+
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
     if (pref === 'off') return;
@@ -1114,6 +1126,7 @@ function AppContent() {
                 affirmation={affirmation}
                 affirmationLoading={affLoading}
                 onRefreshAffirmation={refreshAffirmation}
+                isExpoGo={IS_EXPO_GO}
               />
             )}
           </View>
