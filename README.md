@@ -226,17 +226,33 @@ Shipped lately:
 
 Considering next (open for input):
 
-- **Affirmations tab** with opt-in push notifications (1× / 3× per day, with quiet hours)
-- **Sleep timer** — auto-stop audio after N minutes
-- **Mala bead / breath counter** — tap to count breaths or mantras to 108
-- **Mood check-in** — quick before/after slider, builds a small chart over time
-- **Gratitude journal** — three lines per day, persisted locally
-- **5-4-3-2-1 grounding exercise** — guided sensory walk-through (in the Breath tab)
-- **Daily tarot card** — same horoscope API also has a `/tarot` endpoint
-- **Bija mantra audio loops** — short audio of LAM / VAM / RAM / etc. for chakra meditation
-- **Standalone EAS build** so the leaf icon shows up instead of Expo Go's icon
-- **Apple Health / Google Fit** integration for breath sessions
-- **Shareable preset QR codes**
+**Habit & insight**
+- **Streaks** — track consecutive days with any session (binaural / breath / chakra / mood / gratitude). One number on the More hub, history view in a sub-page.
+- **Weekly insights** — auto-generated summary card: average mood, sessions per category, most-used preset, gratitude count. Pulls from data we already store.
+- **Onboarding flow** — first-launch wizard: ask the user's intent (sleep / focus / calm / energy) and recommend three presets + one breath technique tailored to it.
+
+**Audio**
+- **Built-in soundscapes** — rain, ocean, forest, fireplace, brown/pink noise. Bundled audio files. Can layer with the binaural and the user's MP3 — three independent volumes.
+- **Routines / session sequencer** — chain multiple presets ("10 min alpha → 15 min theta → fade out"). Save and share.
+- **Bija mantra audio** — short loops of LAM / VAM / RAM / OM for each chakra.
+
+**Integrations & sync**
+- **Apple Health / Google Fit** — log breath sessions as mindfulness minutes, mood as wellbeing data.
+- **iCloud / Drive backup** — export presets, gratitude, mood log to cloud. Sync between devices.
+- **Widgets / Lock screen** — daily affirmation widget; quick-play preset from home screen.
+- **Apple Watch / Wear OS companion** — quick controls during a session.
+
+**Spiritual / content**
+- **Mantra library** — Gayatri, Maha Mrityunjaya, Loving-Kindness phrases, with description and optional chant audio.
+- **Yoga Nidra** — guided body-scan audio or text.
+- **Sacred geometry visualizer** — frequency-reactive cymatic patterns behind the play screen.
+- **I Ching / runes daily draw** — companion to the tarot daily card.
+
+**Polish**
+- **Standalone EAS build** so the leaf icon and notifications work outside Expo Go.
+- **Shareable preset / quote cards** — render a beautiful image of a saved preset or affirmation for sharing.
+- **Light theme** — alternative palette for daytime use.
+- **Tutorial / first-run tooltips** — surface less-obvious features (slide-to-tuning, long-press-to-delete, etc.).
 
 ---
 
