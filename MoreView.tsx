@@ -51,10 +51,13 @@ type SubPage =
   | null
   | 'profile'
   | 'compatibility'
+  | 'natal'
   | 'insights'
   | 'affirmations'
   | 'mood'
   | 'gratitude'
+  | 'routines'
+  | 'soundscapes'
   | 'grounding'
   | 'support'
   | 'bug';
@@ -93,7 +96,6 @@ export default function MoreView({
     const next = [{ ts: Date.now(), value }, ...moodLog].slice(0, 365);
     setMoodLog(next);
     AsyncStorage.setItem(STORAGE_MOOD, JSON.stringify(next)).catch(() => {});
-    recordActivity().then(() => getStreak().then(setStreak)).catch(() => {});
   }
 
   function saveGratitude(text: string) {
@@ -164,11 +166,20 @@ export default function MoreView({
           {page === 'profile' && (
             <ProfilePage onBack={close} />
           )}
+          {page === 'natal' && (
+            <NatalChartPage onBack={close} />
+          )}
           {page === 'compatibility' && (
             <CompatibilityPage onBack={close} />
           )}
           {page === 'insights' && (
             <InsightsPage onBack={close} />
+          )}
+          {page === 'routines' && (
+            <RoutinesPage onBack={close} />
+          )}
+          {page === 'soundscapes' && (
+            <SoundscapesPage onBack={close} />
           )}
           {page === 'affirmations' && (
             <AffirmationsPage
@@ -231,6 +242,43 @@ type HubProps = {
 };
 
 function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak, onOpen }: HubProps) {
+  // Weekly insights — computed inline from local data
+  const [weekly, setWeekly] = useState<{
+    moodAvg: number | null;
+    moodCount: number;
+    gratCount: number;
+    moodTrend: 'up' | 'down' | 'flat';
+  } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const dayMs = 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        const moodRaw = await AsyncStorage.getItem(STORAGE_MOOD);
+        const gratRaw = await AsyncStorage.getItem(STORAGE_GRAT);
+        const moods: MoodEntry[] = moodRaw ? JSON.parse(moodRaw) : [];
+        const grats: GratEntry[] = gratRaw ? JSON.parse(gratRaw) : [];
+        const week = moods.filter(m => now - m.ts < 7 * dayMs);
+        const prev = moods.filter(m => now - m.ts >= 7 * dayMs && now - m.ts < 14 * dayMs);
+        const avg = (arr: MoodEntry[]) =>
+          arr.length ? arr.reduce((s, e) => s + e.value, 0) / arr.length : null;
+        const a = avg(week);
+        const b = avg(prev);
+        const trend: 'up' | 'down' | 'flat' =
+          a === null || b === null ? 'flat' :
+          a - b >= 0.25 ? 'up' :
+          a - b <= -0.25 ? 'down' : 'flat';
+        setWeekly({
+          moodAvg: a,
+          moodCount: week.length,
+          gratCount: grats.filter(g => now - g.ts < 7 * dayMs).length,
+          moodTrend: trend,
+        });
+      } catch {}
+    })();
+  }, []);
+
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.headerWrap}>
@@ -243,13 +291,40 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
         </View>
         {streak > 0 ? (
           <View style={styles.streakBadge}>
-            <Text style={styles.streakFire}>🔥</Text>
+            <Text style={styles.streakGlyph}>❀</Text>
             <Text style={styles.streakText}>
-              {streak}-day streak
+              {streak}-day gratitude streak
             </Text>
           </View>
         ) : null}
       </View>
+
+      {weekly && (weekly.moodCount > 0 || weekly.gratCount > 0) ? (
+        <View style={styles.weeklyCard}>
+          <Text style={styles.weeklyLabel}>THIS WEEK</Text>
+          <View style={styles.weeklyRow}>
+            {weekly.moodAvg !== null ? (
+              <View style={styles.weeklyStat}>
+                <Text style={[styles.weeklyValue, { color: '#5BD0FF' }]}>
+                  {weekly.moodAvg.toFixed(1)}
+                  <Text style={styles.weeklyTrend}>
+                    {weekly.moodTrend === 'up' ? '  ↑' : weekly.moodTrend === 'down' ? '  ↓' : '  ·'}
+                  </Text>
+                </Text>
+                <Text style={styles.weeklyStatLabel}>avg mood</Text>
+              </View>
+            ) : null}
+            <View style={styles.weeklyStat}>
+              <Text style={[styles.weeklyValue, { color: '#5BD0FF' }]}>{weekly.moodCount}</Text>
+              <Text style={styles.weeklyStatLabel}>check-ins</Text>
+            </View>
+            <View style={styles.weeklyStat}>
+              <Text style={[styles.weeklyValue, { color: '#FFB05B' }]}>{weekly.gratCount}</Text>
+              <Text style={styles.weeklyStatLabel}>gratitudes</Text>
+            </View>
+          </View>
+        </View>
+      ) : null}
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
@@ -263,6 +338,13 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
           onPress={() => onOpen('profile')}
         />
         <HubItem
+          glyph="✧"
+          color="#5B6CFF"
+          label="Natal Chart"
+          preview="Western planetary positions"
+          onPress={() => onOpen('natal')}
+        />
+        <HubItem
           glyph="∞"
           color="#FF8FB1"
           label="Compatibility"
@@ -270,11 +352,25 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
           onPress={() => onOpen('compatibility')}
         />
         <HubItem
-          glyph="✧"
+          glyph="✦"
           color="#5BD0FF"
           label="AI Insights"
           preview="Reflections on your journal & tarot"
           onPress={() => onOpen('insights')}
+        />
+        <HubItem
+          glyph="≣"
+          color="#9affc8"
+          label="Routines"
+          preview="Chain presets into sessions"
+          onPress={() => onOpen('routines')}
+        />
+        <HubItem
+          glyph="≈"
+          color="#5BD0FF"
+          label="Soundscapes"
+          preview="Rain · ocean · forest · white noise"
+          onPress={() => onOpen('soundscapes')}
         />
         <HubItem
           glyph="✦"
@@ -487,7 +583,14 @@ function MoodPage({
     <View style={{ flex: 1 }}>
       <SubHeader title="Mood" accent="#5BD0FF" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>HOW ARE YOU RIGHT NOW?</Text>
+        <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
+        <Text style={styles.sectionSub}>
+          A 5-second daily check-in surfaces patterns over weeks — what days lift you, what drains
+          you, and how your practice shapes baseline mood. Mood tracking is one of the most
+          evidence-supported daily mental-health habits.
+        </Text>
+
+        <Text style={[styles.sectionLabel, { marginTop: 14 }]}>RIGHT NOW</Text>
         <View style={styles.moodRow}>
           {[1, 2, 3, 4, 5].map(v => {
             const active = moodToday?.value === v;
@@ -616,6 +719,9 @@ function MoodGraph({ buckets }: { buckets: Array<{ date: Date; avg: number | nul
 //   Gratitude sub-page
 // ===========================================================================
 
+const STORAGE_GRAT_REMINDER = '@simply_ambient_grat_reminder_v1';
+type GratReminderHour = 'off' | '21' | '22' | '23'; // 9pm / 10pm / 11pm
+
 function GratitudePage({
   entries, onSave, onDelete, onBack,
 }: {
@@ -625,6 +731,18 @@ function GratitudePage({
   onBack: () => void;
 }) {
   const [text, setText] = useState('');
+  const [reminder, setReminder] = useState<GratReminderHour>('off');
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_GRAT_REMINDER).then(v => {
+      if (v === 'off' || v === '21' || v === '22' || v === '23') setReminder(v);
+    }).catch(() => {});
+  }, []);
+
+  function setReminderPref(p: GratReminderHour) {
+    setReminder(p);
+    AsyncStorage.setItem(STORAGE_GRAT_REMINDER, p).catch(() => {});
+  }
 
   function commit() {
     onSave(text);
@@ -646,8 +764,15 @@ function GratitudePage({
     <View style={{ flex: 1 }}>
       <SubHeader title="Gratitude" accent="#FFB05B" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>WHAT DO YOU APPRECIATE?</Text>
-        <Text style={styles.sectionSub}>One small thing or many. Saved on this device.</Text>
+        <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
+        <Text style={styles.sectionSub}>
+          Naming one thing you appreciate, daily, gradually shifts attention toward what's working.
+          Over weeks it raises baseline mood and reduces rumination — one of the most-studied
+          interventions in positive psychology.
+        </Text>
+
+        <Text style={[styles.sectionLabel, { marginTop: 14 }]}>TODAY</Text>
+        <Text style={styles.sectionSub}>One small thing or many. Saved only on this device.</Text>
         <TextInput
           style={styles.gratInput}
           placeholder="A small or large thing…"
@@ -660,6 +785,34 @@ function GratitudePage({
         <TouchableOpacity onPress={commit} style={styles.gratSaveBtn} activeOpacity={0.85}>
           <Text style={styles.gratSaveText}>SAVE</Text>
         </TouchableOpacity>
+
+        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>EVENING REMINDER</Text>
+        <Text style={styles.sectionSub}>
+          Gentle nudge if you haven't journaled by the chosen hour. Activates with a standalone build.
+        </Text>
+        <View style={styles.notifPills}>
+          {([
+            { id: 'off', label: 'Off' },
+            { id: '21',  label: '9 pm' },
+            { id: '22',  label: '10 pm' },
+            { id: '23',  label: '11 pm' },
+          ] as Array<{ id: GratReminderHour; label: string }>).map(o => {
+            const active = reminder === o.id;
+            return (
+              <TouchableOpacity
+                key={o.id}
+                activeOpacity={0.85}
+                onPress={() => setReminderPref(o.id)}
+                style={[
+                  styles.notifPill,
+                  active && { borderColor: '#FFB05B', backgroundColor: '#FFB05B22' },
+                ]}
+              >
+                <Text style={[styles.notifPillText, active && { color: '#FFB05B' }]}>{o.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         <Text style={[styles.sectionLabel, { marginTop: 24 }]}>JOURNAL</Text>
         {entries.length === 0 ? (
@@ -725,6 +878,36 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
   );
 }
 
+const ROADMAP: Array<{ phase: string; items: Array<{ title: string; blurb: string }> }> = [
+  {
+    phase: 'NEXT UP',
+    items: [
+      { title: 'Custom routines & auto-sequencer', blurb: 'Build your own preset chains with smooth fades between steps.' },
+      { title: 'Built-in soundscapes',              blurb: 'Rain, ocean, forest, fireplace, brown noise — bundled and offline.' },
+      { title: 'In-app natal chart',                blurb: 'Planet positions, houses, and aspects without leaving the app.' },
+      { title: 'Bija mantra audio',                 blurb: 'Short loops of LAM / VAM / RAM / OM for chakra meditation.' },
+    ],
+  },
+  {
+    phase: 'AFTER THAT',
+    items: [
+      { title: 'Apple Health & Google Fit',         blurb: 'Log breath sessions as mindfulness minutes; mood as wellbeing data.' },
+      { title: 'Synastry compatibility',            blurb: 'Full natal-chart matching between two people once the chart pipeline ships.' },
+      { title: 'Widget + lock-screen',              blurb: 'Daily affirmation widget; quick-play preset from the home screen.' },
+      { title: 'iCloud / Drive backup',             blurb: 'Sync presets, gratitude, and mood log between devices.' },
+    ],
+  },
+  {
+    phase: 'CONSIDERING',
+    items: [
+      { title: 'Light theme',           blurb: 'Alternate palette for daytime use.' },
+      { title: 'Sacred geometry visualizer', blurb: 'Frequency-reactive cymatic patterns behind the play screen.' },
+      { title: 'Shareable preset cards',   blurb: 'Render a beautiful image of a saved preset to share.' },
+      { title: 'Yoga Nidra',              blurb: 'Guided body-scan audio or text.' },
+    ],
+  },
+];
+
 function SupportPage({ onBack }: { onBack: () => void }) {
   return (
     <View style={{ flex: 1 }}>
@@ -735,8 +918,7 @@ function SupportPage({ onBack }: { onBack: () => void }) {
           <Text style={styles.supportHeadline}>Support the developer</Text>
           <Text style={styles.supportText}>
             Simply Ambient is built and maintained by one person. If it's brought you peace and
-            you'd like to see more — sleep stories, custom soundscapes, a richer mood graph,
-            integrations — a small donation goes a long way.
+            you'd like to see more, a small donation directly funds the features below.
           </Text>
           <TouchableOpacity
             onPress={() => Linking.openURL(SUPPORT_URL).catch(() => {})}
@@ -746,6 +928,22 @@ function SupportPage({ onBack }: { onBack: () => void }) {
             <Text style={styles.supportBtnText}>BUY A COFFEE</Text>
           </TouchableOpacity>
         </View>
+
+        {ROADMAP.map(group => (
+          <View key={group.phase} style={{ marginTop: 22 }}>
+            <Text style={[styles.sectionLabel, { color: '#d9b35c' }]}>{group.phase}</Text>
+            {group.items.map(item => (
+              <View key={item.title} style={styles.roadmapItem}>
+                <View style={styles.roadmapDot} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.roadmapTitle}>{item.title}</Text>
+                  <Text style={styles.roadmapBlurb}>{item.blurb}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        ))}
+
         <Text style={styles.supportFootnote}>
           Donations are entirely optional. Thank you for being here either way.
         </Text>
@@ -999,6 +1197,205 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
             ) : null}
           </View>
         ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Natal Chart sub-page (uses Profile data + external chart link)
+// ===========================================================================
+
+function NatalChartPage({ onBack }: { onBack: () => void }) {
+  const [profile, setProfile] = useState<Profile>({});
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_PROFILE).then(v => v && setProfile(JSON.parse(v))).catch(() => {});
+  }, []);
+
+  function openExternal() {
+    // astro-seek's free natal chart calculator opens with a clean form to fill
+    const url = 'https://horoscopes.astro-seek.com/birth-chart-horoscope-online';
+    Linking.openURL(url).catch(() => {});
+  }
+
+  const ready = !!(profile.birthDate && profile.birthTime && profile.birthLocation);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Natal Chart" accent="#5B6CFF" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody}>
+        <Text style={styles.sectionLabel}>YOUR BIRTH DETAILS</Text>
+        {profile.name || profile.birthDate ? (
+          <View style={styles.compatCard}>
+            <Text style={styles.compatName}>{profile.name ?? '—'}</Text>
+            <Text style={styles.compatMeta}>
+              {profile.birthDate ?? 'Birth date not set'}
+              {profile.birthTime ? ` · ${profile.birthTime}` : ' · time not set'}
+            </Text>
+            {profile.birthLocation ? (
+              <Text style={styles.compatMeta}>{profile.birthLocation}</Text>
+            ) : (
+              <Text style={styles.compatMeta}>Birth location not set</Text>
+            )}
+          </View>
+        ) : (
+          <Text style={styles.emptyText}>
+            Open the Profile page first and fill in your birth details.
+          </Text>
+        )}
+
+        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>WHAT'S A NATAL CHART?</Text>
+        <Text style={styles.cardSub}>
+          A natal chart is a snapshot of the sky at the moment you were born — the positions of
+          the Sun, Moon, and planets across the zodiac and the twelve houses. Together they sketch
+          a temperament map: not destiny, but inclinations.
+        </Text>
+
+        <View style={[styles.compatComingSoon, { borderColor: '#5B6CFF55' }]}>
+          <Text style={[styles.compatComingTitle, { color: '#5B6CFF' }]}>
+            In-app chart — coming soon
+          </Text>
+          <Text style={styles.compatComingText}>
+            A built-in chart with planet positions, houses, and aspects is in the works.
+            For now, the button below opens a free public calculator pre-filled with what you've
+            entered above.
+          </Text>
+          <TouchableOpacity
+            onPress={openExternal}
+            disabled={!ready}
+            style={[
+              styles.aiBtn,
+              { backgroundColor: '#5B6CFF', marginTop: 14, opacity: ready ? 1 : 0.4 },
+            ]}
+          >
+            <Text style={styles.aiBtnText}>OPEN ASTRO-SEEK CALCULATOR</Text>
+          </TouchableOpacity>
+          {!ready ? (
+            <Text style={[styles.compatComingText, { marginTop: 10 }]}>
+              (Fill in birth date, time, and location on Profile first.)
+            </Text>
+          ) : null}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Routines (basic — sample routines, simple sequencer scaffolded)
+// ===========================================================================
+
+type RoutineStep = { label: string; minutes: number };
+type Routine = { id: string; name: string; description: string; color: string; steps: RoutineStep[] };
+
+const SAMPLE_ROUTINES: Routine[] = [
+  {
+    id: 'morning-focus',
+    name: 'Morning Focus',
+    description: '5 min Beta to wake the mind, 10 min Alpha to settle attention.',
+    color: '#FFB05B',
+    steps: [
+      { label: 'Beta · 18 Hz',  minutes: 5  },
+      { label: 'Alpha · 10 Hz', minutes: 10 },
+    ],
+  },
+  {
+    id: 'evening-windown',
+    name: 'Evening Wind-down',
+    description: '10 min Alpha to release the day, 15 min Theta to soften.',
+    color: '#8A5BFF',
+    steps: [
+      { label: 'Alpha · 10 Hz', minutes: 10 },
+      { label: 'Theta · 6 Hz',  minutes: 15 },
+    ],
+  },
+  {
+    id: 'deep-sleep',
+    name: 'Deep Sleep',
+    description: '10 min Theta to drop in, 30 min Delta to rest.',
+    color: '#5B6CFF',
+    steps: [
+      { label: 'Theta · 6 Hz', minutes: 10 },
+      { label: 'Delta · 2 Hz', minutes: 30 },
+    ],
+  },
+];
+
+function RoutinesPage({ onBack }: { onBack: () => void }) {
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Routines" accent="#9affc8" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody}>
+        <Text style={styles.sectionLabel}>SAMPLE ROUTINES</Text>
+        <Text style={styles.cardSub}>
+          A routine chains preset frequencies for a longer session. The auto-sequencer
+          (transition between steps automatically) is in development — for now, follow the
+          steps manually using the Frequencies tab.
+        </Text>
+        {SAMPLE_ROUTINES.map(r => (
+          <View key={r.id} style={[styles.routineCard, { borderColor: r.color + '55' }]}>
+            <Text style={[styles.routineName, { color: r.color }]}>{r.name}</Text>
+            <Text style={styles.routineDesc}>{r.description}</Text>
+            {r.steps.map((s, i) => (
+              <View key={i} style={styles.routineStep}>
+                <Text style={[styles.routineStepNum, { color: r.color }]}>{i + 1}</Text>
+                <Text style={styles.routineStepLabel}>{s.label}</Text>
+                <Text style={styles.routineStepTime}>{s.minutes} min</Text>
+              </View>
+            ))}
+          </View>
+        ))}
+        <View style={[styles.compatComingSoon, { borderColor: '#9affc855' }]}>
+          <Text style={[styles.compatComingTitle, { color: '#9affc8' }]}>
+            Custom routines & auto-sequencer — coming soon
+          </Text>
+          <Text style={styles.compatComingText}>
+            You'll be able to build your own routines, save them, and have the app auto-transition
+            between steps with smooth fades.
+          </Text>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Soundscapes (basic — descriptive list pending audio integration)
+// ===========================================================================
+
+const SOUNDSCAPES: Array<{ id: string; name: string; blurb: string; color: string; glyph: string }> = [
+  { id: 'rain',   name: 'Soft Rain',      blurb: 'Steady, gentle rainfall',           color: '#5BD0FF', glyph: '☂' },
+  { id: 'ocean',  name: 'Ocean Waves',    blurb: 'Slow tide, long breaths',           color: '#5B6CFF', glyph: '≋' },
+  { id: 'forest', name: 'Forest',         blurb: 'Wind through trees, distant birds', color: '#9affc8', glyph: '⌘' },
+  { id: 'fire',   name: 'Crackling Fire', blurb: 'Hearth on a quiet night',           color: '#FFB05B', glyph: '✧' },
+  { id: 'white',  name: 'White Noise',    blurb: 'Even-spectrum static, masks distractions', color: '#ffffffcc', glyph: '≣' },
+  { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer than white, balanced frequencies',  color: '#FFD0E1', glyph: '≣' },
+  { id: 'brown',  name: 'Brown Noise',    blurb: 'Deep, low-frequency rumble',        color: '#8A6B4A', glyph: '≣' },
+];
+
+function SoundscapesPage({ onBack }: { onBack: () => void }) {
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Soundscapes" accent="#5BD0FF" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody}>
+        <Text style={styles.sectionLabel}>NATURAL AMBIENCE</Text>
+        <Text style={styles.cardSub}>
+          Built-in soundscapes that layer behind the binaural tones. Audio bundles are coming in
+          a follow-up update — for now you can pick any audio file from your device on the
+          Frequencies tab's Background Music card.
+        </Text>
+        {SOUNDSCAPES.map(s => (
+          <View key={s.id} style={[styles.soundscapeCard, { borderColor: s.color + '55' }]}>
+            <View style={[styles.soundscapeGlyphBox, { backgroundColor: s.color + '22', borderColor: s.color }]}>
+              <Text style={[styles.soundscapeGlyph, { color: s.color }]}>{s.glyph}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.soundscapeName}>{s.name}</Text>
+              <Text style={styles.soundscapeBlurb}>{s.blurb}</Text>
+            </View>
+            <Text style={styles.soundscapeSoon}>SOON</Text>
+          </View>
+        ))}
       </ScrollView>
     </View>
   );
@@ -1283,7 +1680,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#FFB05B55',
     marginTop: 14,
   },
-  streakFire: { fontSize: 14, marginRight: 6 },
+  streakGlyph: { color: '#FFB05B', fontSize: 14, marginRight: 6 },
   streakText: { color: '#FFB05B', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
 
   // Sub-page
@@ -1455,6 +1852,75 @@ const styles = StyleSheet.create({
     color: '#ffffff66', fontSize: 11, fontStyle: 'italic',
     textAlign: 'center', marginTop: 16, lineHeight: 16,
   },
+  roadmapItem: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  roadmapDot: {
+    width: 6, height: 6, borderRadius: 3,
+    backgroundColor: '#d9b35c',
+    marginTop: 7, marginRight: 12,
+  },
+  roadmapTitle: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  roadmapBlurb: { color: '#ffffffaa', fontSize: 12, marginTop: 2, lineHeight: 17 },
+
+  // Routines
+  routineCard: {
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1,
+  },
+  routineName: { fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  routineDesc: { color: '#ffffffaa', fontSize: 12, marginTop: 4, lineHeight: 17, marginBottom: 10 },
+  routineStep: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 6,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  routineStepNum: {
+    width: 24, fontSize: 14, fontWeight: '700',
+    textAlign: 'center', marginRight: 10,
+  },
+  routineStepLabel: { flex: 1, color: '#ffffffdd', fontSize: 13 },
+  routineStepTime: { color: '#ffffff88', fontSize: 12 },
+
+  // Soundscapes
+  soundscapeCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 14, padding: 12, marginBottom: 8,
+    borderWidth: 1,
+  },
+  soundscapeGlyphBox: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 12, borderWidth: 1,
+  },
+  soundscapeGlyph: { fontSize: 20, fontWeight: '700' },
+  soundscapeName: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  soundscapeBlurb: { color: '#ffffff88', fontSize: 12, marginTop: 2 },
+  soundscapeSoon: {
+    color: '#ffffff66', fontSize: 9, letterSpacing: 1.5, fontWeight: '700',
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 999,
+  },
+
+  cardName: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  cardSub: { color: '#ffffff88', fontSize: 12, marginTop: 4, lineHeight: 17 },
+
+  // Weekly insights card
+  weeklyCard: {
+    marginHorizontal: 20, marginBottom: 14,
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 16, padding: 14,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+  },
+  weeklyLabel: { color: '#ffffff80', fontSize: 10, letterSpacing: 2, fontWeight: '600', marginBottom: 8 },
+  weeklyRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  weeklyStat: { alignItems: 'center', flex: 1 },
+  weeklyValue: { fontSize: 22, fontWeight: '700' },
+  weeklyTrend: { fontSize: 14, fontWeight: '500' },
+  weeklyStatLabel: { color: '#ffffff88', fontSize: 11, letterSpacing: 0.5, marginTop: 2 },
 
   // Bug
   bugInput: {

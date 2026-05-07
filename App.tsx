@@ -865,10 +865,7 @@ function AppContent() {
 
   function togglePlay() {
     if (isTonePlaying || isToneLoading) stopTones();
-    else {
-      loadAndPlay(leftHz, rightHz);
-      recordActivity().catch(() => {});
-    }
+    else loadAndPlay(leftHz, rightHz);
   }
 
   // Fire-rate-limited live update used while sliders are being dragged.

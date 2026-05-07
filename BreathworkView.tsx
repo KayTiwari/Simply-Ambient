@@ -9,6 +9,11 @@ import {
   View,
 } from 'react-native';
 import Svg, { Polygon } from 'react-native-svg';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
+
+const STORAGE_HAPTIC = '@simply_ambient_mala_haptic_v1';
+type HapticLevel = 'off' | 'low' | 'high';
 
 type Phase = { name: 'Inhale' | 'Hold' | 'Exhale'; seconds: number };
 
@@ -214,7 +219,7 @@ export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandCo
   const technique = TECHNIQUES.find(t => t.id === activeId) ?? null;
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={[{ flex: 1 }, styles.tabScrim]}>
       <View style={styles.headerWrap}>
         <Text style={styles.ambience}>Simply Ambient</Text>
         <Text style={styles.title}>Breath Work</Text>
@@ -246,8 +251,42 @@ export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandCo
 
 function MalaCounter() {
   const [count, setCount] = useState(0);
+  const [haptic, setHaptic] = useState<HapticLevel>('low');
   const target = 108;
   const ratio = Math.min(1, count / target);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_HAPTIC).then(v => {
+      if (v === 'off' || v === 'low' || v === 'high') setHaptic(v);
+    }).catch(() => {});
+  }, []);
+
+  function setHapticPref(p: HapticLevel) {
+    setHaptic(p);
+    AsyncStorage.setItem(STORAGE_HAPTIC, p).catch(() => {});
+    if (p !== 'off') {
+      // Preview tap so the user can feel the chosen level
+      Haptics.impactAsync(
+        p === 'high' ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light,
+      ).catch(() => {});
+    }
+  }
+
+  function tap() {
+    if (haptic !== 'off') {
+      Haptics.impactAsync(
+        haptic === 'high' ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light,
+      ).catch(() => {});
+    }
+    setCount(c => {
+      const next = Math.min(target, c + 1);
+      if (next === target && haptic !== 'off') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+      return next;
+    });
+  }
+
   return (
     <View style={styles.malaCard}>
       <View style={styles.malaTopRow}>
@@ -267,11 +306,34 @@ function MalaCounter() {
         </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={0.85}
-          onPress={() => setCount(c => Math.min(target, c + 1))}
+          onPress={tap}
           style={styles.malaCountBtn}
         >
           <Text style={styles.malaCountBtnText}>{count >= target ? '✓ Complete' : 'TAP'}</Text>
         </TouchableOpacity>
+      </View>
+      <View style={styles.malaHapticRow}>
+        <Text style={styles.malaHapticLabel}>VIBRATION</Text>
+        <View style={styles.malaHapticPills}>
+          {(['off', 'low', 'high'] as HapticLevel[]).map(p => {
+            const active = p === haptic;
+            return (
+              <TouchableOpacity
+                key={p}
+                activeOpacity={0.85}
+                onPress={() => setHapticPref(p)}
+                style={[
+                  styles.malaHapticPill,
+                  active && { borderColor: '#d9b35c', backgroundColor: '#d9b35c22' },
+                ]}
+              >
+                <Text style={[styles.malaHapticText, active && { color: '#d9b35c' }]}>
+                  {p === 'off' ? 'Off' : p === 'low' ? 'Low' : 'High'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
       <Text style={styles.malaHint}>Tap on each breath, mantra, or bead.</Text>
     </View>
@@ -715,6 +777,10 @@ function BreathMandala({
 // ===========================================================================
 
 const styles = StyleSheet.create({
+  // Dark scrim so the technique's vivid color stays readable regardless of
+  // whatever global band/tuning palette is active behind the tab.
+  tabScrim: { backgroundColor: 'rgba(0,0,0,0.32)' },
+
   headerWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 14 },
   ambience: {
     color: '#fff',
@@ -792,6 +858,20 @@ const styles = StyleSheet.create({
   },
   malaCountBtnText: { color: '#0B0B1F', fontSize: 14, fontWeight: '800', letterSpacing: 4 },
   malaHint: { color: '#ffffff66', fontSize: 11, fontStyle: 'italic', marginTop: 10, textAlign: 'center' },
+  malaHapticRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  malaHapticLabel: { color: '#ffffff80', fontSize: 10, letterSpacing: 1.5, fontWeight: '600' },
+  malaHapticPills: { flexDirection: 'row', gap: 6 },
+  malaHapticPill: {
+    paddingHorizontal: 12, paddingVertical: 5,
+    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(0,0,0,0.20)',
+  },
+  malaHapticText: { color: '#ffffff99', fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
 
   footnote: {
     color: '#ffffff66', fontSize: 12, textAlign: 'center',

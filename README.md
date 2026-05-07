@@ -124,9 +124,17 @@ The More tab is a hub menu — tapping any item slides a dedicated sub-page in f
 - **Support** sub-page — opens Buy Me a Coffee link with a hero card.
 - **Report a Bug** sub-page — tries the FormSubmit silent submission first, then falls back to opening the user's mail app pre-filled. The developer's email is base64-encoded in the source so it doesn't appear as plaintext in the bundle and is never displayed in the UI.
 
-### Streaks
+### Gratitude streak
 
-Any activity (binaural session, breath session, mood check-in, gratitude entry) registers as a "practice day". The streak counter on the More hub shows your consecutive-day count and resets to zero if you skip more than one day.
+A flower badge on the More hub shows your consecutive-day **gratitude streak** — counts up each day you save a gratitude entry, resets if you skip more than one day. Streaks are deliberately tied to gratitude (not just app opens) because writing one thing you appreciate, daily, is the most consistent positive-psychology lever in this app.
+
+### Mala counter haptics
+
+The mala counter offers Off / Low / High vibration on each tap, plus a success vibration when you reach 108. Persisted locally.
+
+### Weekly insights
+
+A small card at the top of the More hub summarises this week: average mood (with up/down trend versus last week), number of mood check-ins, number of gratitudes. Pulls entirely from your local data; nothing is sent anywhere.
 
 ### First-launch onboarding
 
