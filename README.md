@@ -1,6 +1,6 @@
 # Simply Ambient
 
-> A binaural frequency generator and breath-work companion for Android and iOS.
+> A binaural frequency generator, breath-work companion, and ambient spiritual reference for Android and iOS.
 
 <p align="center">
   <img src="screenshots/1.jpg" width="22%" alt="Frequencies tab" />
@@ -9,9 +9,22 @@
   <img src="screenshots/4.jpg" width="22%" alt="Breath session" />
 </p>
 
-Simply Ambient pairs custom binaural beats with guided breath techniques. Pick a brainwave band, tune each ear independently (or type the exact Hz), layer in your own background music, save your favorite mixes, and step through breath sessions with phase-aware animation.
+Simply Ambient pairs custom binaural beats with guided breath techniques and grounded spiritual content. Pick a brainwave band, tune each ear independently (or type the exact Hz), layer in your own background music, save your favorite mixes, and step through breath sessions with phase-aware animation. Cross-reference with the chakras and your daily horoscope.
 
 The philosophy is rooted in **New Thought / manifestation**: tune your vibration, set your intention, let the rest follow.
+
+---
+
+## Four tabs
+
+| Tab | Glyph | Contents |
+|---|---|---|
+| **Frequencies** | ∿ | L/R sliders, brainwave & tuning presets, custom presets, background music |
+| **Breath** | ○ | 16 breath techniques, circle / polygonal-mandala visualizations, mudras |
+| **Chakras** | ✦ | 7 chakras with Devanagari bija glyphs, doshas (Vata/Pitta/Kapha) |
+| **Horoscopes** | ☽ | Daily / monthly / yearly horoscopes, zodiac picker, lunar phase |
+
+Plus a small **lunar-phase chip** in the top-right corner of every screen.
 
 ---
 
@@ -19,8 +32,8 @@ The philosophy is rooted in **New Thought / manifestation**: tune your vibration
 
 ### 🎧 Frequencies tab
 
-- **Independent left / right ear sliders** (50–1000 Hz). Tap any displayed Hz value to type it directly with the numpad.
-- **Live audio updates as you slide** — the beat changes in real time without the old frequency overlapping the new one.
+- **Independent left / right ear sliders** (50–1000 Hz). Tap any displayed Hz to type it via numpad. **±1 buttons** for fine adjustment.
+- **Live audio updates as you slide** — the beat changes in real time, no overlapping playback.
 - **Brainwave-band presets** with manifestation-aligned blurbs:
   - **Delta** (0.5–4 Hz) — *Surrender · Restoration*
   - **Theta** (4–8 Hz) — *Visualize · Receive*
@@ -28,15 +41,15 @@ The philosophy is rooted in **New Thought / manifestation**: tune your vibration
   - **Alpha** (8–13 Hz) — *Aligned focus · Allow*
   - **Beta** (13–30 Hz) — *Direct · Take action*
   - **Gamma** (30–100 Hz) — *Insight · Knowing*
-  - **Gamma-40** (40 Hz @ 250 Hz carrier) — *Memory · Clarity* (the frequency studied for cognitive support)
+  - **Gamma-40** (40 Hz @ 250 Hz carrier) — *Memory · Clarity*
 - **Tuning frequencies** — wrapped in a default 6 Hz theta beat so you get both the carrier's resonance and a real binaural beat:
   - **111 Hz** — Hypogeum cymatic tone (archaeo-acoustic)
   - **136 Hz** — OM / Cosmic Earth-orbit tone
   - **174 Hz** — Pain · Grounding (Solfeggio)
   - **256 Hz** — Scientific C / Verdi tuning
-  - **285, 396, 417, 432, 444, 528, 639, 741, 852, 963 Hz** — full Solfeggio + companion tunings
-- **Slide-to-tuning detection** — slide the L/R sliders so the carrier hits a tuning frequency (within 1 Hz) and the gold tuning theme + label activate automatically.
-- **Custom presets** — name and save the current L/R combination. Long-press a saved chip to delete it. Built-in presets are protected. Stored locally via AsyncStorage so they survive app restarts.
+  - **285, 396, 417, 432, 444, 528, 639, 741, 852, 963 Hz** — Solfeggio + companion tunings
+- **Slide-to-tuning detection** — slide so the carrier hits a tuning frequency (within 1 Hz) and the gold tuning theme + label activate automatically.
+- **Custom presets** — name and save the current L/R combination. Long-press a saved chip to delete it. Built-in presets are protected. Stored locally.
 - **Background music** — pick any audio file from your device. Plays alongside the binaural tones with its own play/pause and volume slider.
 
 ### 🌬 Breath Work tab
@@ -62,46 +75,51 @@ Sixteen techniques across two categories:
 | Activating | Kapalabhati | passive in · forceful out — skull-shining breath |
 
 - **Two visual options**, switchable mid-session:
-  - **Circle** — minimal scaling ring with phase label
-  - **Mandala** — geometric polygon center with orbiting petals and a counter-rotating inner ring; petals expand outward on inhale and pull back on exhale, freezing during holds
-- Per-second countdown, cycle counter, and smooth ease-in/out timing matched to each phase.
+  - **Circle** — minimal scaling ring with phase label and per-second countdown
+  - **Mandala** — six nested polygons (triangle → octagon) rotating at three independent rates and scaling with breath; freezes during holds
+- **Mudras**: every technique includes a paired hand mudra (Gyan, Anjali, Hakini, Vayu, Apana Vayu, Shanmukhi, Vishnu, Bhairava, Pran, Apana, Chin, …) with placement instructions shown in the session view.
 - The binaural tone you set on the Frequencies tab keeps playing while you're on this tab.
 
-### 🎨 Living background
+### ✦ Chakras tab
 
-- A slow color field that breathes with the active band.
-- Two huge rotating rounded shapes in the band's accent and secondary tones — the visible color morphs as they slowly spin past one another. Inspired by Rowno's [Chameleon background](https://codepen.io/Rowno/pen/EVEgJb) CodePen.
-- Snaps to a new palette when you choose a different preset.
+Seven chakras with the **actual Devanagari bija mantra glyph** rendered in each chakra's color:
 
-### 🔯 Chakras tab
-
-Seven chakras with full attribution:
-- **Root** (Muladhara · LAM · Earth · 396 Hz)
-- **Sacral** (Svadhisthana · VAM · Water · 417 Hz)
-- **Solar Plexus** (Manipura · RAM · Fire · 528 Hz)
-- **Heart** (Anahata · YAM · Air · 639 Hz)
-- **Throat** (Vishuddha · HAM · Ether · 741 Hz)
-- **Third Eye** (Ajna · OM · Light · 852 Hz)
-- **Crown** (Sahasrara · AUM · Consciousness · 963 Hz)
+| # | Name | Sanskrit | Bija | Glyph | Element | Hz |
+|---|---|---|---|---|---|---|
+| 1 | Root | Muladhara | LAM | लं | Earth | 396 |
+| 2 | Sacral | Svadhisthana | VAM | वं | Water | 417 |
+| 3 | Solar Plexus | Manipura | RAM | रं | Fire | 528 |
+| 4 | Heart | Anahata | YAM | यं | Air | 639 |
+| 5 | Throat | Vishuddha | HAM | हं | Ether | 741 |
+| 6 | Third Eye | Ajna | OM | ॐ | Light | 852 |
+| 7 | Crown | Sahasrara | AUM | ॐ | Consciousness | 963 |
 
 Each card shows the bija mantra, element, body location, what it governs, and what blocks look like. Tap to tune both ears around its carrier frequency with a 6 Hz theta beat — the whole app theme shifts to that chakra's color.
 
 ### 🌿 Doshas (Ayurveda)
 
-Three constitutions on the chakra tab — **Vata**, **Pitta**, **Kapha** — each with its qualities, recommended balancing frequency, and recommended breath technique. Tap to apply.
+Three Ayurvedic constitutions on the chakra tab — **Vata** (Air + Ether), **Pitta** (Fire + Water), **Kapha** (Earth + Water) — each with its qualities, recommended balancing frequency, and recommended breath technique. Tap to apply.
 
-### 🤲 Mudras
+### ☽ Horoscopes tab
 
-Every breath technique includes a paired hand mudra (Gyan, Anjali, Hakini, Shanmukhi, Vishnu, Bhairava, Pran, Apana, Chin, etc.) with placement instructions, shown in the breath session screen.
+- **Today widget** with the actual date, your sign's glyph, element, and qualities.
+- **Three period toggles**: DAILY · MONTHLY · YEARLY.
+  - Daily and monthly are pulled live from a free public horoscope API.
+  - Yearly uses 12 hand-written "year-ahead" intentions (one per sign) — grounded, manifestation-aligned, not predictive pulp.
+- **Lunar phase + percent illumination** at the bottom of the widget (also computed locally from Conway's algorithm).
+- **Full 12-zodiac picker** — tap to set your sign. Persisted in local storage.
 
-### 🌙 Lunar phase
+### 🎨 Living background
 
-A subtle indicator in the corner of the app shows the current moon phase (computed from Conway's algorithm) — passive ambient awareness.
+- Rich diagonal base gradient + two cross-fading diagonal gradient layers in opposing directions, plus a slow vertical accent stripe drifting upward.
+- All animation **freezes when no frequency is playing** so you only see motion during a session.
+- The palette swaps when you choose a new preset (chakras get their own saturated red→violet palettes).
+- A small lunar-phase pill ( ◐ Waxing crescent ) sits in the top-right corner on every screen, positioned below the status bar via `useSafeAreaInsets`.
 
 ### 💭 Manifestation language
 
-A rotating set of New Thought aphorisms drifts across the top of the screen:
-*"Thoughts become things" · "Energy flows where attention goes" · "What you seek is seeking you" · "You attract what you vibrate" · "As within, so without"*
+A rotating set of New Thought aphorisms drifts across the top of the Frequencies tab:
+*"Thoughts become things" · "Energy flows where attention goes" · "What you seek is seeking you" · "You attract what you vibrate" · "As within, so without" · "Tune in. Receive." · "Be still, and know"*
 
 ---
 
@@ -112,15 +130,20 @@ A rotating set of New Thought aphorisms drifts across the top of the screen:
 - **expo-audio** — playback (and synthesized stereo PCM WAV for the binaural tones)
 - **expo-document-picker** — picking the user's background audio file
 - **expo-file-system** — caching the synthesized WAV between frequency changes
-- **@react-native-async-storage/async-storage** — persisting custom presets
+- **expo-font** + **@expo-google-fonts/cormorant-garamond** — elegant serif for the wordmark
+- **@react-native-async-storage/async-storage** — persisting custom presets, user's zodiac
 - **@react-native-community/slider**
-- **expo-linear-gradient** — base color field
+- **expo-linear-gradient** — gradient layers for the living background
 - **react-native-svg** — polygons for the mandala visualization
 - **react-native-safe-area-context**
 
 ### How the binaural audio works
 
 Every time the frequency changes, a **1-second 44.1 kHz 16-bit stereo PCM WAV** is generated in JavaScript — one full cycle of the left tone in the L channel, one of the right tone in the R channel, integer Hz so the 1-second loop closes seamlessly. The bytes are base64-encoded, written to `FileSystem.cacheDirectory`, and loaded into a single persistent `AudioPlayer` via `.replace()` so there's never a second player overlapping the first. Slider drags are throttled to ~220 ms to keep audio responsive without thrashing the synthesizer.
+
+### How the horoscopes work
+
+Daily and monthly horoscopes are fetched from `freehoroscopeapi.com` — a free public API that returns plain JSON. Yearly horoscopes are local: each of the 12 zodiac signs has a hand-written one-paragraph "year ahead" intention bundled into the app. The user's chosen zodiac sign is persisted in `AsyncStorage` so the next launch defaults to the same sign.
 
 ---
 
@@ -145,10 +168,13 @@ Then either:
 
 ```
 .
-├── App.tsx                  # Main app: tabs, state, audio, frequencies UI, animated background
-├── BreathworkView.tsx       # Breath techniques + circle/mandala visuals
+├── App.tsx                  # Tabs, state, audio, frequencies UI, animated background, zodiac/lunar data
+├── BreathworkView.tsx       # 16 breath techniques + circle and polygonal-mandala visuals + mudras
+├── ChakrasView.tsx          # 7 chakras (Devanagari bijas) + doshas
+├── HoroscopesView.tsx       # Today widget, daily/monthly/yearly horoscopes, zodiac picker, lunar
 ├── app.json                 # Expo config (icon, splash, plugins)
 ├── assets/                  # Icons + splash (minimal green leaf on white)
+├── screenshots/             # README screenshots
 ├── index.ts                 # Expo entry point
 ├── package.json
 └── tsconfig.json
@@ -158,11 +184,32 @@ Then either:
 
 ## Roadmap
 
-- Standalone build via EAS (so the green-leaf icon shows up instead of Expo Go's icon)
-- Sleep timer
-- Shareable preset QR codes
-- Apple Health / Google Fit integration for breath sessions
-- Curated guided-meditation library
+Shipped lately:
+
+- ✅ Sleep / standalone EAS build *(planned)*
+- ✅ Lunar phase indicator (Conway's algorithm)
+- ✅ Chakras with Devanagari bijas
+- ✅ Doshas
+- ✅ Mudras paired with breath techniques
+- ✅ Horoscopes tab (daily / monthly / yearly)
+- ✅ Persistent user zodiac sign
+- ✅ Manifestation rotating quotes
+- ✅ Slide-to-tuning auto-detection
+- ✅ Live slider audio with no overlap
+
+Considering next (open for input):
+
+- **Affirmations tab** with opt-in push notifications (1× / 3× per day, with quiet hours)
+- **Sleep timer** — auto-stop audio after N minutes
+- **Mala bead / breath counter** — tap to count breaths or mantras to 108
+- **Mood check-in** — quick before/after slider, builds a small chart over time
+- **Gratitude journal** — three lines per day, persisted locally
+- **5-4-3-2-1 grounding exercise** — guided sensory walk-through (in the Breath tab)
+- **Daily tarot card** — same horoscope API also has a `/tarot` endpoint
+- **Bija mantra audio loops** — short audio of LAM / VAM / RAM / etc. for chakra meditation
+- **Standalone EAS build** so the leaf icon shows up instead of Expo Go's icon
+- **Apple Health / Google Fit** integration for breath sessions
+- **Shareable preset QR codes**
 
 ---
 
@@ -171,7 +218,13 @@ Then either:
 - Background animation inspired by [Rowno's "Chameleon background"](https://codepen.io/Rowno/pen/EVEgJb)
 - Brainwave-band conventions from standard EEG / neuroscience literature
 - Solfeggio frequency intents drawn from sound-healing tradition
+- Chakra system from yogic / tantric tradition; bija mantras in Devanagari
+- Doshas from Ayurveda
+- Horoscope API: [freehoroscopeapi.com](https://freehoroscopeapi.com/)
+- Lunar phase: Conway's algorithm
+- Tropical zodiac date conventions
 - New Thought aphorisms from Wallace Wattles, Florence Scovel Shinn, Ernest Holmes, and similar lineage
+- Cormorant Garamond font by Christian Thalmann (SIL OFL)
 
 ---
 
