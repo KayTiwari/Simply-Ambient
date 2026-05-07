@@ -31,7 +31,7 @@ function decodeReportEmail(): string {
 }
 
 // Donation link — replace with your own Buy Me a Coffee / Ko-fi handle.
-const SUPPORT_URL = 'https://www.buymeacoffee.com/kaytiwari';
+const SUPPORT_URL = 'https://www.buymeacoffee.com/likechess';
 
 export type NotifPref = 'off' | 'daily' | 'thrice';
 
