@@ -1,7 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Dimensions,
+  Easing,
   Linking,
   ScrollView,
   StyleSheet,
@@ -11,13 +14,14 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Svg, { Circle, Line, Path } from 'react-native-svg';
 
-const STORAGE_NOTIF = '@simply_ambient_notif_pref_v1';
+const { width: SCREEN_W } = Dimensions.get('window');
+
 const STORAGE_MOOD = '@simply_ambient_mood_log_v1';
 const STORAGE_GRAT = '@simply_ambient_gratitude_v1';
 
 // Email obfuscated so it doesn't appear as plaintext in the bundle.
-// (Base64 of the developer's email — used only for form submissions.)
 const REPORT_EMAIL_B64 = 'dGl3a2F5QGdtYWlsLmNvbQ==';
 function decodeReportEmail(): string {
   // @ts-ignore — atob exists in the React Native runtime
@@ -41,6 +45,18 @@ type Props = {
   isExpoGo: boolean;
 };
 
+type SubPage =
+  | null
+  | 'affirmations'
+  | 'mood'
+  | 'gratitude'
+  | 'grounding'
+  | 'support'
+  | 'bug';
+
+const MOOD_COLORS = ['#FF5B5B', '#FF8A38', '#FFD000', '#9affc8', '#5BD0FF'];
+const MOOD_LABELS = ['Low', 'Off', 'OK', 'Good', 'Great'];
+
 export default function MoreView({
   notifPref, onChangeNotifPref,
   affirmation, affirmationLoading, onRefreshAffirmation,
@@ -48,30 +64,23 @@ export default function MoreView({
 }: Props) {
   const [moodLog, setMoodLog] = useState<MoodEntry[]>([]);
   const [gratitude, setGratitude] = useState<GratEntry[]>([]);
-  const [gratText, setGratText] = useState('');
 
-  const [bugSubject, setBugSubject] = useState('');
-  const [bugBody, setBugBody] = useState('');
-  const [bugSending, setBugSending] = useState(false);
-
-  // Load persisted mood + gratitude
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_MOOD).then(v => v && setMoodLog(JSON.parse(v))).catch(() => {});
     AsyncStorage.getItem(STORAGE_GRAT).then(v => v && setGratitude(JSON.parse(v))).catch(() => {});
   }, []);
 
   function saveMood(value: number) {
-    const next = [{ ts: Date.now(), value }, ...moodLog].slice(0, 60);
+    const next = [{ ts: Date.now(), value }, ...moodLog].slice(0, 365);
     setMoodLog(next);
     AsyncStorage.setItem(STORAGE_MOOD, JSON.stringify(next)).catch(() => {});
   }
 
-  function saveGratitude() {
-    const text = gratText.trim();
-    if (!text) return;
-    const next = [{ ts: Date.now(), text }, ...gratitude].slice(0, 100);
+  function saveGratitude(text: string) {
+    const t = text.trim();
+    if (!t) return;
+    const next = [{ ts: Date.now(), text: t }, ...gratitude].slice(0, 1000);
     setGratitude(next);
-    setGratText('');
     AsyncStorage.setItem(STORAGE_GRAT, JSON.stringify(next)).catch(() => {});
   }
 
@@ -81,45 +90,109 @@ export default function MoreView({
     AsyncStorage.setItem(STORAGE_GRAT, JSON.stringify(next)).catch(() => {});
   }
 
-  async function submitBugReport() {
-    if (!bugSubject.trim() && !bugBody.trim()) {
-      Alert.alert('Empty report', 'Add a subject or describe the issue first.');
-      return;
-    }
-    setBugSending(true);
-    try {
-      const url = `https://formsubmit.co/ajax/${decodeReportEmail()}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-          _subject: `[Simply Ambient] ${bugSubject || 'Bug report'}`,
-          _captcha: 'false',
-          subject: bugSubject,
-          message: bugBody,
-        }),
-      });
-      if (res.ok) {
-        Alert.alert('Sent', 'Thank you. The developer will see it soon.');
-        setBugSubject('');
-        setBugBody('');
-      } else {
-        Alert.alert('Could not send', 'Please try again later.');
-      }
-    } catch {
-      Alert.alert('Could not send', 'Check your connection and try again.');
-    } finally {
-      setBugSending(false);
-    }
+  // Slide-over navigation
+  const [page, setPage] = useState<SubPage>(null);
+  const slide = useRef(new Animated.Value(0)).current;
+
+  function open(p: Exclude<SubPage, null>) {
+    setPage(p);
+    Animated.timing(slide, {
+      toValue: 1, duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
   }
 
+  function close() {
+    Animated.timing(slide, {
+      toValue: 0, duration: 240,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => setPage(null));
+  }
+
+  const subTranslateX = slide.interpolate({ inputRange: [0, 1], outputRange: [SCREEN_W, 0] });
+  const hubScale = slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0.97] });
+  const hubOpacity = slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0.5] });
+
+  const today = new Date();
   const moodToday = moodLog.find(
-    m => new Date(m.ts).toDateString() === new Date().toDateString(),
+    m => new Date(m.ts).toDateString() === today.toDateString(),
   );
 
+  return (
+    <View style={{ flex: 1 }}>
+      <Animated.View style={{ flex: 1, transform: [{ scale: hubScale }], opacity: hubOpacity }}>
+        <Hub
+          notifPref={notifPref}
+          affirmationPreview={affirmation}
+          moodToday={moodToday}
+          gratitudeCount={gratitude.length}
+          onOpen={open}
+        />
+      </Animated.View>
+
+      {page !== null && (
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            { transform: [{ translateX: subTranslateX }], backgroundColor: '#0B0B1F' },
+          ]}
+        >
+          {page === 'affirmations' && (
+            <AffirmationsPage
+              affirmation={affirmation}
+              loading={affirmationLoading}
+              onRefresh={onRefreshAffirmation}
+              notifPref={notifPref}
+              onChangeNotifPref={onChangeNotifPref}
+              isExpoGo={isExpoGo}
+              onBack={close}
+            />
+          )}
+          {page === 'mood' && (
+            <MoodPage
+              moodLog={moodLog}
+              onSaveMood={saveMood}
+              onBack={close}
+            />
+          )}
+          {page === 'gratitude' && (
+            <GratitudePage
+              entries={gratitude}
+              onSave={saveGratitude}
+              onDelete={deleteGratitude}
+              onBack={close}
+            />
+          )}
+          {page === 'grounding' && (
+            <GroundingPage onBack={close} />
+          )}
+          {page === 'support' && (
+            <SupportPage onBack={close} />
+          )}
+          {page === 'bug' && (
+            <BugReportPage onBack={close} />
+          )}
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Hub
+// ===========================================================================
+
+type HubProps = {
+  notifPref: NotifPref;
+  affirmationPreview: string | null;
+  moodToday: MoodEntry | undefined;
+  gratitudeCount: number;
+  onOpen: (p: Exclude<SubPage, null>) => void;
+};
+
+function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, onOpen }: HubProps) {
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.headerWrap}>
@@ -136,193 +209,564 @@ export default function MoreView({
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* ====================  AFFIRMATION  ==================== */}
-        <View style={[styles.card, { borderColor: '#9affc855' }]}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardLabel}>DAILY AFFIRMATION</Text>
-            <TouchableOpacity onPress={onRefreshAffirmation} style={styles.refreshBtn}>
-              <Text style={styles.refreshText}>↻</Text>
-            </TouchableOpacity>
-          </View>
-          {affirmationLoading ? (
-            <ActivityIndicator color="#9affc8" style={{ marginVertical: 16 }} />
+        <HubItem
+          glyph="✦"
+          color="#9affc8"
+          label="Daily Affirmation"
+          preview={affirmationPreview ? `“${affirmationPreview}”` : 'Tap for a fresh thought'}
+          extra={notifPref === 'off' ? null : notifPref === 'daily' ? '1×/day' : '3×/day'}
+          onPress={() => onOpen('affirmations')}
+        />
+        <HubItem
+          glyph="◐"
+          color="#5BD0FF"
+          label="Mood Check-in"
+          preview={
+            moodToday
+              ? `Today: ${MOOD_LABELS[moodToday.value - 1]}`
+              : 'How are you feeling?'
+          }
+          extra={moodToday ? String(moodToday.value) : null}
+          extraColor={moodToday ? MOOD_COLORS[moodToday.value - 1] : undefined}
+          onPress={() => onOpen('mood')}
+        />
+        <HubItem
+          glyph="❀"
+          color="#FFB05B"
+          label="Gratitude"
+          preview={
+            gratitudeCount === 0
+              ? 'What do you appreciate?'
+              : `${gratitudeCount} ${gratitudeCount === 1 ? 'entry' : 'entries'} saved`
+          }
+          onPress={() => onOpen('gratitude')}
+        />
+        <HubItem
+          glyph="◊"
+          color="#5B6CFF"
+          label="5-4-3-2-1 Grounding"
+          preview="Senses-based anxiety reset"
+          onPress={() => onOpen('grounding')}
+        />
+        <HubItem
+          glyph="☕"
+          color="#d9b35c"
+          label="Support the Developer"
+          preview="If the app brings you peace"
+          onPress={() => onOpen('support')}
+        />
+        <HubItem
+          glyph="!"
+          color="#FF5B9C"
+          label="Report a Bug"
+          preview="Something off? Let me know"
+          onPress={() => onOpen('bug')}
+        />
+      </ScrollView>
+    </View>
+  );
+}
+
+function HubItem({
+  glyph, color, label, preview, extra, extraColor, onPress,
+}: {
+  glyph: string;
+  color: string;
+  label: string;
+  preview: string;
+  extra?: string | null;
+  extraColor?: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={onPress}
+      style={[styles.hubItem, { borderColor: color + '55' }]}
+    >
+      <View style={[styles.hubGlyphCircle, { backgroundColor: color + '22', borderColor: color }]}>
+        <Text style={[styles.hubGlyph, { color }]}>{glyph}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.hubLabel}>{label}</Text>
+        <Text style={styles.hubPreview} numberOfLines={1}>{preview}</Text>
+      </View>
+      {extra ? (
+        <Text style={[styles.hubExtra, { color: extraColor ?? '#ffffff99' }]}>{extra}</Text>
+      ) : null}
+      <Text style={styles.hubChevron}>›</Text>
+    </TouchableOpacity>
+  );
+}
+
+// ===========================================================================
+//   Sub-page header
+// ===========================================================================
+
+function SubHeader({ title, accent, onBack }: { title: string; accent: string; onBack: () => void }) {
+  return (
+    <View style={styles.subHeader}>
+      <TouchableOpacity onPress={onBack} style={styles.subBackBtn} activeOpacity={0.7}>
+        <Text style={[styles.subBackText, { color: accent }]}>‹</Text>
+      </TouchableOpacity>
+      <Text style={styles.subTitle}>{title}</Text>
+      <View style={{ width: 36 }} />
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Affirmations sub-page
+// ===========================================================================
+
+function AffirmationsPage({
+  affirmation, loading, onRefresh, notifPref, onChangeNotifPref, isExpoGo, onBack,
+}: {
+  affirmation: string | null;
+  loading: boolean;
+  onRefresh: () => void;
+  notifPref: NotifPref;
+  onChangeNotifPref: (p: NotifPref) => void;
+  isExpoGo: boolean;
+  onBack: () => void;
+}) {
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Daily Affirmation" accent="#9affc8" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+        <View style={[styles.bigAffirmCard, { borderColor: '#9affc855' }]}>
+          {loading ? (
+            <ActivityIndicator color="#9affc8" />
           ) : (
-            <Text style={styles.affirmationText}>“{affirmation ?? 'You are exactly where you need to be.'}”</Text>
+            <Text style={styles.bigAffirmText}>“{affirmation ?? 'You are exactly where you need to be.'}”</Text>
           )}
-
-          <View style={styles.notifRow}>
-            <Text style={styles.notifLabel}>NOTIFICATIONS</Text>
-            <View style={styles.notifPills}>
-              {(['off', 'daily', 'thrice'] as NotifPref[]).map(p => {
-                const active = p === notifPref;
-                const label = p === 'off' ? 'Off' : p === 'daily' ? '1×/day' : '3×/day';
-                return (
-                  <TouchableOpacity
-                    key={p}
-                    activeOpacity={0.85}
-                    onPress={() => onChangeNotifPref(p)}
-                    style={[
-                      styles.notifPill,
-                      active && { borderColor: '#9affc8', backgroundColor: '#9affc822' },
-                    ]}
-                  >
-                    <Text style={[styles.notifPillText, active && { color: '#9affc8' }]}>{label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            {notifPref !== 'off' ? (
-              <Text style={styles.notifHint}>
-                {notifPref === 'daily' ? 'A gentle nudge at 9 a.m.' : 'Nudges at 9 a.m., 1 p.m., 6 p.m.'}
-              </Text>
-            ) : null}
-            {isExpoGo ? (
-              <Text style={styles.notifWarn}>
-                Notifications require a standalone build (EAS / TestFlight / Play Store). They are inactive in Expo Go.
-              </Text>
-            ) : null}
-          </View>
-        </View>
-
-        {/* ====================  MOOD CHECK-IN  ==================== */}
-        <View style={[styles.card, { borderColor: '#5BD0FF55' }]}>
-          <Text style={styles.cardLabel}>MOOD CHECK-IN</Text>
-          <Text style={styles.cardSub}>How are you feeling right now?</Text>
-          <View style={styles.moodRow}>
-            {[1, 2, 3, 4, 5].map(v => {
-              const active = moodToday?.value === v;
-              const colors = ['#FF5B5B', '#FF8A38', '#FFD000', '#9affc8', '#5BD0FF'];
-              const labels = ['Low', 'Off', 'OK', 'Good', 'Great'];
-              return (
-                <TouchableOpacity
-                  key={v}
-                  activeOpacity={0.85}
-                  onPress={() => saveMood(v)}
-                  style={[
-                    styles.moodBtn,
-                    {
-                      borderColor: active ? colors[v - 1] : colors[v - 1] + '55',
-                      backgroundColor: active ? colors[v - 1] + '22' : 'rgba(0,0,0,0.20)',
-                    },
-                  ]}
-                >
-                  <Text style={[styles.moodValue, { color: colors[v - 1] }]}>{v}</Text>
-                  <Text style={[styles.moodLabel, { color: active ? colors[v - 1] : '#ffffff88' }]}>{labels[v - 1]}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          {moodLog.length > 0 ? (
-            <Text style={styles.moodHistory}>
-              {moodLog.length} entr{moodLog.length === 1 ? 'y' : 'ies'} logged
-            </Text>
-          ) : null}
-        </View>
-
-        {/* ====================  GRATITUDE JOURNAL  ==================== */}
-        <View style={[styles.card, { borderColor: '#FFB05B55' }]}>
-          <Text style={styles.cardLabel}>GRATITUDE</Text>
-          <Text style={styles.cardSub}>What is one thing you appreciate today?</Text>
-          <TextInput
-            style={styles.gratInput}
-            placeholder="A small or large thing…"
-            placeholderTextColor="#ffffff55"
-            value={gratText}
-            onChangeText={setGratText}
-            multiline
-            maxLength={300}
-          />
-          <TouchableOpacity onPress={saveGratitude} style={styles.gratSaveBtn} activeOpacity={0.85}>
-            <Text style={styles.gratSaveText}>SAVE</Text>
+          <TouchableOpacity onPress={onRefresh} style={styles.bigRefreshBtn} activeOpacity={0.85}>
+            <Text style={styles.bigRefreshText}>↻  ANOTHER</Text>
           </TouchableOpacity>
-          {gratitude.slice(0, 5).map(g => (
-            <View key={g.ts} style={styles.gratEntry}>
-              <Text style={styles.gratEntryDate}>
-                {new Date(g.ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-              </Text>
-              <Text style={styles.gratEntryText}>{g.text}</Text>
-              <TouchableOpacity onPress={() => deleteGratitude(g.ts)} style={styles.gratDelBtn}>
-                <Text style={styles.gratDelText}>✕</Text>
+        </View>
+
+        <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
+        <Text style={styles.sectionSub}>How often should we send a gentle nudge?</Text>
+        <View style={styles.notifPills}>
+          {(['off', 'daily', 'thrice'] as NotifPref[]).map(p => {
+            const active = p === notifPref;
+            const label = p === 'off' ? 'Off' : p === 'daily' ? '1×/day' : '3×/day';
+            return (
+              <TouchableOpacity
+                key={p}
+                activeOpacity={0.85}
+                onPress={() => onChangeNotifPref(p)}
+                style={[
+                  styles.notifPill,
+                  active && { borderColor: '#9affc8', backgroundColor: '#9affc822' },
+                ]}
+              >
+                <Text style={[styles.notifPillText, active && { color: '#9affc8' }]}>{label}</Text>
               </TouchableOpacity>
+            );
+          })}
+        </View>
+        {notifPref !== 'off' ? (
+          <Text style={styles.notifHint}>
+            {notifPref === 'daily' ? 'A gentle nudge at 9 a.m.' : 'Nudges at 9 a.m., 1 p.m., 6 p.m.'}
+          </Text>
+        ) : null}
+        {isExpoGo ? (
+          <Text style={styles.notifWarn}>
+            Notifications require a standalone build (EAS / TestFlight / Play Store). They are inactive in Expo Go.
+          </Text>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Mood sub-page (with graph)
+// ===========================================================================
+
+function MoodPage({
+  moodLog, onSaveMood, onBack,
+}: {
+  moodLog: MoodEntry[];
+  onSaveMood: (v: number) => void;
+  onBack: () => void;
+}) {
+  const today = new Date();
+  const moodToday = moodLog.find(
+    m => new Date(m.ts).toDateString() === today.toDateString(),
+  );
+
+  // Per-day average over last 14 days for the graph.
+  const dayBuckets = useMemo(() => {
+    const days = 14;
+    const dayMs = 24 * 60 * 60 * 1000;
+    const start = new Date(today);
+    start.setHours(0, 0, 0, 0);
+    const out: Array<{ date: Date; avg: number | null }> = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const dayStart = start.getTime() - i * dayMs;
+      const dayEnd = dayStart + dayMs;
+      const inDay = moodLog.filter(e => e.ts >= dayStart && e.ts < dayEnd);
+      out.push({
+        date: new Date(dayStart),
+        avg: inDay.length ? inDay.reduce((s, e) => s + e.value, 0) / inDay.length : null,
+      });
+    }
+    return out;
+  }, [moodLog]);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Mood" accent="#5BD0FF" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionLabel}>HOW ARE YOU RIGHT NOW?</Text>
+        <View style={styles.moodRow}>
+          {[1, 2, 3, 4, 5].map(v => {
+            const active = moodToday?.value === v;
+            return (
+              <TouchableOpacity
+                key={v}
+                activeOpacity={0.85}
+                onPress={() => onSaveMood(v)}
+                style={[
+                  styles.moodBtn,
+                  {
+                    borderColor: active ? MOOD_COLORS[v - 1] : MOOD_COLORS[v - 1] + '55',
+                    backgroundColor: active ? MOOD_COLORS[v - 1] + '22' : 'rgba(0,0,0,0.20)',
+                  },
+                ]}
+              >
+                <Text style={[styles.moodValue, { color: MOOD_COLORS[v - 1] }]}>{v}</Text>
+                <Text style={[styles.moodLabel, { color: active ? MOOD_COLORS[v - 1] : '#ffffff88' }]}>
+                  {MOOD_LABELS[v - 1]}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>LAST 14 DAYS</Text>
+        <Text style={styles.sectionSub}>Daily average · tap any day below to log retroactively, sliders coming</Text>
+        <MoodGraph buckets={dayBuckets} />
+
+        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>HISTORY</Text>
+        {moodLog.length === 0 ? (
+          <Text style={styles.emptyText}>No entries yet. Your first check-in starts the chart.</Text>
+        ) : (
+          moodLog.slice(0, 30).map(m => (
+            <View key={m.ts} style={styles.moodHistoryRow}>
+              <Text style={[styles.moodHistoryDot, { backgroundColor: MOOD_COLORS[m.value - 1] }]} />
+              <Text style={styles.moodHistoryDate}>
+                {new Date(m.ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                {' · '}
+                {new Date(m.ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+              </Text>
+              <Text style={[styles.moodHistoryLabel, { color: MOOD_COLORS[m.value - 1] }]}>
+                {MOOD_LABELS[m.value - 1]}
+              </Text>
             </View>
-          ))}
-        </View>
+          ))
+        )}
+      </ScrollView>
+    </View>
+  );
+}
 
-        {/* ====================  5-4-3-2-1 GROUNDING  ==================== */}
-        <View style={[styles.card, { borderColor: '#5B6CFF55' }]}>
-          <Text style={styles.cardLabel}>5-4-3-2-1 GROUNDING</Text>
-          <Text style={styles.cardSub}>When anxiety rises, return to the senses.</Text>
-          <View style={styles.groundList}>
-            <Text style={styles.groundItem}><Text style={[styles.groundNum, { color: '#FF5B5B' }]}>5  </Text>things you can <Text style={styles.groundEm}>see</Text></Text>
-            <Text style={styles.groundItem}><Text style={[styles.groundNum, { color: '#FFB05B' }]}>4  </Text>things you can <Text style={styles.groundEm}>touch</Text></Text>
-            <Text style={styles.groundItem}><Text style={[styles.groundNum, { color: '#FFD000' }]}>3  </Text>things you can <Text style={styles.groundEm}>hear</Text></Text>
-            <Text style={styles.groundItem}><Text style={[styles.groundNum, { color: '#9affc8' }]}>2  </Text>things you can <Text style={styles.groundEm}>smell</Text></Text>
-            <Text style={styles.groundItem}><Text style={[styles.groundNum, { color: '#5BD0FF' }]}>1  </Text>thing you can <Text style={styles.groundEm}>taste</Text></Text>
+function MoodGraph({ buckets }: { buckets: Array<{ date: Date; avg: number | null }> }) {
+  const W = SCREEN_W - 40;
+  const H = 160;
+  const padX = 18;
+  const padTop = 14;
+  const padBottom = 26;
+  const innerW = W - padX * 2;
+  const innerH = H - padTop - padBottom;
+
+  // y for value v (1..5): 1 at bottom, 5 at top
+  const yFor = (v: number) => padTop + ((5 - v) / 4) * innerH;
+  const xFor = (i: number) => padX + (i / Math.max(1, buckets.length - 1)) * innerW;
+
+  // Build a path through points that have data; gap-aware (start a new sub-path
+  // after each null).
+  const segments: string[] = [];
+  let current = '';
+  buckets.forEach((b, i) => {
+    if (b.avg === null) {
+      if (current) { segments.push(current); current = ''; }
+    } else {
+      const x = xFor(i).toFixed(1);
+      const y = yFor(b.avg).toFixed(1);
+      current += current ? ` L ${x} ${y}` : `M ${x} ${y}`;
+    }
+  });
+  if (current) segments.push(current);
+
+  return (
+    <View style={[styles.graphCard, { width: W, height: H }]}>
+      <Svg width={W} height={H}>
+        {/* Horizontal grid lines for 1..5 */}
+        {[1, 2, 3, 4, 5].map(v => (
+          <Line
+            key={v}
+            x1={padX} y1={yFor(v)}
+            x2={W - padX} y2={yFor(v)}
+            stroke={MOOD_COLORS[v - 1] + (v === 3 ? '33' : '14')}
+            strokeWidth={v === 3 ? 1 : 0.6}
+          />
+        ))}
+        {/* Connecting line(s) */}
+        {segments.map((d, idx) => (
+          <Path
+            key={idx}
+            d={d}
+            stroke="#5BD0FF"
+            strokeWidth={2}
+            fill="none"
+          />
+        ))}
+        {/* Dots */}
+        {buckets.map((b, i) =>
+          b.avg !== null ? (
+            <Circle
+              key={i}
+              cx={xFor(i)}
+              cy={yFor(b.avg)}
+              r={4}
+              fill={MOOD_COLORS[Math.round(b.avg) - 1]}
+            />
+          ) : null,
+        )}
+      </Svg>
+      <View style={styles.graphLabelRow}>
+        <Text style={styles.graphLabelText}>14d ago</Text>
+        <Text style={styles.graphLabelText}>today</Text>
+      </View>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Gratitude sub-page
+// ===========================================================================
+
+function GratitudePage({
+  entries, onSave, onDelete, onBack,
+}: {
+  entries: GratEntry[];
+  onSave: (text: string) => void;
+  onDelete: (ts: number) => void;
+  onBack: () => void;
+}) {
+  const [text, setText] = useState('');
+
+  function commit() {
+    onSave(text);
+    setText('');
+  }
+
+  // Group entries by date
+  const grouped = useMemo(() => {
+    const map: Record<string, GratEntry[]> = {};
+    for (const e of entries) {
+      const key = new Date(e.ts).toDateString();
+      if (!map[key]) map[key] = [];
+      map[key].push(e);
+    }
+    return Object.entries(map);
+  }, [entries]);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Gratitude" accent="#FFB05B" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionLabel}>WHAT DO YOU APPRECIATE?</Text>
+        <Text style={styles.sectionSub}>One small thing or many. Saved on this device.</Text>
+        <TextInput
+          style={styles.gratInput}
+          placeholder="A small or large thing…"
+          placeholderTextColor="#ffffff55"
+          value={text}
+          onChangeText={setText}
+          multiline
+          maxLength={500}
+        />
+        <TouchableOpacity onPress={commit} style={styles.gratSaveBtn} activeOpacity={0.85}>
+          <Text style={styles.gratSaveText}>SAVE</Text>
+        </TouchableOpacity>
+
+        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>JOURNAL</Text>
+        {entries.length === 0 ? (
+          <Text style={styles.emptyText}>Your first gratitude will appear here.</Text>
+        ) : (
+          grouped.map(([dateKey, items]) => (
+            <View key={dateKey} style={{ marginBottom: 18 }}>
+              <Text style={styles.gratDateHeader}>
+                {new Date(dateKey).toLocaleDateString(undefined, {
+                  weekday: 'long', month: 'short', day: 'numeric',
+                })}
+              </Text>
+              {items.map(g => (
+                <View key={g.ts} style={styles.gratItem}>
+                  <View style={styles.gratItemBar} />
+                  <Text style={styles.gratItemText}>{g.text}</Text>
+                  <TouchableOpacity onPress={() => onDelete(g.ts)} style={styles.gratDelBtn}>
+                    <Text style={styles.gratDelText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          ))
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Grounding / Support / Bug Report
+// ===========================================================================
+
+function GroundingPage({ onBack }: { onBack: () => void }) {
+  const items = [
+    { num: 5, color: '#FF5B5B', sense: 'see' },
+    { num: 4, color: '#FFB05B', sense: 'touch' },
+    { num: 3, color: '#FFD000', sense: 'hear' },
+    { num: 2, color: '#9affc8', sense: 'smell' },
+    { num: 1, color: '#5BD0FF', sense: 'taste' },
+  ];
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="5-4-3-2-1 Grounding" accent="#5B6CFF" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody}>
+        <Text style={styles.groundIntro}>
+          When anxiety rises, return to the senses. Move slowly. Breathe between each.
+        </Text>
+        {items.map(it => (
+          <View key={it.num} style={styles.groundCard}>
+            <Text style={[styles.groundBigNum, { color: it.color }]}>{it.num}</Text>
+            <Text style={styles.groundCardText}>
+              things you can <Text style={styles.groundEm}>{it.sense}</Text>
+            </Text>
           </View>
-          <Text style={styles.cardSub}>Move slowly. Breathe between each.</Text>
-        </View>
+        ))}
+        <Text style={styles.groundOutro}>
+          Notice them slowly. Name them aloud or silently. Let each one anchor you a little more
+          firmly to the present.
+        </Text>
+      </ScrollView>
+    </View>
+  );
+}
 
-        {/* ====================  SUPPORT  ==================== */}
-        <View style={[styles.card, { borderColor: '#d9b35c55' }]}>
-          <Text style={styles.cardLabel}>SUPPORT THE DEVELOPER</Text>
+function SupportPage({ onBack }: { onBack: () => void }) {
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Support" accent="#d9b35c" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody}>
+        <View style={[styles.supportHero, { borderColor: '#d9b35c55' }]}>
+          <Text style={styles.supportEmoji}>☕</Text>
+          <Text style={styles.supportHeadline}>Support the developer</Text>
           <Text style={styles.supportText}>
-            Simply Ambient is built and maintained by one person. If it's brought you peace
-            and you'd like more features (sleep stories, custom soundscapes, integrations…),
-            a small donation goes a long way.
+            Simply Ambient is built and maintained by one person. If it's brought you peace and
+            you'd like to see more — sleep stories, custom soundscapes, a richer mood graph,
+            integrations — a small donation goes a long way.
           </Text>
           <TouchableOpacity
             onPress={() => Linking.openURL(SUPPORT_URL).catch(() => {})}
             style={styles.supportBtn}
             activeOpacity={0.85}
           >
-            <Text style={styles.supportBtnText}>☕  Buy a coffee</Text>
+            <Text style={styles.supportBtnText}>BUY A COFFEE</Text>
           </TouchableOpacity>
         </View>
-
-        {/* ====================  BUG REPORT  ==================== */}
-        <View style={[styles.card, { borderColor: '#FF5B9C55' }]}>
-          <Text style={styles.cardLabel}>REPORT A BUG</Text>
-          <Text style={styles.cardSub}>
-            Something broken or off? This goes straight to the developer.
-          </Text>
-          <TextInput
-            style={styles.bugInput}
-            placeholder="Subject"
-            placeholderTextColor="#ffffff55"
-            value={bugSubject}
-            onChangeText={setBugSubject}
-            maxLength={120}
-          />
-          <TextInput
-            style={[styles.bugInput, { minHeight: 90, textAlignVertical: 'top' }]}
-            placeholder="Describe what happened, what you expected, and what device you're on…"
-            placeholderTextColor="#ffffff55"
-            value={bugBody}
-            onChangeText={setBugBody}
-            multiline
-            maxLength={2000}
-          />
-          <TouchableOpacity
-            onPress={submitBugReport}
-            disabled={bugSending}
-            style={[styles.bugSendBtn, bugSending && { opacity: 0.5 }]}
-            activeOpacity={0.85}
-          >
-            {bugSending ? (
-              <ActivityIndicator color="#0B0B1F" />
-            ) : (
-              <Text style={styles.bugSendText}>SEND REPORT</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.footnote}>
-          Affirmations from a free public API · Donations and bug reports go directly to the developer.
+        <Text style={styles.supportFootnote}>
+          Donations are entirely optional. Thank you for being here either way.
         </Text>
       </ScrollView>
     </View>
   );
 }
+
+function BugReportPage({ onBack }: { onBack: () => void }) {
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+  const [sending, setSending] = useState(false);
+
+  async function submit() {
+    if (!subject.trim() && !body.trim()) {
+      Alert.alert('Empty report', 'Add a subject or describe the issue first.');
+      return;
+    }
+    setSending(true);
+    try {
+      const url = `https://formsubmit.co/ajax/${decodeReportEmail()}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          _subject: `[Simply Ambient] ${subject || 'Bug report'}`,
+          _captcha: 'false',
+          subject,
+          message: body,
+        }),
+      });
+      if (res.ok) {
+        Alert.alert('Sent', 'Thank you. The developer will see it soon.');
+        setSubject('');
+        setBody('');
+      } else {
+        Alert.alert('Could not send', 'Please try again later.');
+      }
+    } catch {
+      Alert.alert('Could not send', 'Check your connection and try again.');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Report a Bug" accent="#FF5B9C" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionLabel}>WHAT WENT WRONG?</Text>
+        <Text style={styles.sectionSub}>This goes straight to the developer's inbox.</Text>
+        <TextInput
+          style={styles.bugInput}
+          placeholder="Subject"
+          placeholderTextColor="#ffffff55"
+          value={subject}
+          onChangeText={setSubject}
+          maxLength={120}
+        />
+        <TextInput
+          style={[styles.bugInput, { minHeight: 140, textAlignVertical: 'top' }]}
+          placeholder="Describe what happened, what you expected, and what device you're on…"
+          placeholderTextColor="#ffffff55"
+          value={body}
+          onChangeText={setBody}
+          multiline
+          maxLength={2000}
+        />
+        <TouchableOpacity
+          onPress={submit}
+          disabled={sending}
+          style={[styles.bugSendBtn, sending && { opacity: 0.5 }]}
+          activeOpacity={0.85}
+        >
+          {sending ? (
+            <ActivityIndicator color="#0B0B1F" />
+          ) : (
+            <Text style={styles.bugSendText}>SEND REPORT</Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Styles
+// ===========================================================================
 
 const styles = StyleSheet.create({
   headerWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 14 },
@@ -343,34 +787,76 @@ const styles = StyleSheet.create({
     marginHorizontal: 14, fontStyle: 'italic',
   },
 
-  card: {
+  // Hub
+  hubItem: {
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 18, padding: 16, marginBottom: 14, borderWidth: 1,
+    borderRadius: 16, padding: 14, marginBottom: 10,
+    borderWidth: 1,
   },
-  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardLabel: {
-    color: '#ffffff80', fontSize: 11, letterSpacing: 2, fontWeight: '600',
-  },
-  cardSub: { color: '#ffffff88', fontSize: 12, marginTop: 4, lineHeight: 17 },
-
-  refreshBtn: {
-    width: 32, height: 32, borderRadius: 16,
+  hubGlyphCircle: {
+    width: 44, height: 44, borderRadius: 22,
     alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginRight: 14, borderWidth: 1,
   },
-  refreshText: { color: '#fff', fontSize: 16 },
-  affirmationText: {
-    color: '#ffffffdd',
-    fontFamily: 'CormorantGaramond_500Medium_Italic',
-    fontSize: 18, lineHeight: 26,
-    marginVertical: 14,
-  },
+  hubGlyph: { fontSize: 20, fontWeight: '700' },
+  hubLabel: { color: '#fff', fontSize: 15, fontWeight: '600', letterSpacing: 0.3 },
+  hubPreview: { color: '#ffffff88', fontSize: 12, marginTop: 2, lineHeight: 16 },
+  hubExtra: { fontSize: 12, fontWeight: '700', letterSpacing: 1, marginRight: 10 },
+  hubChevron: { color: '#ffffff66', fontSize: 22 },
 
-  notifRow: {
-    marginTop: 10, paddingTop: 12,
-    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
+  // Sub-page
+  subHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 12, paddingTop: 10, paddingBottom: 4,
   },
-  notifLabel: { color: '#ffffff80', fontSize: 10, letterSpacing: 2, fontWeight: '600', marginBottom: 8 },
+  subBackBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  subBackText: { fontSize: 32, fontWeight: '300', marginTop: -4 },
+  subTitle: {
+    flex: 1,
+    color: '#fff',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 24,
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  subBody: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 120 },
+
+  sectionLabel: {
+    color: '#ffffff80', fontSize: 11, letterSpacing: 2, fontWeight: '600',
+    marginBottom: 4,
+  },
+  sectionSub: {
+    color: '#ffffff66', fontSize: 11, fontStyle: 'italic',
+    marginBottom: 12, lineHeight: 16,
+  },
+  emptyText: { color: '#ffffff66', fontSize: 13, fontStyle: 'italic', marginTop: 8 },
+
+  // Affirmations
+  bigAffirmCard: {
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 18, padding: 22, marginBottom: 24,
+    borderWidth: 1, alignItems: 'center', minHeight: 160,
+    justifyContent: 'center',
+  },
+  bigAffirmText: {
+    color: '#fff',
+    fontFamily: 'CormorantGaramond_500Medium_Italic',
+    fontSize: 22, lineHeight: 32,
+    textAlign: 'center',
+  },
+  bigRefreshBtn: {
+    marginTop: 18,
+    paddingHorizontal: 18, paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 1, borderColor: '#9affc8',
+    backgroundColor: '#9affc822',
+  },
+  bigRefreshText: { color: '#9affc8', fontSize: 11, fontWeight: '700', letterSpacing: 2 },
+
   notifPills: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   notifPill: {
     paddingHorizontal: 14, paddingVertical: 6,
@@ -381,49 +867,115 @@ const styles = StyleSheet.create({
   notifHint: { color: '#ffffff66', fontSize: 11, marginTop: 8, fontStyle: 'italic' },
   notifWarn: { color: '#FFB05B', fontSize: 11, marginTop: 8, fontStyle: 'italic', lineHeight: 16 },
 
-  moodRow: { flexDirection: 'row', gap: 6, marginTop: 12 },
+  // Mood
+  moodRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
   moodBtn: {
-    flex: 1, alignItems: 'center', paddingVertical: 10,
+    flex: 1, alignItems: 'center', paddingVertical: 12,
     borderRadius: 12, borderWidth: 1,
   },
-  moodValue: { fontSize: 18, fontWeight: '700' },
-  moodLabel: { fontSize: 9, letterSpacing: 1, fontWeight: '600', marginTop: 2 },
-  moodHistory: { color: '#ffffff66', fontSize: 11, fontStyle: 'italic', marginTop: 10 },
+  moodValue: { fontSize: 20, fontWeight: '700' },
+  moodLabel: { fontSize: 10, letterSpacing: 1, fontWeight: '600', marginTop: 2 },
 
+  graphCard: {
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 14, padding: 4,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    marginVertical: 4,
+  },
+  graphLabelRow: {
+    position: 'absolute', bottom: 6, left: 18, right: 18,
+    flexDirection: 'row', justifyContent: 'space-between',
+  },
+  graphLabelText: { color: '#ffffff66', fontSize: 9, letterSpacing: 1 },
+
+  moodHistoryRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  moodHistoryDot: { width: 8, height: 8, borderRadius: 4, marginRight: 12 },
+  moodHistoryDate: { flex: 1, color: '#ffffffaa', fontSize: 12 },
+  moodHistoryLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+
+  // Gratitude
   gratInput: {
-    color: '#fff', fontSize: 14,
+    color: '#fff', fontSize: 15,
     backgroundColor: 'rgba(0,0,0,0.25)',
     borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
-    marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
-    minHeight: 70, textAlignVertical: 'top',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+    minHeight: 90, textAlignVertical: 'top',
   },
   gratSaveBtn: {
     alignSelf: 'flex-end', marginTop: 10,
-    paddingHorizontal: 18, paddingVertical: 8,
+    paddingHorizontal: 22, paddingVertical: 10,
     borderRadius: 999, backgroundColor: '#FFB05B',
   },
   gratSaveText: { color: '#0B0B1F', fontWeight: '700', letterSpacing: 2, fontSize: 12 },
-  gratEntry: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    paddingVertical: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)',
+  gratDateHeader: {
+    color: '#FFB05B', fontSize: 11, letterSpacing: 1.5, fontWeight: '700',
+    marginBottom: 8,
   },
-  gratEntryDate: { color: '#FFB05B', fontSize: 11, fontWeight: '700', letterSpacing: 1, width: 56, marginTop: 2 },
-  gratEntryText: { color: '#ffffffcc', fontSize: 13, flex: 1, lineHeight: 18 },
+  gratItem: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    backgroundColor: 'rgba(0,0,0,0.20)',
+    borderRadius: 12, padding: 12, marginBottom: 6,
+  },
+  gratItemBar: {
+    width: 3, alignSelf: 'stretch',
+    backgroundColor: '#FFB05B', borderRadius: 2,
+    marginRight: 12, minHeight: 18,
+  },
+  gratItemText: { color: '#ffffffdd', fontSize: 14, lineHeight: 20, flex: 1 },
   gratDelBtn: { paddingHorizontal: 6, paddingVertical: 2 },
   gratDelText: { color: '#ffffff44', fontSize: 14 },
 
-  groundList: { marginTop: 14, marginBottom: 10 },
-  groundItem: { color: '#ffffffcc', fontSize: 14, lineHeight: 26 },
-  groundNum: { fontSize: 16, fontWeight: '800' },
-  groundEm: { fontStyle: 'italic', color: '#fff' },
-
-  supportText: { color: '#ffffffcc', fontSize: 13, lineHeight: 19, marginVertical: 10 },
-  supportBtn: {
-    paddingVertical: 12, borderRadius: 12,
-    backgroundColor: '#d9b35c', alignItems: 'center',
+  // Grounding
+  groundIntro: {
+    color: '#ffffffcc', fontSize: 14, lineHeight: 22,
+    fontStyle: 'italic', marginBottom: 16, textAlign: 'center',
   },
-  supportBtnText: { color: '#0B0B1F', fontWeight: '700', letterSpacing: 2, fontSize: 14 },
+  groundCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 14, padding: 16, marginBottom: 8,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+  },
+  groundBigNum: { fontSize: 36, fontWeight: '300', width: 60, textAlign: 'center' },
+  groundCardText: { color: '#ffffffcc', fontSize: 16, flex: 1 },
+  groundEm: { fontStyle: 'italic', color: '#fff', fontWeight: '700' },
+  groundOutro: {
+    color: '#ffffff88', fontSize: 12, lineHeight: 18,
+    fontStyle: 'italic', textAlign: 'center', marginTop: 14,
+  },
 
+  // Support
+  supportHero: {
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 18, padding: 22,
+    borderWidth: 1, alignItems: 'center',
+  },
+  supportEmoji: { fontSize: 44, marginBottom: 8 },
+  supportHeadline: {
+    color: '#fff',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 26, letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  supportText: {
+    color: '#ffffffcc', fontSize: 13, lineHeight: 19,
+    textAlign: 'center', marginBottom: 18,
+  },
+  supportBtn: {
+    paddingVertical: 14, paddingHorizontal: 30,
+    borderRadius: 999, backgroundColor: '#d9b35c',
+  },
+  supportBtnText: { color: '#0B0B1F', fontWeight: '800', letterSpacing: 3, fontSize: 13 },
+  supportFootnote: {
+    color: '#ffffff66', fontSize: 11, fontStyle: 'italic',
+    textAlign: 'center', marginTop: 16, lineHeight: 16,
+  },
+
+  // Bug
   bugInput: {
     color: '#fff', fontSize: 13,
     backgroundColor: 'rgba(0,0,0,0.25)',
@@ -431,13 +983,8 @@ const styles = StyleSheet.create({
     marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
   },
   bugSendBtn: {
-    paddingVertical: 12, borderRadius: 12, marginTop: 12,
+    paddingVertical: 14, borderRadius: 12, marginTop: 16,
     backgroundColor: '#FF5B9C', alignItems: 'center',
   },
   bugSendText: { color: '#0B0B1F', fontWeight: '700', letterSpacing: 2, fontSize: 14 },
-
-  footnote: {
-    color: '#ffffff66', fontSize: 11, textAlign: 'center',
-    marginTop: 18, paddingHorizontal: 12, fontStyle: 'italic', lineHeight: 16,
-  },
 });

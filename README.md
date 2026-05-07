@@ -1,6 +1,6 @@
 # Simply Ambient
 
-> A binaural frequency generator, breath-work companion, and ambient spiritual reference for Android and iOS.
+> **Your spiritual center.** A binaural frequency generator, breath-work companion, and ambient spiritual reference for Android and iOS.
 
 <p align="center">
   <img src="screenshots/1.jpg" width="22%" alt="Frequencies tab" />
@@ -112,15 +112,14 @@ Three Ayurvedic constitutions on the chakra tab — **Vata** (Air + Ether), **Pi
 
 ### ⋯ More tab
 
-- **Daily affirmation** — fetched from `affirmations.dev` (free public API), refreshable.
-- **Opt-in push notifications** for affirmations:
-  - Off / 1× per day (9 a.m.) / 3× per day (9 a.m., 1 p.m., 6 p.m.)
-  - Scheduled locally via `expo-notifications`
-- **Mood check-in** — 1–5 buttons, color-coded, stores up to 60 entries locally.
-- **Gratitude journal** — multi-line text input + persistent log of entries.
-- **5-4-3-2-1 grounding** — sensory anxiety reset reference.
-- **Support the developer** — opens Buy Me a Coffee link.
-- **Report a bug** — in-app form that sends straight to the developer's inbox via FormSubmit (email obfuscated, never shown in the UI).
+The More tab is a hub menu — tapping any item slides a dedicated sub-page in from the right.
+
+- **Daily Affirmation** sub-page — large rotating affirmation card (live from `affirmations.dev`) plus opt-in notification settings: Off / 1× per day (9 a.m.) / 3× per day (9 a.m., 1 p.m., 6 p.m.), scheduled locally via `expo-notifications`.
+- **Mood** sub-page — 1–5 color-coded buttons + a **14-day SVG line graph** of daily-average mood + a scrollable history list (up to 365 entries persisted).
+- **Gratitude** sub-page — multi-line entry box + dedicated journal grouped by date. Up to 1000 entries persisted locally.
+- **5-4-3-2-1 Grounding** sub-page — full sensory walk-through, one card per sense (5 see, 4 touch, 3 hear, 2 smell, 1 taste).
+- **Support** sub-page — opens Buy Me a Coffee link with a hero card.
+- **Report a Bug** sub-page — in-app form (subject + body) that POSTs to FormSubmit. The developer's email is base64-encoded in the source so it doesn't appear as plaintext in the bundle and is never displayed in the UI.
 
 ### 💤 Sleep timer
 

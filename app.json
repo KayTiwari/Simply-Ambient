@@ -3,6 +3,7 @@
     "name": "Simply Ambient",
     "slug": "simply-ambient",
     "version": "1.0.0",
+    "description": "Your spiritual center. Binaural frequencies, breath work, chakras, horoscopes, and grounded tools for daily practice.",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
