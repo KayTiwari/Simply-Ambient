@@ -42,6 +42,30 @@ import {
   CormorantGaramond_500Medium,
   CormorantGaramond_500Medium_Italic,
 } from '@expo-google-fonts/cormorant-garamond';
+import { Cinzel_700Bold } from '@expo-google-fonts/cinzel';
+import * as Sentry from '@sentry/react-native';
+
+// Sentry init. DSN injected at build time via the SENTRY_DSN env var so the
+// repo doesn't carry a secret. If the DSN is missing (e.g. local dev), Sentry
+// becomes a no-op rather than blocking startup.
+//
+// To enable on a real build:
+//   1. Create a free project at sentry.io and copy the DSN.
+//   2. Set SENTRY_DSN as an EAS secret:  eas secret:create --name SENTRY_DSN --value <dsn>
+//   3. Run eas build. Errors will start flowing in.
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN ?? '';
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    // Don't ship sensitive data. Journal entries / rants must never be auto-attached.
+    beforeSend(event) {
+      if (event.contexts) delete event.contexts.state;
+      return event;
+    },
+    tracesSampleRate: 0.1,
+    enableNativeCrashHandling: true,
+  });
+}
 
 import BreathworkView from './BreathworkView';
 import ChakrasView from './ChakrasView';
@@ -51,8 +75,16 @@ import OnboardingView from './OnboardingView';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-const MIN_HZ = 50;
-const MAX_HZ = 1000;
+// MIN_HZ / MAX_HZ / clampHz / comfortableCarrier / btoaFallback live in
+// lib/binauralMath so they can be unit-tested in plain Node without React
+// Native deps. See __tests__/binauralMath.test.ts.
+import {
+  MIN_HZ,
+  MAX_HZ,
+  clampHz,
+  comfortableCarrier,
+  btoaFallback,
+} from './lib/binauralMath';
 const STORAGE_KEY = '@binaural_user_presets_v1';
 const STORAGE_KEY_ZODIAC = '@simply_ambient_zodiac_v1';
 const STORAGE_KEY_STREAK = '@simply_ambient_streak_v1';
@@ -107,7 +139,8 @@ const SLIDE_THROTTLE_MS = 220;
 
 type BandKey =
   | 'none' | 'delta' | 'theta' | 'alpha' | 'beta' | 'gamma' | 'tuning'
-  | 'root' | 'sacral' | 'solar' | 'heart' | 'throat' | 'thirdEye' | 'crown';
+  | 'root' | 'sacral' | 'solar' | 'heart' | 'throat' | 'thirdEye' | 'crown'
+  | 'vata' | 'pitta' | 'kapha';
 
 const QUOTES = [
   'Thoughts become things',
@@ -153,28 +186,34 @@ export type Chakra = {
   number: number;
   name: string;
   sanskrit: string;
+  sanskritMeaning: string;   // Translation of the Sanskrit name (e.g. "Root Support")
   bija: string;
+  bijaPronunciation: string; // English-phonetic pronunciation guide
   symbol: string;            // Devanagari bija glyph
   hz: number;
   element: string;
   location: string;
   color: string;
+  affirmation: string;       // Short mantra, e.g. "I am"
+  planets: string;           // Astrological associations
+  gland: string;             // Endocrine correspondences
   governs: string;
   blocked: string;
 };
 
 export const CHAKRAS: Chakra[] = [
-  { id: 'cr-root',     band: 'root',     number: 1, name: 'Root',         sanskrit: 'Muladhara',   bija: 'LAM', symbol: 'लं', hz: 396, element: 'Earth',         location: 'Base of spine',     color: '#FF3838', governs: 'Safety · Stability · Survival',         blocked: 'Fear · Anxiety · Ungroundedness' },
-  { id: 'cr-sacral',   band: 'sacral',   number: 2, name: 'Sacral',       sanskrit: 'Svadhisthana',bija: 'VAM', symbol: 'वं', hz: 417, element: 'Water',         location: 'Lower abdomen',     color: '#FF8A38', governs: 'Creativity · Sensuality · Pleasure',     blocked: 'Emotional repression · Stagnant flow' },
-  { id: 'cr-solar',    band: 'solar',    number: 3, name: 'Solar Plexus', sanskrit: 'Manipura',    bija: 'RAM', symbol: 'रं', hz: 528, element: 'Fire',          location: 'Upper abdomen',     color: '#FFD000', governs: 'Will · Confidence · Personal power',     blocked: 'Low self-esteem · Control patterns' },
-  { id: 'cr-heart',    band: 'heart',    number: 4, name: 'Heart',        sanskrit: 'Anahata',     bija: 'YAM', symbol: 'यं', hz: 639, element: 'Air',           location: 'Center of chest',   color: '#3FE07F', governs: 'Love · Compassion · Connection',         blocked: 'Grief · Resentment · Isolation' },
-  { id: 'cr-throat',   band: 'throat',   number: 5, name: 'Throat',       sanskrit: 'Vishuddha',   bija: 'HAM', symbol: 'हं', hz: 741, element: 'Ether',         location: 'Throat',            color: '#3FB6FF', governs: 'Truth · Expression · Voice',             blocked: 'Suppressed truth · Fear of judgment' },
-  { id: 'cr-thirdEye', band: 'thirdEye', number: 6, name: 'Third Eye',    sanskrit: 'Ajna',        bija: 'OM',  symbol: 'ॐ',  hz: 852, element: 'Light',         location: 'Between brows',     color: '#5B6CFF', governs: 'Intuition · Insight · Inner vision',     blocked: 'Disconnect from inner knowing' },
-  { id: 'cr-crown',    band: 'crown',    number: 7, name: 'Crown',        sanskrit: 'Sahasrara',   bija: 'AUM', symbol: 'ॐ',  hz: 963, element: 'Consciousness', location: 'Top of head',       color: '#A45BFF', governs: 'Unity · Spirituality · Divine connection', blocked: 'Spiritual disconnect · Materialism' },
+  { id: 'cr-root',     band: 'root',     number: 1, name: 'Root',         sanskrit: 'Muladhara',    sanskritMeaning: 'Root Support', bija: 'LAM', bijaPronunciation: 'lām', symbol: 'लं', hz: 396, element: 'Earth',         location: 'Base of spine',     color: '#FF3838', affirmation: 'I am',         planets: 'Earth · Saturn',     gland: 'Adrenals',           governs: 'Safety · Stability · Survival',         blocked: 'Fear · Anxiety · Ungroundedness' },
+  { id: 'cr-sacral',   band: 'sacral',   number: 2, name: 'Sacral',       sanskrit: 'Svadhisthana', sanskritMeaning: 'Sweetness',    bija: 'VAM', bijaPronunciation: 'vām', symbol: 'वं', hz: 417, element: 'Water',         location: 'Lower abdomen',     color: '#FF8A38', affirmation: 'I feel',       planets: 'Moon',               gland: 'Gonads',             governs: 'Creativity · Sensuality · Pleasure',     blocked: 'Emotional repression · Stagnant flow' },
+  { id: 'cr-solar',    band: 'solar',    number: 3, name: 'Solar Plexus', sanskrit: 'Manipura',     sanskritMeaning: 'Lustrous Gem', bija: 'RAM', bijaPronunciation: 'rām', symbol: 'रं', hz: 528, element: 'Fire',          location: 'Upper abdomen',     color: '#FFD000', affirmation: 'I do',         planets: 'Mars · Sun',         gland: 'Pancreas · Adrenals', governs: 'Will · Confidence · Personal power',     blocked: 'Low self-esteem · Control patterns' },
+  { id: 'cr-heart',    band: 'heart',    number: 4, name: 'Heart',        sanskrit: 'Anahata',      sanskritMeaning: 'Unstruck',     bija: 'YAM', bijaPronunciation: 'yām', symbol: 'यं', hz: 639, element: 'Air',           location: 'Center of chest',   color: '#3FE07F', affirmation: 'I love',       planets: 'Venus',              gland: 'Thymus',             governs: 'Love · Compassion · Connection',         blocked: 'Grief · Resentment · Isolation' },
+  { id: 'cr-throat',   band: 'throat',   number: 5, name: 'Throat',       sanskrit: 'Vishuddha',    sanskritMeaning: 'Purification', bija: 'HAM', bijaPronunciation: 'hām', symbol: 'हं', hz: 741, element: 'Ether',         location: 'Throat',            color: '#3FB6FF', affirmation: 'I speak',      planets: 'Mercury',            gland: 'Thyroid',            governs: 'Truth · Expression · Voice',             blocked: 'Suppressed truth · Fear of judgment' },
+  { id: 'cr-thirdEye', band: 'thirdEye', number: 6, name: 'Third Eye',    sanskrit: 'Ajna',         sanskritMeaning: 'Command',      bija: 'OM',  bijaPronunciation: 'oṃ',  symbol: 'ॐ',  hz: 852, element: 'Light',         location: 'Between brows',     color: '#5B6CFF', affirmation: 'I see',        planets: 'Jupiter · Neptune',  gland: 'Pineal',             governs: 'Intuition · Insight · Inner vision',     blocked: 'Disconnect from inner knowing' },
+  { id: 'cr-crown',    band: 'crown',    number: 7, name: 'Crown',        sanskrit: 'Sahasrara',    sanskritMeaning: 'Thousand Fold',bija: 'AUM', bijaPronunciation: 'auṃ', symbol: 'ॐ',  hz: 963, element: 'Consciousness', location: 'Top of head',       color: '#A45BFF', affirmation: 'I understand', planets: 'Uranus',             gland: 'Pituitary',          governs: 'Unity · Spirituality · Divine connection', blocked: 'Spiritual disconnect · Materialism' },
 ];
 
 export type Dosha = {
   id: 'vata' | 'pitta' | 'kapha';
+  band: BandKey;
   name: string;
   element: string;
   qualities: string;
@@ -201,7 +240,7 @@ export type Zodiac = {
 
 export const ZODIAC: Zodiac[] = [
   { id: 'aries',       glyph: '♈', name: 'Aries',       startMonth: 3,  startDay: 21, endMonth: 4,  endDay: 19, element: 'Fire',  qualities: 'Initiator · Bold',          intention: 'Lead with the courage that already lives in you.',
-    yearAhead: 'This year your fire is meant to lead — but lead with patience. Begin only what you can finish, and finish what truly matters.',
+    yearAhead: 'This year your fire is meant to lead. But lead with patience. Begin only what you can finish, and finish what truly matters.',
     chakraId: 'cr-solar',  color: '#FF5B5B' },
   { id: 'taurus',      glyph: '♉', name: 'Taurus',      startMonth: 4,  startDay: 20, endMonth: 5,  endDay: 20, element: 'Earth', qualities: 'Steady · Sensual',          intention: 'Ground in what nourishes. Slow down to taste it.',
     yearAhead: 'A year for slow, deliberate building. The pleasure is in the process, not the prize. Trust your senses.',
@@ -234,7 +273,7 @@ export const ZODIAC: Zodiac[] = [
     yearAhead: 'Imagine larger than you\'ve allowed. The vision you withhold serves no one. Speak it.',
     chakraId: 'cr-throat', color: '#5BD0FF' },
   { id: 'pisces',      glyph: '♓', name: 'Pisces',      startMonth: 2,  startDay: 19, endMonth: 3,  endDay: 20, element: 'Water', qualities: 'Dreamy · Compassionate',    intention: 'Dissolve into the larger flow.',
-    yearAhead: 'Trust the current. Surrender is not weakness — it is mastery of flow. Soften the grip.',
+    yearAhead: 'Trust the current. Surrender is not weakness. It is mastery of flow. Soften the grip.',
     chakraId: 'cr-sacral', color: '#5B6CFF' },
 ];
 
@@ -257,16 +296,18 @@ export function todaysSign(date: Date = new Date()): Zodiac {
 export const DOSHAS: Dosha[] = [
   {
     id: 'vata',
+    band: 'vata',
     name: 'Vata',
     element: 'Air + Ether',
     qualities: 'Light · Cold · Mobile · Dry',
     balanceHz: 432,
     balanceTechnique: 'Nadi Shodhana',
     color: '#9aa0e0',
-    description: 'Governs movement, breath, nervous system. Imbalanced: anxiety, insomnia, restlessness. Soothe with grounding warmth and slow, steady breath.',
+    description: 'Governs movement, breath, nervous system. Imbalanced: scattered, restless, light sleep. Soothe with grounding warmth and slow, steady breath.',
   },
   {
     id: 'pitta',
+    band: 'pitta',
     name: 'Pitta',
     element: 'Fire + Water',
     qualities: 'Hot · Sharp · Intense',
@@ -277,6 +318,7 @@ export const DOSHAS: Dosha[] = [
   },
   {
     id: 'kapha',
+    band: 'kapha',
     name: 'Kapha',
     element: 'Earth + Water',
     qualities: 'Heavy · Slow · Stable · Cool',
@@ -329,7 +371,7 @@ const PALETTES: Record<BandKey, Palette> = {
   beta:   { base: ['#3a1a0a', '#76402a', '#3a1a0a'], waves: ['#502a14', '#965a3a', '#FFB05B'], accent: '#FFB05B' },
   gamma:  { base: ['#3a0a1a', '#76124a', '#3a0a1a'], waves: ['#5a0e2a', '#962060', '#FF5B9C'], accent: '#FF5B9C' },
   tuning: { base: ['#2a200a', '#5a4218', '#2a200a'], waves: ['#3a2c14', '#7a5e2a', '#d9b35c'], accent: '#d9b35c' },
-  // Chakra palettes — saturated, rainbow progression
+  // Chakra palettes. Saturated, rainbow progression
   root:     { base: ['#1a0a0a', '#3a1a14', '#1a0a0a'], waves: ['#2a1018', '#5a2030', '#FF3838'], accent: '#FF3838' },
   sacral:   { base: ['#1a1208', '#3a2a14', '#1a1208'], waves: ['#2a1c10', '#5a3a20', '#FF8A38'], accent: '#FF8A38' },
   solar:    { base: ['#1a1808', '#3a3214', '#1a1808'], waves: ['#2a2410', '#5a4a20', '#FFD000'], accent: '#FFD000' },
@@ -337,6 +379,10 @@ const PALETTES: Record<BandKey, Palette> = {
   throat:   { base: ['#0a1418', '#143040', '#0a1418'], waves: ['#10202a', '#205070', '#3FB6FF'], accent: '#3FB6FF' },
   thirdEye: { base: ['#0a0a1a', '#141a3a', '#0a0a1a'], waves: ['#101020', '#202a5a', '#5B6CFF'], accent: '#5B6CFF' },
   crown:    { base: ['#10081a', '#1a103a', '#10081a'], waves: ['#181020', '#3a205a', '#A45BFF'], accent: '#A45BFF' },
+  // Dosha palettes (Ayurveda)
+  vata:     { base: ['#0c1024', '#181f48', '#0c1024'], waves: ['#15193a', '#2c3478', '#9aa0e0'], accent: '#9aa0e0' },
+  pitta:    { base: ['#1a1208', '#3a2814', '#1a1208'], waves: ['#2a1c10', '#5a3e20', '#FFB05B'], accent: '#FFB05B' },
+  kapha:    { base: ['#08180e', '#143824', '#08180e'], waves: ['#102a18', '#205a3a', '#9affc8'], accent: '#9affc8' },
 };
 
 function bandFor(beat: number): { name: string; color: string; key: BandKey } {
@@ -345,10 +391,6 @@ function bandFor(beat: number): { name: string; color: string; key: BandKey } {
   if (beat < 13) return { name: 'Alpha', color: '#5BD0FF', key: 'alpha' };
   if (beat < 30) return { name: 'Beta',  color: '#FFB05B', key: 'beta' };
   return           { name: 'Gamma', color: '#FF5B9C', key: 'gamma' };
-}
-
-function clampHz(n: number) {
-  return Math.max(MIN_HZ, Math.min(MAX_HZ, Math.round(n)));
 }
 
 // Configure foreground display only outside Expo Go, where this raises a
@@ -393,7 +435,7 @@ async function scheduleAffirmationNotifs(pref: NotifPref) {
 }
 
 // ---------------------------------------------------------------------------
-//   Lunar phase — Conway's algorithm, ~99% accurate
+//   Lunar phase. Conway's algorithm, ~99% accurate
 // ---------------------------------------------------------------------------
 
 function lunarPhase(date: Date = new Date()): { glyph: string; name: string; illum: number } {
@@ -429,8 +471,11 @@ function bytesToBase64(bytes: Uint8Array): string {
   for (let i = 0; i < bytes.length; i += chunk) {
     binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)) as number[]);
   }
-  // @ts-ignore
-  return globalThis.btoa(binary);
+  try {
+    // @ts-ignore. btoa is on globalThis in all current RN runtimes
+    if (typeof globalThis.btoa === 'function') return globalThis.btoa(binary);
+  } catch {}
+  return btoaFallback(binary);
 }
 
 function buildWav(leftHz: number, rightHz: number): string {
@@ -496,7 +541,7 @@ function ManifestQuote() {
 }
 
 // ---------------------------------------------------------------------------
-//   WaveBackground — ocean waves animated when playing
+//   WaveBackground. Ocean waves animated when playing
 // ---------------------------------------------------------------------------
 
 // Renders one palette as a full background. Used by WaveBackground to
@@ -541,7 +586,7 @@ function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
 
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.base[0], overflow: 'hidden' }]} pointerEvents="none">
-      {/* Static rich base — always shows even when paused */}
+      {/* Static rich base. Always shows even when paused */}
       <LinearGradient
         colors={[palette.base[0], palette.waves[0], palette.base[1], palette.base[2]]}
         start={{ x: 0, y: 0 }}
@@ -549,7 +594,7 @@ function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Layer A — diagonal TL → BR, secondary tones with a hot accent stop */}
+      {/* Layer A. Diagonal TL → BR, secondary tones with a hot accent stop */}
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: op1 }]}>
         <LinearGradient
           colors={[palette.waves[1], palette.base[1], palette.accent + 'cc', palette.waves[0]]}
@@ -560,7 +605,7 @@ function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
         />
       </Animated.View>
 
-      {/* Layer B — counter-diagonal TR → BL, brighter tones */}
+      {/* Layer B. Counter-diagonal TR → BL, brighter tones */}
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: op2 }]}>
         <LinearGradient
           colors={[palette.accent + 'cc', palette.waves[2], palette.base[1], palette.waves[0]]}
@@ -571,7 +616,7 @@ function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
         />
       </Animated.View>
 
-      {/* Slow vertical accent stripe drifting upward — adds visible motion */}
+      {/* Slow vertical accent stripe drifting upward. Adds visible motion */}
       <Animated.View
         style={{
           position: 'absolute',
@@ -594,8 +639,9 @@ function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
 }
 
 // Wrapper that crossfades between palettes when the active band changes.
-// Old palette stays mounted at full opacity until the new one finishes fading
-// in over the top, then the old one is dropped.
+// Symmetric crossfade: as the new layer fades in to 1, the old fades out to 0
+// in lockstep. Avoids the muddy "both at full opacity" overlap and the snap
+// when the old layer used to unmount at full opacity.
 function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) {
   type LayerSpec = { band: BandKey; key: number; opacity: Animated.Value };
   const counter = useRef(0);
@@ -603,26 +649,59 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
     band, key: 0, opacity: new Animated.Value(1),
   }));
   const [incoming, setIncoming] = useState<LayerSpec | null>(null);
+  // Tracks the currently running crossfade so a rapid band change can cancel it
+  // before its completion callback fires and clobbers the new state. Generation
+  // counter is the belt-and-suspenders fallback in case stop() races.
+  const runningAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const generationRef = useRef(0);
 
   useEffect(() => {
     if (band === active.band || (incoming && incoming.band === band)) return;
+
+    // Cancel any in-flight crossfade. Without this, the old start() callback
+    // still fires later and overwrites active/incoming, leaving the screen
+    // with no visible palette layer (active at opacity 0, incoming nulled).
+    if (runningAnimRef.current) {
+      runningAnimRef.current.stop();
+      runningAnimRef.current = null;
+    }
+
     counter.current += 1;
+    generationRef.current += 1;
+    const myGeneration = generationRef.current;
     const layer: LayerSpec = {
       band,
       key: counter.current,
       opacity: new Animated.Value(0),
     };
     setIncoming(layer);
-    Animated.timing(layer.opacity, {
-      toValue: 1,
-      duration: 900,
-      easing: Easing.inOut(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
+    const anim = Animated.parallel([
+      Animated.timing(layer.opacity, {
+        toValue: 1,
+        duration: 1400,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(active.opacity, {
+        toValue: 0,
+        duration: 1400,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]);
+    runningAnimRef.current = anim;
+    anim.start(({ finished }) => {
+      // Late callbacks from cancelled animations must NOT promote the stale
+      // layer or null out the current incoming. Two checks: finished flag
+      // (stop() should make this false) AND generation match (in case stop()
+      // races and the callback still reports finished=true).
+      if (!finished) return;
+      if (myGeneration !== generationRef.current) return;
+      runningAnimRef.current = null;
       setActive(layer);
       setIncoming(null);
     });
-  }, [band, active.band, incoming]);
+  }, [band, active.band, active.opacity, incoming]);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -832,9 +911,17 @@ function AppContent() {
 
   // Mount: audio mode + load saved presets.
   useEffect(() => {
-    setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false }).catch(() => {});
+    setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true }).catch(() => {});
     AsyncStorage.getItem(STORAGE_KEY)
-      .then(raw => { if (raw) setUserPresets(JSON.parse(raw)); })
+      .then(raw => {
+        if (!raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) setUserPresets(parsed);
+        } catch {
+          // Corrupted preset blob. Drop it silently.
+        }
+      })
       .catch(() => {});
     return () => {
       try { tonePlayerRef.current?.release(); } catch {}
@@ -1023,10 +1110,12 @@ function AppContent() {
   }
 
   function applyTuning(t: TuningPreset) {
-    // Carrier at the Solfeggio frequency, with a 6 Hz theta beat (3 below, 3 above).
-    // This produces both the carrier resonance and an actual binaural beat.
-    const l = clampHz(t.hz - 3);
-    const r = clampHz(t.hz + 3);
+    // Carrier dropped by octaves into a comfortable range, with a 6 Hz theta
+    // beat (3 below, 3 above). Octave shifts preserve the musical note, so
+    // the symbolic Solfeggio pitch is intact but no longer piercing.
+    const carrier = comfortableCarrier(t.hz);
+    const l = clampHz(carrier - 3);
+    const r = clampHz(carrier + 3);
     setLeftHz(l);
     setRightHz(r);
     setActivePresetId(t.id);
@@ -1035,8 +1124,9 @@ function AppContent() {
   }
 
   function applyChakra(c: Chakra) {
-    const l = clampHz(c.hz - 3);
-    const r = clampHz(c.hz + 3);
+    const carrier = comfortableCarrier(c.hz);
+    const l = clampHz(carrier - 3);
+    const r = clampHz(carrier + 3);
     setLeftHz(l);
     setRightHz(r);
     setActivePresetId(c.id);
@@ -1045,16 +1135,17 @@ function AppContent() {
   }
 
   function applyDosha(d: Dosha) {
-    const l = clampHz(d.balanceHz - 3);
-    const r = clampHz(d.balanceHz + 3);
+    const carrier = comfortableCarrier(d.balanceHz);
+    const l = clampHz(carrier - 3);
+    const r = clampHz(carrier + 3);
     setLeftHz(l);
     setRightHz(r);
     setActivePresetId(`dosha-${d.id}`);
-    setActiveBand('tuning');
+    setActiveBand(d.band);
     if (stateRef.current.isTonePlaying) loadAndPlay(l, r);
   }
 
-  // Computed display name for the band — prefers chakra/dosha/tuning names
+  // Computed display name for the band. Prefers chakra/dosha/tuning names
   // over the raw brainwave band when the user has tapped a specific preset.
   const displayBandName = useMemo(() => {
     const chakra = CHAKRAS.find(c => c.band === activeBand);
@@ -1301,6 +1392,7 @@ export default function App() {
     CormorantGaramond_400Regular,
     CormorantGaramond_500Medium,
     CormorantGaramond_500Medium_Italic,
+    Cinzel_700Bold,
   });
   const fadeIn = useRef(new Animated.Value(0)).current;
 
@@ -1399,6 +1491,19 @@ function FrequenciesView(props: FreqViewProps) {
     isTonePlaying, isToneLoading, userPresets,
     bgFileName, isBgPlaying, bgVolume, beatColor,
   } = props;
+
+  const [customSleepOpen, setCustomSleepOpen] = useState(false);
+  const [customSleepInput, setCustomSleepInput] = useState('');
+  const isCustomSleep = sleepMinutes > 0 && !(SLEEP_TIMER_OPTIONS as readonly number[]).includes(sleepMinutes);
+
+  function commitCustomSleep() {
+    const m = parseInt(customSleepInput, 10);
+    if (Number.isFinite(m) && m > 0) {
+      onSetSleepTimer(Math.min(m, 24 * 60));
+    }
+    setCustomSleepOpen(false);
+    setCustomSleepInput('');
+  }
 
   return (
     <ScrollView
@@ -1500,7 +1605,7 @@ function FrequenciesView(props: FreqViewProps) {
       </ScrollView>
 
       <Text style={styles.sectionLabel}>TUNING FREQUENCIES</Text>
-      <Text style={styles.sectionSub}>Solfeggio · ancient healing tones, played equally in both ears</Text>
+      <Text style={styles.sectionSub}>Solfeggio · ancient resonant tones, played equally in both ears</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
         {TUNINGS.map(t => {
           const active = activePresetId === t.id;
@@ -1536,7 +1641,7 @@ function FrequenciesView(props: FreqViewProps) {
       </TouchableOpacity>
 
       <View style={styles.sleepRow}>
-        <Text style={styles.sleepLabel}>SLEEP TIMER</Text>
+        <Text style={styles.sleepLabel}>STILLNESS · auto-end</Text>
         <View style={styles.sleepPills}>
           {SLEEP_TIMER_OPTIONS.map(m => {
             const active = m === sleepMinutes;
@@ -1555,8 +1660,71 @@ function FrequenciesView(props: FreqViewProps) {
               </TouchableOpacity>
             );
           })}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => {
+              setCustomSleepInput(isCustomSleep ? String(sleepMinutes) : '');
+              setCustomSleepOpen(true);
+            }}
+            style={[
+              styles.sleepPill,
+              isCustomSleep && { borderColor: beatColor, backgroundColor: beatColor + '22' },
+            ]}
+          >
+            <Text style={[styles.sleepPillText, isCustomSleep && { color: beatColor }]}>
+              {isCustomSleep ? `${sleepMinutes}m` : 'Custom…'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
+
+      <Modal
+        visible={customSleepOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCustomSleepOpen(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setCustomSleepOpen(false)}>
+          <View style={styles.customSleepBackdrop}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                style={styles.customSleepCard}
+              >
+                <Text style={styles.customSleepTitle}>Custom stillness</Text>
+                <Text style={styles.customSleepHint}>Stop playback after how many minutes?</Text>
+                <TextInput
+                  value={customSleepInput}
+                  onChangeText={t => setCustomSleepInput(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                  keyboardType="number-pad"
+                  placeholder="e.g. 25"
+                  placeholderTextColor="#ffffff55"
+                  style={[styles.customSleepInput, { borderColor: beatColor + '88' }]}
+                  autoFocus
+                  onSubmitEditing={commitCustomSleep}
+                  returnKeyType="done"
+                />
+                <View style={styles.customSleepActions}>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => setCustomSleepOpen(false)}
+                    style={styles.customSleepCancelBtn}
+                  >
+                    <Text style={styles.customSleepCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={commitCustomSleep}
+                    style={[styles.customSleepSetBtn, { backgroundColor: beatColor }]}
+                  >
+                    <Text style={styles.customSleepSetText}>Set</Text>
+                  </TouchableOpacity>
+                </View>
+              </KeyboardAvoidingView>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       <View style={styles.bgCard}>
         <Text style={styles.sectionLabel}>BACKGROUND MUSIC</Text>
@@ -1596,7 +1764,7 @@ function FrequenciesView(props: FreqViewProps) {
       </View>
 
       <Text style={styles.footnote}>
-        Set your intention. Wear stereo headphones — each ear receives a different tone, and your mind tunes itself to the difference.
+        Set your intention. Wear stereo headphones. Each ear receives a different tone, and your mind tunes itself to the difference.
       </Text>
     </ScrollView>
   );
@@ -1847,6 +2015,35 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.25)',
   },
   sleepPillText: { color: '#ffffff99', fontSize: 11, fontWeight: '600', letterSpacing: 1 },
+
+  customSleepBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center', justifyContent: 'center', padding: 24,
+  },
+  customSleepCard: {
+    width: '100%', maxWidth: 360,
+    backgroundColor: '#0F1024',
+    borderRadius: 20, padding: 22,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+  },
+  customSleepTitle: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: 0.5 },
+  customSleepHint: { color: '#ffffff88', fontSize: 12, marginTop: 6, marginBottom: 16 },
+  customSleepInput: {
+    color: '#fff', fontSize: 22, fontWeight: '600', letterSpacing: 1,
+    borderWidth: 1, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    textAlign: 'center',
+  },
+  customSleepActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  customSleepCancelBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 12,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+  },
+  customSleepCancelText: { color: '#ffffffaa', fontSize: 13, fontWeight: '600', letterSpacing: 1 },
+  customSleepSetBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
+  customSleepSetText: { color: '#0B0B1F', fontSize: 13, fontWeight: '800', letterSpacing: 2 },
 
   bgCard: {
     marginTop: 22,

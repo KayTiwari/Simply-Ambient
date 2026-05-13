@@ -5,9 +5,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const STORAGE_PROFILE = '@simply_ambient_profile_v1';
 
 type Intent = 'sleep' | 'focus' | 'calm' | 'energy';
 
@@ -45,12 +49,26 @@ const RECS: Record<Intent, {
   },
 };
 
+type Step = 0 | 1 | 2 | 3 | 4;
+
 export default function OnboardingView({ onDone }: { onDone: () => void }) {
-  const [step, setStep] = useState<0 | 1 | 2>(0);
+  const [step, setStep] = useState<Step>(0);
   const [intent, setIntent] = useState<Intent | null>(null);
+  const [name, setName] = useState('');
+  const [birthDate, setBirthDate] = useState(''); // YYYY-MM-DD
   const fade = useRef(new Animated.Value(1)).current;
 
-  function transition(next: 0 | 1 | 2) {
+  function persistProfileAndDone() {
+    const profile: Record<string, string> = {};
+    if (name.trim()) profile.name = name.trim();
+    if (birthDate.trim()) profile.birthDate = birthDate.trim();
+    if (Object.keys(profile).length > 0) {
+      AsyncStorage.setItem(STORAGE_PROFILE, JSON.stringify(profile)).catch(() => {});
+    }
+    onDone();
+  }
+
+  function transition(next: Step) {
     Animated.timing(fade, { toValue: 0, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true })
       .start(() => {
         setStep(next);
@@ -89,8 +107,64 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
 
         {step === 1 && (
           <ScrollView contentContainerStyle={styles.scroll}>
+            <Text style={styles.smallTitle}>Before you begin</Text>
+            <Text style={styles.smallSub}>Read this once. It applies to the whole app.</Text>
+
+            <View style={styles.safetySection}>
+              <Text style={styles.safetyLabel}>HEARING SAFETY</Text>
+              <Text style={styles.safetyBody}>
+                Always start at low volume and raise gradually only if needed. If a tone
+                feels piercing or sharp, stop immediately. Sustained loud headphone
+                listening can damage hearing at any frequency.
+              </Text>
+            </View>
+
+            <View style={styles.safetySection}>
+              <Text style={styles.safetyLabel}>NOT MEDICAL ADVICE</Text>
+              <Text style={styles.safetyBody}>
+                Simply Ambient is a wellness tool, not a medical device. Frequencies,
+                breathwork, chakras, horoscopes, and AI reflections are for contemplative
+                use only. They do not diagnose, treat, cure, or prevent any condition,
+                and they are not a substitute for professional care.
+              </Text>
+            </View>
+
+            <View style={styles.safetySection}>
+              <Text style={styles.safetyLabel}>WHEN NOT TO USE</Text>
+              <Text style={styles.safetyBody}>
+                Do not use while driving or operating machinery. Consult a physician first
+                if you are pregnant, have a pacemaker, history of seizures or epilepsy, a
+                heart condition, or are prone to dissociation. Stop and seek care if you
+                feel dizzy, nauseous, panicked, or hear ringing.
+              </Text>
+            </View>
+
+            <View style={styles.safetySection}>
+              <Text style={styles.safetyLabel}>YOUR DATA</Text>
+              <Text style={styles.safetyBody}>
+                Everything you enter (profile, mood, gratitude, rants, manifestations) is
+                stored only on this device. Nothing leaves the app unless you explicitly
+                tap an analyse button on the AI Insights page, which sends only the data
+                sources you toggle on to Google Gemini using your own API key.
+              </Text>
+            </View>
+
+            <Text style={styles.safetyAck}>
+              By tapping "I agree" you accept these terms and acknowledge that use is at
+              your own risk. The full notice is available any time under More → Safety
+              & Disclaimer.
+            </Text>
+
+            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={() => transition(2)}>
+              <Text style={styles.primaryBtnText}>I AGREE & CONTINUE</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+
+        {step === 2 && (
+          <ScrollView contentContainerStyle={styles.scroll}>
             <Text style={styles.smallTitle}>What brings you here?</Text>
-            <Text style={styles.smallSub}>Pick one — you can always switch.</Text>
+            <Text style={styles.smallSub}>Pick one. You can always switch.</Text>
             <View style={{ marginTop: 18 }}>
               {INTENTS.map(it => {
                 const active = intent === it.id;
@@ -120,17 +194,64 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
               activeOpacity={0.85}
               style={[styles.primaryBtn, !intent && { opacity: 0.4 }]}
               disabled={!intent}
-              onPress={() => transition(2)}
+              onPress={() => transition(3)}
             >
               <Text style={styles.primaryBtnText}>CONTINUE</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={onDone} style={styles.skipBtn}>
+              <Text style={styles.skipText}>Skip the rest</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+
+        {step === 3 && (
+          <ScrollView contentContainerStyle={styles.scroll}>
+            <Text style={styles.smallTitle}>A little about you</Text>
+            <Text style={styles.smallSub}>
+              Optional. Stored only on this device. Used to personalize horoscopes and
+              AI reflections.
+            </Text>
+
+            <View style={{ marginTop: 22 }}>
+              <Text style={styles.fieldLabel}>NAME</Text>
+              <TextInput
+                style={styles.fieldInput}
+                placeholder="What should we call you?"
+                placeholderTextColor="#ffffff55"
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+                returnKeyType="next"
+                maxLength={60}
+              />
+
+              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>BIRTH DATE</Text>
+              <Text style={styles.fieldHint}>YYYY-MM-DD · used to suggest your zodiac sign</Text>
+              <TextInput
+                style={styles.fieldInput}
+                placeholder="1995-06-21"
+                placeholderTextColor="#ffffff55"
+                value={birthDate}
+                onChangeText={t => setBirthDate(t.replace(/[^0-9-]/g, '').slice(0, 10))}
+                keyboardType="numbers-and-punctuation"
+                autoCorrect={false}
+              />
+            </View>
+
+            <Text style={[styles.smallSub, { marginTop: 18 }]}>
+              You can fill more (birth time, location, MBTI) later under More → Profile.
+            </Text>
+
+            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={() => transition(4)}>
+              <Text style={styles.primaryBtnText}>CONTINUE</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => transition(4)} style={styles.skipBtn}>
               <Text style={styles.skipText}>Skip</Text>
             </TouchableOpacity>
           </ScrollView>
         )}
 
-        {step === 2 && rec && intentMeta && (
+        {step === 4 && rec && intentMeta && (
           <ScrollView contentContainerStyle={styles.scroll}>
             <View style={styles.center}>
               <Text style={[styles.intentGlyph, { color: intentMeta.color, fontSize: 48, marginBottom: 8 }]}>{intentMeta.glyph}</Text>
@@ -161,10 +282,24 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
               />
             </View>
             <Text style={styles.outro}>
-              Everything else — horoscopes, mood, gratitude, grounding — is on the
+              Everything else. Horoscopes, mood, gratitude, grounding. Is on the
               Horoscopes and More tabs.
             </Text>
-            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={onDone}>
+            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={persistProfileAndDone}>
+              <Text style={styles.primaryBtnText}>ENTER</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+
+        {/* Defensive fallback: if step 4 is reached without an intent picked
+            (shouldn't happen, but state could desync), show a plain ENTER. */}
+        {step === 4 && (!rec || !intentMeta) && (
+          <ScrollView contentContainerStyle={styles.scroll}>
+            <View style={styles.center}>
+              <Text style={styles.smallTitle}>You're all set</Text>
+              <Text style={styles.smallSub}>Everything is on the tabs at the bottom.</Text>
+            </View>
+            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={persistProfileAndDone}>
               <Text style={styles.primaryBtnText}>ENTER</Text>
             </TouchableOpacity>
           </ScrollView>
@@ -260,4 +395,56 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: '#0B0B1F', fontSize: 14, fontWeight: '800', letterSpacing: 4 },
   skipBtn: { alignSelf: 'center', marginTop: 16, padding: 8 },
   skipText: { color: '#ffffff88', fontSize: 12, letterSpacing: 1 },
+
+  safetySection: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.10)',
+  },
+  safetyLabel: {
+    color: '#9aa0b4',
+    fontSize: 10,
+    letterSpacing: 2,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  safetyBody: {
+    color: '#ffffffcc',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  safetyAck: {
+    color: '#ffffff88',
+    fontSize: 12,
+    fontStyle: 'italic',
+    lineHeight: 18,
+    marginTop: 22,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+
+  fieldLabel: {
+    color: '#ffffff80',
+    fontSize: 10,
+    letterSpacing: 2,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  fieldHint: {
+    color: '#ffffff66',
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  fieldInput: {
+    color: '#fff',
+    fontSize: 16,
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
 });

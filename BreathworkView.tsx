@@ -11,9 +11,32 @@ import {
 import Svg, { Polygon } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import {
+  Square,
+  MoonStars,
+  Wind,
+  Waves,
+  Heartbeat,
+  Butterfly,
+  InfinityIcon,
+  Snowflake,
+  ArrowsDownUp,
+  Lightning,
+  Flame,
+  Sun,
+  Fire,
+  HandFist,
+  Sparkle,
+  Drop,
+  Tree,
+  Mountains,
+  type IconProps,
+} from 'phosphor-react-native';
 
 const STORAGE_HAPTIC = '@simply_ambient_mala_haptic_v1';
 type HapticLevel = 'off' | 'low' | 'high';
+
+type TechniqueIcon = React.ComponentType<IconProps>;
 
 type Phase = { name: 'Inhale' | 'Hold' | 'Exhale'; seconds: number };
 
@@ -25,6 +48,7 @@ type Technique = {
   description: string;
   phases: Phase[];
   color: string;
+  Icon: TechniqueIcon;
   // Visual character
   petalSides: 3 | 4 | 5 | 6 | 8;
   petalCount: 3 | 4 | 5 | 6 | 8;
@@ -44,7 +68,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 4 },
       { name: 'Hold',   seconds: 4 },
     ],
-    color: '#5BD0FF', petalSides: 4, petalCount: 4, centerSides: 4,
+    color: '#5BD0FF', Icon: Square, petalSides: 4, petalCount: 4, centerSides: 4,
     mudra: { name: 'Gyan Mudra', instruction: 'Touch thumb and index fingertip; rest hands palms-up on knees.' },
   },
   {
@@ -56,7 +80,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Hold',   seconds: 7 },
       { name: 'Exhale', seconds: 8 },
     ],
-    color: '#8A5BFF', petalSides: 6, petalCount: 6, centerSides: 6,
+    color: '#8A5BFF', Icon: MoonStars, petalSides: 6, petalCount: 6, centerSides: 6,
     mudra: { name: 'Anjali Mudra', instruction: 'Press palms together at the heart center; relax the shoulders.' },
   },
   {
@@ -67,7 +91,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 6 },
     ],
-    color: '#5B6CFF', petalSides: 8, petalCount: 8, centerSides: 8,
+    color: '#5B6CFF', Icon: Wind, petalSides: 8, petalCount: 8, centerSides: 8,
     mudra: { name: 'Hakini Mudra', instruction: 'Touch all five fingertips of one hand to the opposite hand in front of the chest.' },
   },
   {
@@ -78,19 +102,19 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 2 },
       { name: 'Exhale', seconds: 4 },
     ],
-    color: '#9affc8', petalSides: 5, petalCount: 5, centerSides: 5,
+    color: '#9affc8', Icon: Waves, petalSides: 5, petalCount: 5, centerSides: 5,
     mudra: { name: 'Vayu Mudra', instruction: 'Curl the index finger to the base of the thumb; thumb covers the index. Rest other fingers extended.' },
   },
   {
     id: 'holotropic', name: 'Holotropic', category: 'activating',
-    blurb: '1 in · 1 out · fast',
-    description: 'Rapid, full breaths. Originated by Stanislav Grof. Brief sessions only — can induce altered states.',
+    blurb: '2 in · 2 out · circular',
+    description: 'Deep continuous circular breathing. No pause between in and out. Originated by Stanislav Grof. Brief sessions only. Can induce altered states.',
     phases: [
-      { name: 'Inhale', seconds: 1 },
-      { name: 'Exhale', seconds: 1 },
+      { name: 'Inhale', seconds: 2 },
+      { name: 'Exhale', seconds: 2 },
     ],
-    color: '#FF5B9C', petalSides: 3, petalCount: 6, centerSides: 3,
-    mudra: { name: 'Open palms', instruction: 'Lay hands palms-up on knees, fingers softly extended — receiving and surrender.' },
+    color: '#FF5B9C', Icon: Lightning, petalSides: 3, petalCount: 6, centerSides: 3,
+    mudra: { name: 'Open palms', instruction: 'Lay hands palms-up on knees, fingers softly extended. Receiving and surrender.' },
   },
   {
     id: 'shamanic', name: 'Shamanic', category: 'activating',
@@ -100,8 +124,8 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 2 },
       { name: 'Exhale', seconds: 1 },
     ],
-    color: '#FFB05B', petalSides: 3, petalCount: 8, centerSides: 6,
-    mudra: { name: 'Power fists', instruction: 'Loose fists at the solar plexus, knuckles facing each other — gathering inner fire.' },
+    color: '#FFB05B', Icon: Fire, petalSides: 3, petalCount: 8, centerSides: 6,
+    mudra: { name: 'Power fists', instruction: 'Loose fists at the solar plexus, knuckles facing each other. Gathering inner fire.' },
   },
   {
     id: 'soma', name: 'SOMA', category: 'activating',
@@ -112,7 +136,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 1 },
       { name: 'Hold',   seconds: 2 },
     ],
-    color: '#d9b35c', petalSides: 6, petalCount: 6, centerSides: 3,
+    color: '#d9b35c', Icon: Sun, petalSides: 6, petalCount: 6, centerSides: 3,
     mudra: { name: 'Apana Mudra', instruction: 'Tip of thumb touches tips of middle and ring fingers; index and pinky extended.' },
   },
   {
@@ -123,18 +147,18 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 5 },
       { name: 'Exhale', seconds: 5 },
     ],
-    color: '#5BD0FF', petalSides: 6, petalCount: 6, centerSides: 6,
+    color: '#5BD0FF', Icon: Heartbeat, petalSides: 6, petalCount: 6, centerSides: 6,
     mudra: { name: 'Apana Vayu Mudra', instruction: 'Index curls to base of thumb; tips of middle and ring touch thumb; pinky extended. Heart-opening.' },
   },
   {
     id: 'bhramari', name: 'Bhramari (Bee)', category: 'calming',
     blurb: '4 in · 8 hum-out',
-    description: 'Inhale slowly, then hum like a bee on the long exhale. Stimulates the vagus nerve, raises nitric oxide, eases anxiety, insomnia, and tinnitus.',
+    description: 'Inhale slowly, then hum like a bee on the long exhale. Said to stimulate the vagus nerve. Often used to settle a racing mind before sleep.',
     phases: [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 8 },
     ],
-    color: '#9affc8', petalSides: 8, petalCount: 8, centerSides: 8,
+    color: '#9affc8', Icon: Butterfly, petalSides: 8, petalCount: 8, centerSides: 8,
     mudra: { name: 'Shanmukhi Mudra', instruction: 'Use thumbs to gently close ears; index over closed eyes; middle fingers beside nostrils; ring + pinky around lips.' },
   },
   {
@@ -146,7 +170,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Hold',   seconds: 2 },
       { name: 'Exhale', seconds: 4 },
     ],
-    color: '#8A5BFF', petalSides: 5, petalCount: 6, centerSides: 5,
+    color: '#8A5BFF', Icon: ArrowsDownUp, petalSides: 5, petalCount: 6, centerSides: 5,
     mudra: { name: 'Vishnu Mudra', instruction: 'Right hand: fold index and middle fingers into palm. Use thumb to close right nostril, ring + pinky to close left.' },
   },
   {
@@ -157,7 +181,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 6 },
     ],
-    color: '#5B6CFF', petalSides: 4, petalCount: 8, centerSides: 4,
+    color: '#5B6CFF', Icon: Snowflake, petalSides: 4, petalCount: 8, centerSides: 4,
     mudra: { name: 'Bhairava Mudra', instruction: 'Right hand resting in left palm, both palms facing up in lap.' },
   },
   {
@@ -169,18 +193,18 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 1 },
       { name: 'Exhale', seconds: 6 },
     ],
-    color: '#5BD0FF', petalSides: 3, petalCount: 6, centerSides: 6,
+    color: '#5BD0FF', Icon: Sparkle, petalSides: 3, petalCount: 6, centerSides: 6,
     mudra: { name: 'Pran Mudra', instruction: 'Tips of thumb, ring, and pinky touch; index and middle extended. Activates life force.' },
   },
   {
     id: 'bhastrika', name: 'Bhastrika (Bellows)', category: 'activating',
     blurb: '1 in · 1 out · forceful',
-    description: 'Forceful, equal inhale and exhale through the nose using the diaphragm like a bellows. Builds heat, oxygenates, energizes — keep sessions short.',
+    description: 'Forceful, equal inhale and exhale through the nose using the diaphragm like a bellows. Builds heat, oxygenates, energizes. Keep sessions short.',
     phases: [
       { name: 'Inhale', seconds: 1 },
       { name: 'Exhale', seconds: 1 },
     ],
-    color: '#FFB05B', petalSides: 3, petalCount: 8, centerSides: 3,
+    color: '#FFB05B', Icon: Flame, petalSides: 3, petalCount: 8, centerSides: 3,
     mudra: { name: 'Knee grip', instruction: 'Sit upright, grasp the knees firmly with thumbs out. Anchors the diaphragmatic effort.' },
   },
   {
@@ -191,19 +215,52 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 4 },
     ],
-    color: '#FF5B9C', petalSides: 5, petalCount: 5, centerSides: 5,
-    mudra: { name: 'Lion claws', instruction: 'Stretch fingers wide on the knees like claws, palms down — opens the throat and chest.' },
+    color: '#FF5B9C', Icon: HandFist, petalSides: 5, petalCount: 5, centerSides: 5,
+    mudra: { name: 'Lion claws', instruction: 'Stretch fingers wide on the knees like claws, palms down. Opens the throat and chest.' },
   },
   {
     id: 'kapalabhati', name: 'Kapalabhati', category: 'activating',
-    blurb: 'Passive in · forceful out',
-    description: '"Skull-shining breath." Passive inhale, sharp forceful exhale through the nose, repeated rapidly. Cleanses the lungs and energizes the mind.',
+    blurb: '1 in · 1 out · sharp pulse',
+    description: '"Skull-shining breath." Passive inhale, sharp forceful exhale through the nose, repeated rapidly. Faster cadence than holotropic. Cleanses the lungs and energizes the mind.',
     phases: [
       { name: 'Inhale', seconds: 1 },
       { name: 'Exhale', seconds: 1 },
     ],
-    color: '#FF8FB1', petalSides: 6, petalCount: 8, centerSides: 3,
+    color: '#FF8FB1', Icon: InfinityIcon, petalSides: 6, petalCount: 8, centerSides: 3,
     mudra: { name: 'Chin Mudra', instruction: 'Touch tip of thumb and index together; rest hands palms-up on knees, other fingers extended.' },
+  },
+  {
+    id: 'ujjayi', name: 'Ujjayi (Ocean)', category: 'calming',
+    blurb: '4 in · 6 out · whispered',
+    description: 'Slight constriction at the back of the throat creates a soft ocean-wave sound on inhale and exhale. Slows the breath, focuses the mind, warms the body. The breath of yoga and pranayama.',
+    phases: [
+      { name: 'Inhale', seconds: 4 },
+      { name: 'Exhale', seconds: 6 },
+    ],
+    color: '#5BD0FF', Icon: Drop, petalSides: 6, petalCount: 8, centerSides: 6,
+    mudra: { name: 'Jnana Mudra', instruction: 'Tip of thumb meets tip of index; remaining fingers extended. Hands rest on knees, palms up. Receiving wisdom.' },
+  },
+  {
+    id: 'dirga', name: 'Dirga (Three-Part)', category: 'calming',
+    blurb: '6 in (belly · ribs · chest) · 6 out',
+    description: 'Layered three-part inhale. First fill the belly, then the ribs, then the upper chest. Exhale in reverse. Maximizes lung capacity and quiets the nervous system.',
+    phases: [
+      { name: 'Inhale', seconds: 6 },
+      { name: 'Exhale', seconds: 6 },
+    ],
+    color: '#9affc8', Icon: Tree, petalSides: 3, petalCount: 8, centerSides: 6,
+    mudra: { name: 'Padma Mudra', instruction: 'Heels of palms and pinkies touch; thumbs touch; other fingers spread like lotus petals at the heart.' },
+  },
+  {
+    id: 'wimhof', name: 'Wim Hof Style', category: 'activating',
+    blurb: '2 in · 1 out · 30 rounds',
+    description: 'Deep active inhale, passive exhale, repeated ~30 times before a long retention. Floods the body with oxygen, raises adrenaline, builds cold tolerance and immune resilience.',
+    phases: [
+      { name: 'Inhale', seconds: 2 },
+      { name: 'Exhale', seconds: 1 },
+    ],
+    color: '#5B6CFF', Icon: Mountains, petalSides: 6, petalCount: 8, centerSides: 6,
+    mudra: { name: 'Open palms upward', instruction: 'Hands rest on knees or thighs, palms facing up. Fully open to receive breath.' },
   },
 ];
 
@@ -371,6 +428,7 @@ function TechniqueList({ onPick }: { onPick: (t: Technique) => void }) {
 }
 
 function TechniqueCard({ technique, onPress }: { technique: Technique; onPress: () => void }) {
+  const Icon = technique.Icon;
   return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -378,7 +436,16 @@ function TechniqueCard({ technique, onPress }: { technique: Technique; onPress: 
       style={[styles.card, { borderColor: technique.color + '55' }]}
     >
       <View style={styles.cardRow}>
-        <View style={[styles.cardDot, { backgroundColor: technique.color }]} />
+        <View style={[
+          styles.cardIconWrap,
+          {
+            borderColor: technique.color + '88',
+            shadowColor: technique.color,
+          },
+        ]}>
+          <View style={[styles.cardIconInner, { backgroundColor: technique.color + '14' }]} />
+          <Icon size={26} weight="fill" color={technique.color} />
+        </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.cardName}>{technique.name}</Text>
           <Text style={[styles.cardBlurb, { color: technique.color }]}>{technique.blurb}</Text>
@@ -458,7 +525,7 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
         setCycle(cyc);
       }
 
-      // During Hold the breath value freezes — no motion in/out.
+      // During Hold the breath value freezes. No motion in/out.
       if (phase.name === 'Inhale') {
         currentAnim = Animated.timing(breath, {
           toValue: 1,
@@ -594,7 +661,7 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
 }
 
 // ===========================================================================
-//   BreathCircle — minimal circle that scales with breath
+//   BreathCircle. Minimal circle that scales with breath
 // ===========================================================================
 
 type CircleProps = {
@@ -633,7 +700,7 @@ function BreathCircle({ breath, color, phaseLabel, phaseCount, cycle, active }: 
 }
 
 // ===========================================================================
-//   BreathMandala — animated polygonal mandala
+//   BreathMandala. Animated polygonal mandala
 // ===========================================================================
 
 const MANDALA_SIZE = 280;
@@ -754,7 +821,7 @@ function BreathMandala({
         );
       })}
 
-      {/* Phase label overlay — centered atop the stack */}
+      {/* Phase label overlay. Centered atop the stack */}
       <View pointerEvents="none" style={styles.absCenter}>
         <View style={styles.labelInner}>
           <Text style={[styles.phaseText, { color: active ? color : '#ffffff66' }]}>
@@ -826,6 +893,16 @@ const styles = StyleSheet.create({
   },
   cardRow: { flexDirection: 'row', alignItems: 'center' },
   cardDot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
+  cardIconWrap: {
+    width: 46, height: 46, borderRadius: 23,
+    marginRight: 14, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    shadowOpacity: 0.45, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
+  },
+  cardIconInner: {
+    ...StyleSheet.absoluteFillObject,
+  },
   cardName: { color: '#fff', fontSize: 16, fontWeight: '600' },
   cardBlurb: { fontSize: 11, marginTop: 2, letterSpacing: 1 },
   cardChevron: { color: '#ffffff66', fontSize: 22 },

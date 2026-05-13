@@ -7,8 +7,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { Wind, Flame, Mountains, type IconProps } from 'phosphor-react-native';
 
 import type { Chakra, Dosha } from './App';
+
+const DOSHA_ICONS: Record<Dosha['id'], React.ComponentType<IconProps>> = {
+  vata: Wind,
+  pitta: Flame,
+  kapha: Mountains,
+};
 
 type Props = {
   chakras: Chakra[];
@@ -81,7 +88,7 @@ export default function ChakrasView({
                 styles.card,
                 {
                   borderColor: active ? c.color : c.color + '55',
-                  backgroundColor: active ? c.color + '14' : 'rgba(0,0,0,0.30)',
+                  borderWidth: active ? 2 : 1,
                 },
               ]}
             >
@@ -92,10 +99,21 @@ export default function ChakrasView({
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.cardName}>{c.name}</Text>
-                  <Text style={styles.sanskrit}>{c.sanskrit}</Text>
+                  <Text style={styles.sanskrit}>
+                    {c.sanskrit}
+                    <Text style={styles.sanskritMeaning}>  ·  {c.sanskritMeaning}</Text>
+                  </Text>
                 </View>
-                <View style={[styles.bijaPill, { borderColor: c.color, backgroundColor: c.color + '22' }]}>
-                  <Text style={[styles.bijaText, { color: c.color }]}>{c.bija}</Text>
+                <View style={styles.bijaBlock}>
+                  <View style={[styles.bijaRule, { backgroundColor: c.color }]} />
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[styles.bijaText, { color: c.color, textShadowColor: 'rgba(0,0,0,0.85)' }]}>
+                      {c.bija}
+                    </Text>
+                    <Text style={[styles.bijaPronunciation, { color: c.color, textShadowColor: 'rgba(0,0,0,0.7)' }]}>
+                      {c.bijaPronunciation}
+                    </Text>
+                  </View>
                 </View>
               </View>
 
@@ -107,8 +125,23 @@ export default function ChakrasView({
                 <Text style={styles.metaText} numberOfLines={1}>{c.location}</Text>
               </View>
 
+              <Text style={[styles.affirmation, { color: c.color }]}>
+                "{c.affirmation}"
+              </Text>
+
               <Text style={[styles.governs, { color: c.color }]}>{c.governs}</Text>
               <Text style={styles.blocked}>Blocked: <Text style={{ color: '#ffffffaa' }}>{c.blocked}</Text></Text>
+
+              <View style={styles.correspondenceRow}>
+                <View style={styles.correspondenceCol}>
+                  <Text style={styles.correspondenceLabel}>PLANETS</Text>
+                  <Text style={[styles.correspondenceValue, { color: c.color }]}>{c.planets}</Text>
+                </View>
+                <View style={styles.correspondenceCol}>
+                  <Text style={styles.correspondenceLabel}>GLAND</Text>
+                  <Text style={[styles.correspondenceValue, { color: c.color }]}>{c.gland}</Text>
+                </View>
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -119,6 +152,8 @@ export default function ChakrasView({
         </View>
 
         {doshas.map(d => {
+          const active = activePresetId === `dosha-${d.id}`;
+          const DoshaIcon = DOSHA_ICONS[d.id];
           return (
             <TouchableOpacity
               key={d.id}
@@ -126,17 +161,32 @@ export default function ChakrasView({
               onPress={() => onApplyDosha(d)}
               style={[
                 styles.doshaCard,
-                { borderColor: d.color + '55' },
+                {
+                  borderColor: active ? d.color : d.color + '55',
+                  borderWidth: active ? 2 : 1,
+                },
               ]}
             >
               <View style={styles.cardTopRow}>
-                <View style={[styles.colorDot, { backgroundColor: d.color, marginRight: 12 }]} />
+                <View style={[
+                  styles.doshaIconWrap,
+                  {
+                    borderColor: d.color + '88',
+                    shadowColor: d.color,
+                  },
+                ]}>
+                  <View style={[styles.doshaIconInner, { backgroundColor: d.color + '14' }]} />
+                  <DoshaIcon size={26} weight="fill" color={d.color} />
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.doshaName}>{d.name}</Text>
                   <Text style={[styles.metaText, { color: d.color }]}>{d.element}</Text>
                 </View>
-                <View style={[styles.bijaPill, { borderColor: d.color, backgroundColor: d.color + '22' }]}>
-                  <Text style={[styles.bijaText, { color: d.color, fontSize: 11 }]}>{d.balanceHz} Hz</Text>
+                <View style={styles.bijaBlock}>
+                  <View style={[styles.bijaRule, { backgroundColor: d.color }]} />
+                  <Text style={[styles.bijaText, { color: d.color, fontSize: 13, letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.85)' }]}>
+                    {d.balanceHz} Hz
+                  </Text>
                 </View>
               </View>
               <Text style={styles.qualities}>{d.qualities}</Text>
@@ -220,7 +270,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
+    backgroundColor: 'rgba(11, 11, 31, 0.78)',
     borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: 1,
   },
   cardTopRow: {
@@ -235,7 +285,7 @@ const styles = StyleSheet.create({
     width: 52, height: 52,
     borderRadius: 26,
     borderWidth: 1,
-    backgroundColor: 'rgba(0,0,0,0.30)',
+    backgroundColor: 'rgba(11, 11, 31, 0.85)',
     alignItems: 'center', justifyContent: 'center',
     marginRight: 14,
   },
@@ -252,20 +302,69 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 1,
   },
-  bijaPill: {
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 999, borderWidth: 1,
-    minWidth: 56, alignItems: 'center',
+  bijaBlock: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingLeft: 10,
+  },
+  bijaRule: {
+    width: 1.5, height: 32, marginRight: 10,
+    opacity: 0.85,
   },
   bijaText: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 18, letterSpacing: 2, fontWeight: '700',
+    fontFamily: 'Cinzel_700Bold',
+    fontSize: 19, letterSpacing: 3,
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
+  },
+  bijaPronunciation: {
+    fontFamily: 'CormorantGaramond_500Medium_Italic',
+    fontSize: 15, letterSpacing: 0.4,
+    marginTop: 2,
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 8 },
   metaText: { color: '#ffffffaa', fontSize: 11, letterSpacing: 0.3 },
   metaDot: { color: '#ffffff44', fontSize: 11, marginHorizontal: 6 },
   governs: { fontSize: 13, fontWeight: '600', letterSpacing: 0.3, marginBottom: 4 },
   blocked: { color: '#ffffff66', fontSize: 11, fontStyle: 'italic' },
+
+  sanskritMeaning: {
+    color: '#ffffff66',
+    fontFamily: 'CormorantGaramond_500Medium_Italic',
+    fontSize: 13,
+    fontWeight: '400',
+  },
+  affirmation: {
+    fontFamily: 'CormorantGaramond_500Medium_Italic',
+    fontSize: 18,
+    letterSpacing: 0.5,
+    marginTop: 6, marginBottom: 8,
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  correspondenceRow: {
+    flexDirection: 'row',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    gap: 18,
+  },
+  correspondenceCol: { flex: 1 },
+  correspondenceLabel: {
+    color: '#ffffff55',
+    fontSize: 9,
+    letterSpacing: 1.5,
+    fontWeight: '700',
+    marginBottom: 3,
+  },
+  correspondenceValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
 
   sectionLabel: {
     color: '#ffffff80', fontSize: 11, letterSpacing: 2, fontWeight: '600',
@@ -277,9 +376,16 @@ const styles = StyleSheet.create({
   },
 
   doshaCard: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
+    backgroundColor: 'rgba(11, 11, 31, 0.78)',
     borderRadius: 18, padding: 16, marginBottom: 10, borderWidth: 1,
   },
+  doshaIconWrap: {
+    width: 46, height: 46, borderRadius: 23,
+    marginRight: 14, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, overflow: 'hidden',
+    shadowOpacity: 0.45, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
+  },
+  doshaIconInner: { ...StyleSheet.absoluteFillObject },
   doshaName: { color: '#fff', fontSize: 16, fontWeight: '600' },
   qualities: { color: '#ffffff88', fontSize: 12, marginTop: 4, letterSpacing: 0.5 },
   doshaDescription: { color: '#ffffff99', fontSize: 12, marginTop: 8, lineHeight: 18 },

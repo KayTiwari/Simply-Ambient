@@ -83,7 +83,7 @@ export default function HoroscopesView({
   useEffect(() => {
     let cancelled = false;
 
-    // Yearly is a static intention written into the zodiac data — no API call.
+    // Yearly is a static intention written into the zodiac data. No API call.
     if (period === 'yearly') {
       setLoading(false);
       setHoroscope(mySign.yearAhead);
@@ -222,7 +222,7 @@ export default function HoroscopesView({
             <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
               <Text style={styles.horoscopeFallback}>“{mySign.intention}”</Text>
               <Text style={styles.horoscopeNote}>
-                (Couldn't reach the horoscope service — showing the sign's intention.)
+                (Couldn't reach the horoscope service. Showing the sign's intention.)
               </Text>
             </View>
           )}
@@ -237,7 +237,7 @@ export default function HoroscopesView({
 
         <Text style={styles.sectionLabel}>YOUR ZODIAC SIGN</Text>
         <Text style={styles.sectionSub}>
-          Tap to set your sign — saved on this device
+          Tap to set your sign. Saved on this device
         </Text>
         <ScrollView
           horizontal
@@ -271,7 +271,13 @@ export default function HoroscopesView({
         <View style={[styles.tarotCard, { borderColor: '#A45BFF55' }]}>
           <View style={styles.tarotHeaderRow}>
             <Text style={styles.cardLabel}>CARD OF THE MOMENT</Text>
-            <TouchableOpacity onPress={() => drawTarot()} style={styles.tarotRefreshBtn}>
+            <TouchableOpacity
+              onPress={() => drawTarot()}
+              style={styles.tarotRefreshBtn}
+              accessibilityLabel="Draw a new tarot card"
+              accessibilityRole="button"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <ArrowsClockwise size={16} color="#fff" weight="regular" />
             </TouchableOpacity>
           </View>

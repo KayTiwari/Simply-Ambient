@@ -1,0 +1,89 @@
+// Pure-JS audio + storage utilities. No React Native imports here so the
+// module is unit-testable in plain Node and can't accidentally pull native
+// code into jest.
+
+export const MIN_HZ = 50;
+// Capped at 500 Hz: binaural-beat phase-locking degrades above ~500 Hz, and
+// sustained tones above this range are uncomfortable and a hearing-safety
+// risk at non-trivial volumes.
+export const MAX_HZ = 500;
+
+export function clampHz(n: number): number {
+  return Math.max(MIN_HZ, Math.min(MAX_HZ, Math.round(n)));
+}
+
+// Drop a high "symbolic" frequency (Solfeggio, chakra, dosha) by octaves
+// into a comfortable carrier range (~150-260 Hz). Octaves preserve the same
+// musical note, so the symbolism is intact, but the carrier is no longer
+// piercing.
+export function comfortableCarrier(hz: number): number {
+  let h = hz;
+  while (h > 280) h = h / 2;
+  while (h < 120) h = h * 2;
+  return h;
+}
+
+// Pure-JS Base64 encoder. Used as a fallback if globalThis.btoa is missing
+// in some RN runtime variants. The audio engine builds a WAV per Hz change,
+// so a missing btoa would silently break playback.
+export function btoaFallback(binary: string): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let out = '';
+  let i = 0;
+  while (i < binary.length) {
+    const b1 = binary.charCodeAt(i++) & 0xff;
+    const b2 = i < binary.length ? binary.charCodeAt(i++) & 0xff : NaN;
+    const b3 = i < binary.length ? binary.charCodeAt(i++) & 0xff : NaN;
+    const e1 = b1 >> 2;
+    const e2 = ((b1 & 3) << 4) | (Number.isNaN(b2) ? 0 : (b2 >> 4));
+    const e3 = Number.isNaN(b2) ? 64 : (((b2 & 15) << 2) | (Number.isNaN(b3) ? 0 : (b3 >> 6)));
+    const e4 = Number.isNaN(b3) ? 64 : (b3 & 63);
+    out += chars[e1] + chars[e2] + (e3 === 64 ? '=' : chars[e3]) + (e4 === 64 ? '=' : chars[e4]);
+  }
+  return out;
+}
+
+// Minimal Base64 decoder. Mirror of btoaFallback for ASCII payloads.
+export function atobFallback(b64: string): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const s = b64.replace(/=+$/, '');
+  let out = '';
+  let buf = 0;
+  let bits = 0;
+  for (let i = 0; i < s.length; i++) {
+    const v = chars.indexOf(s[i]);
+    if (v === -1) continue;
+    buf = (buf << 6) | v;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out += String.fromCharCode((buf >> bits) & 0xff);
+    }
+  }
+  return out;
+}
+
+// Streak math (extracted from getStreak/recordActivity in App.tsx) so the
+// branching logic can be unit-tested without AsyncStorage mocks.
+export function nextStreakCount(opts: {
+  lastDate: string;
+  count: number;
+  today: string;
+  yesterday: string;
+}): { lastDate: string; count: number } {
+  const { lastDate, count, today, yesterday } = opts;
+  if (lastDate === today) return { lastDate, count };
+  return { lastDate: today, count: lastDate === yesterday ? count + 1 : 1 };
+}
+
+// Visible streak (returned to UI). Drops to 0 if the last activity was not
+// yesterday or today.
+export function visibleStreak(opts: {
+  lastDate: string;
+  count: number;
+  today: string;
+  yesterday: string;
+}): number {
+  const { lastDate, count, today, yesterday } = opts;
+  return lastDate === today || lastDate === yesterday ? count : 0;
+}

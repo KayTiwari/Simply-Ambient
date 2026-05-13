@@ -6,6 +6,7 @@ import {
   Dimensions,
   Easing,
   Linking,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +22,14 @@ import {
   ArrowsClockwise,
   X,
   Plus,
+  Stack,
+  Waveform,
+  Smiley,
+  CloudLightning,
+  Coffee,
+  ShieldCheck,
+  Bug,
+  type IconProps,
 } from 'phosphor-react-native';
 
 import { recordActivity, getStreak } from './App';
@@ -29,21 +38,58 @@ const { width: SCREEN_W } = Dimensions.get('window');
 
 const STORAGE_MOOD = '@simply_ambient_mood_log_v1';
 const STORAGE_GRAT = '@simply_ambient_gratitude_v1';
+const STORAGE_RANT = '@simply_ambient_rant_v1';
+const STORAGE_MANIFEST = '@simply_ambient_manifestation_v1';
+const STORAGE_AI_SOURCES = '@simply_ambient_ai_sources_v1';
+
+type AISourceKey = 'mood' | 'gratitude' | 'rant' | 'manifestation';
+type AISources = Record<AISourceKey, boolean>;
+const DEFAULT_AI_SOURCES: AISources = {
+  mood: true,
+  gratitude: true,
+  rant: false,        // Sensitive — opt in
+  manifestation: true,
+};
 
 // Email obfuscated so it doesn't appear as plaintext in the bundle.
 const REPORT_EMAIL_B64 = 'dGl3a2F5QGdtYWlsLmNvbQ==';
+function atobFallback(b64: string): string {
+  // Minimal Base64 decoder. Used if globalThis.atob is unavailable in some
+  // RN runtimes. Pure ASCII output is sufficient for an email address.
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let s = b64.replace(/=+$/, '');
+  let out = '';
+  let buf = 0;
+  let bits = 0;
+  for (let i = 0; i < s.length; i++) {
+    const v = chars.indexOf(s[i]);
+    if (v === -1) continue;
+    buf = (buf << 6) | v;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      out += String.fromCharCode((buf >> bits) & 0xff);
+    }
+  }
+  return out;
+}
 function decodeReportEmail(): string {
-  // @ts-ignore — atob exists in the React Native runtime
-  return globalThis.atob(REPORT_EMAIL_B64);
+  try {
+    // @ts-ignore. Atob exists in most React Native runtimes
+    if (typeof globalThis.atob === 'function') return globalThis.atob(REPORT_EMAIL_B64);
+  } catch {}
+  return atobFallback(REPORT_EMAIL_B64);
 }
 
-// Donation link — replace with your own Buy Me a Coffee / Ko-fi handle.
+// Donation link. Replace with your own Buy Me a Coffee / Ko-fi handle.
 const SUPPORT_URL = 'https://www.buymeacoffee.com/likechess';
 
 export type NotifPref = 'off' | 'daily' | 'thrice';
 
 type MoodEntry = { ts: number; value: number };
 type GratEntry = { ts: number; text: string };
+type RantEntry = { ts: number; text: string };
+type ManifestEntry = { ts: number; text: string; manifested: boolean };
 
 type Props = {
   notifPref: NotifPref;
@@ -63,10 +109,13 @@ type SubPage =
   | 'affirmations'
   | 'mood'
   | 'gratitude'
+  | 'rant'
+  | 'manifestation'
   | 'routines'
   | 'soundscapes'
   | 'grounding'
   | 'support'
+  | 'safety'
   | 'bug';
 
 const STORAGE_PROFILE = '@simply_ambient_profile_v1';
@@ -84,6 +133,29 @@ type Profile = {
 const MOOD_COLORS = ['#FF5B5B', '#FF8A38', '#FFD000', '#9affc8', '#5BD0FF'];
 const MOOD_LABELS = ['Low', 'Off', 'OK', 'Good', 'Great'];
 
+// Defensive accessors. If storage is corrupted and a mood value is outside
+// 1..5, render a placeholder rather than "undefined".
+function moodLabel(value: number): string {
+  const idx = Math.max(1, Math.min(5, Math.round(value))) - 1;
+  return MOOD_LABELS[idx];
+}
+function moodColor(value: number): string {
+  const idx = Math.max(1, Math.min(5, Math.round(value))) - 1;
+  return MOOD_COLORS[idx];
+}
+
+// Safely parse JSON from AsyncStorage. Returns fallback on any error so a
+// corrupted storage entry can't crash the app or poison subsequent reads.
+function safeParse<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function MoreView({
   notifPref, onChangeNotifPref,
   affirmation, affirmationLoading, onRefreshAffirmation,
@@ -91,11 +163,27 @@ export default function MoreView({
 }: Props) {
   const [moodLog, setMoodLog] = useState<MoodEntry[]>([]);
   const [gratitude, setGratitude] = useState<GratEntry[]>([]);
+  const [rants, setRants] = useState<RantEntry[]>([]);
+  const [manifestations, setManifestations] = useState<ManifestEntry[]>([]);
   const [streak, setStreak] = useState(0);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_MOOD).then(v => v && setMoodLog(JSON.parse(v))).catch(() => {});
-    AsyncStorage.getItem(STORAGE_GRAT).then(v => v && setGratitude(JSON.parse(v))).catch(() => {});
+    AsyncStorage.getItem(STORAGE_MOOD).then(v => {
+      const parsed = safeParse<MoodEntry[]>(v, []);
+      if (Array.isArray(parsed)) setMoodLog(parsed);
+    }).catch(() => {});
+    AsyncStorage.getItem(STORAGE_GRAT).then(v => {
+      const parsed = safeParse<GratEntry[]>(v, []);
+      if (Array.isArray(parsed)) setGratitude(parsed);
+    }).catch(() => {});
+    AsyncStorage.getItem(STORAGE_RANT).then(v => {
+      const parsed = safeParse<RantEntry[]>(v, []);
+      if (Array.isArray(parsed)) setRants(parsed);
+    }).catch(() => {});
+    AsyncStorage.getItem(STORAGE_MANIFEST).then(v => {
+      const parsed = safeParse<ManifestEntry[]>(v, []);
+      if (Array.isArray(parsed)) setManifestations(parsed);
+    }).catch(() => {});
     getStreak().then(setStreak);
   }, []);
 
@@ -112,6 +200,40 @@ export default function MoreView({
     setGratitude(next);
     AsyncStorage.setItem(STORAGE_GRAT, JSON.stringify(next)).catch(() => {});
     recordActivity().then(() => getStreak().then(setStreak)).catch(() => {});
+  }
+
+  function saveRant(text: string) {
+    const t = text.trim();
+    if (!t) return;
+    const next = [{ ts: Date.now(), text: t }, ...rants].slice(0, 500);
+    setRants(next);
+    AsyncStorage.setItem(STORAGE_RANT, JSON.stringify(next)).catch(() => {});
+  }
+
+  function deleteRant(ts: number) {
+    const next = rants.filter(r => r.ts !== ts);
+    setRants(next);
+    AsyncStorage.setItem(STORAGE_RANT, JSON.stringify(next)).catch(() => {});
+  }
+
+  function saveManifestation(text: string) {
+    const t = text.trim();
+    if (!t) return;
+    const next = [{ ts: Date.now(), text: t, manifested: false }, ...manifestations].slice(0, 500);
+    setManifestations(next);
+    AsyncStorage.setItem(STORAGE_MANIFEST, JSON.stringify(next)).catch(() => {});
+  }
+
+  function toggleManifestation(ts: number) {
+    const next = manifestations.map(m => m.ts === ts ? { ...m, manifested: !m.manifested } : m);
+    setManifestations(next);
+    AsyncStorage.setItem(STORAGE_MANIFEST, JSON.stringify(next)).catch(() => {});
+  }
+
+  function deleteManifestation(ts: number) {
+    const next = manifestations.filter(m => m.ts !== ts);
+    setManifestations(next);
+    AsyncStorage.setItem(STORAGE_MANIFEST, JSON.stringify(next)).catch(() => {});
   }
 
   function deleteGratitude(ts: number) {
@@ -214,11 +336,31 @@ export default function MoreView({
               onBack={close}
             />
           )}
+          {page === 'rant' && (
+            <RantPage
+              entries={rants}
+              onSave={saveRant}
+              onDelete={deleteRant}
+              onBack={close}
+            />
+          )}
+          {page === 'manifestation' && (
+            <ManifestationPage
+              entries={manifestations}
+              onSave={saveManifestation}
+              onToggle={toggleManifestation}
+              onDelete={deleteManifestation}
+              onBack={close}
+            />
+          )}
           {page === 'grounding' && (
             <GroundingPage onBack={close} />
           )}
           {page === 'support' && (
             <SupportPage onBack={close} />
+          )}
+          {page === 'safety' && (
+            <SafetyPage onBack={close} />
           )}
           {page === 'bug' && (
             <BugReportPage onBack={close} />
@@ -249,7 +391,7 @@ type HubProps = {
 };
 
 function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak, onOpen }: HubProps) {
-  // Weekly insights — computed inline from local data
+  // Weekly insights. Computed inline from local data
   const [weekly, setWeekly] = useState<{
     moodAvg: number | null;
     moodCount: number;
@@ -264,8 +406,10 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
         const now = Date.now();
         const moodRaw = await AsyncStorage.getItem(STORAGE_MOOD);
         const gratRaw = await AsyncStorage.getItem(STORAGE_GRAT);
-        const moods: MoodEntry[] = moodRaw ? JSON.parse(moodRaw) : [];
-        const grats: GratEntry[] = gratRaw ? JSON.parse(gratRaw) : [];
+        const moodsRaw = safeParse<MoodEntry[]>(moodRaw, []);
+        const gratsRaw = safeParse<GratEntry[]>(gratRaw, []);
+        const moods: MoodEntry[] = Array.isArray(moodsRaw) ? moodsRaw : [];
+        const grats: GratEntry[] = Array.isArray(gratsRaw) ? gratsRaw : [];
         const week = moods.filter(m => now - m.ts < 7 * dayMs);
         const prev = moods.filter(m => now - m.ts >= 7 * dayMs && now - m.ts < 14 * dayMs);
         const avg = (arr: MoodEntry[]) =>
@@ -366,14 +510,14 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
           onPress={() => onOpen('insights')}
         />
         <HubItem
-          glyph="≣"
+          Icon={Stack}
           color="#9affc8"
           label="Routines"
           preview="Chain presets into sessions"
           onPress={() => onOpen('routines')}
         />
         <HubItem
-          glyph="≈"
+          Icon={Waveform}
           color="#5BD0FF"
           label="Soundscapes"
           preview="Rain · ocean · forest · white noise"
@@ -388,16 +532,16 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
           onPress={() => onOpen('affirmations')}
         />
         <HubItem
-          glyph="◐"
+          Icon={Smiley}
           color="#5BD0FF"
           label="Mood Check-in"
           preview={
             moodToday
-              ? `Today: ${MOOD_LABELS[moodToday.value - 1]} · keep the streak`
+              ? `Today: ${moodLabel(moodToday.value)} · keep the streak`
               : 'See patterns in what lifts and drains you'
           }
           extra={moodToday ? String(moodToday.value) : null}
-          extraColor={moodToday ? MOOD_COLORS[moodToday.value - 1] : undefined}
+          extraColor={moodToday ? moodColor(moodToday.value) : undefined}
           onPress={() => onOpen('mood')}
         />
         <HubItem
@@ -412,6 +556,20 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
           onPress={() => onOpen('gratitude')}
         />
         <HubItem
+          Icon={CloudLightning}
+          color="#FF5B9C"
+          label="Rant"
+          preview="Vent it out. Raw, private, unfiltered"
+          onPress={() => onOpen('rant')}
+        />
+        <HubItem
+          glyph="✷"
+          color="#A45BFF"
+          label="Manifestation"
+          preview="Name what you're calling in"
+          onPress={() => onOpen('manifestation')}
+        />
+        <HubItem
           glyph="◊"
           color="#5B6CFF"
           label="5-4-3-2-1 Grounding"
@@ -419,14 +577,21 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
           onPress={() => onOpen('grounding')}
         />
         <HubItem
-          glyph="☕"
+          Icon={Coffee}
           color="#d9b35c"
           label="Support the Developer"
           preview="If the app brings you peace"
           onPress={() => onOpen('support')}
         />
         <HubItem
-          glyph="!"
+          Icon={ShieldCheck}
+          color="#9aa0b4"
+          label="Safety & Disclaimer"
+          preview="Hearing safety, medical notice, terms"
+          onPress={() => onOpen('safety')}
+        />
+        <HubItem
+          Icon={Bug}
           color="#FF5B9C"
           label="Report a Bug"
           preview="Something off? Let me know"
@@ -438,9 +603,12 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
 }
 
 function HubItem({
-  glyph, color, label, preview, extra, extraColor, onPress,
+  glyph, Icon, color, label, preview, extra, extraColor, onPress,
 }: {
-  glyph: string;
+  // Either a unicode glyph (kept for spiritual symbols: ensō, flower, sparkle)
+  // or a Phosphor icon component (used for utility items: Routines, Bug, etc.)
+  glyph?: string;
+  Icon?: React.ComponentType<IconProps>;
   color: string;
   label: string;
   preview: string;
@@ -455,7 +623,11 @@ function HubItem({
       style={[styles.hubItem, { borderColor: color + '55' }]}
     >
       <View style={[styles.hubGlyphCircle, { backgroundColor: color + '22', borderColor: color }]}>
-        <Text style={[styles.hubGlyph, { color }]}>{glyph}</Text>
+        {Icon ? (
+          <Icon size={22} weight="duotone" color={color} />
+        ) : (
+          <Text style={[styles.hubGlyph, { color }]}>{glyph}</Text>
+        )}
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.hubLabel}>{label}</Text>
@@ -476,7 +648,14 @@ function HubItem({
 function SubHeader({ title, accent, onBack }: { title: string; accent: string; onBack: () => void }) {
   return (
     <View style={styles.subHeader}>
-      <TouchableOpacity onPress={onBack} style={styles.subBackBtn} activeOpacity={0.7}>
+      <TouchableOpacity
+        onPress={onBack}
+        style={styles.subBackBtn}
+        activeOpacity={0.7}
+        accessibilityLabel="Back"
+        accessibilityRole="button"
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
         <CaretLeft size={26} color={accent} weight="thin" />
       </TouchableOpacity>
       <Text style={styles.subTitle}>{title}</Text>
@@ -506,8 +685,8 @@ function AffirmationsPage({
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
         <Text style={styles.sectionSub}>
-          A single intention, repeated, becomes a frame for the day. The affirmation isn't magic —
-          it's a small mental anchor that biases what you notice, what you say yes to, and how
+          A single intention, repeated, becomes a frame for the day. The affirmation isn't magic.
+          It's a small mental anchor that biases what you notice, what you say yes to, and how
           you read your own moods. Read it once, then carry on.
         </Text>
 
@@ -517,7 +696,13 @@ function AffirmationsPage({
           ) : (
             <Text style={styles.bigAffirmText}>“{affirmation ?? 'You are exactly where you need to be.'}”</Text>
           )}
-          <TouchableOpacity onPress={onRefresh} style={styles.bigRefreshBtn} activeOpacity={0.85}>
+          <TouchableOpacity
+            onPress={onRefresh}
+            style={styles.bigRefreshBtn}
+            activeOpacity={0.85}
+            accessibilityLabel="Get another affirmation"
+            accessibilityRole="button"
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <ArrowsClockwise size={14} color="#9affc8" weight="regular" />
               <Text style={[styles.bigRefreshText, { marginLeft: 8 }]}>ANOTHER</Text>
@@ -602,9 +787,9 @@ function MoodPage({
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
         <Text style={styles.sectionSub}>
-          A 5-second daily check-in surfaces patterns over weeks — what days lift you, what drains
+          A 5-second daily check-in surfaces patterns over weeks. What days lift you, what drains
           you, and how your practice shapes baseline mood. Mood tracking is one of the most
-          evidence-supported daily mental-health habits.
+          evidence-supported daily wellbeing habits.
         </Text>
 
         <Text style={[styles.sectionLabel, { marginTop: 14 }]}>RIGHT NOW</Text>
@@ -643,14 +828,14 @@ function MoodPage({
         ) : (
           moodLog.slice(0, 30).map(m => (
             <View key={m.ts} style={styles.moodHistoryRow}>
-              <Text style={[styles.moodHistoryDot, { backgroundColor: MOOD_COLORS[m.value - 1] }]} />
+              <Text style={[styles.moodHistoryDot, { backgroundColor: moodColor(m.value) }]} />
               <Text style={styles.moodHistoryDate}>
                 {new Date(m.ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                 {' · '}
                 {new Date(m.ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
               </Text>
-              <Text style={[styles.moodHistoryLabel, { color: MOOD_COLORS[m.value - 1] }]}>
-                {MOOD_LABELS[m.value - 1]}
+              <Text style={[styles.moodHistoryLabel, { color: moodColor(m.value) }]}>
+                {moodLabel(m.value)}
               </Text>
             </View>
           ))
@@ -719,7 +904,7 @@ function MoodGraph({ buckets }: { buckets: Array<{ date: Date; avg: number | nul
               cx={xFor(i)}
               cy={yFor(b.avg)}
               r={4}
-              fill={MOOD_COLORS[Math.round(b.avg) - 1]}
+              fill={moodColor(b.avg)}
             />
           ) : null,
         )}
@@ -784,7 +969,7 @@ function GratitudePage({
         <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
         <Text style={styles.sectionSub}>
           Naming one thing you appreciate, daily, gradually shifts attention toward what's working.
-          Over weeks it raises baseline mood and reduces rumination — one of the most-studied
+          Over weeks it raises baseline mood and reduces rumination. One of the most-studied
           interventions in positive psychology.
         </Text>
 
@@ -846,7 +1031,13 @@ function GratitudePage({
                 <View key={g.ts} style={styles.gratItem}>
                   <View style={styles.gratItemBar} />
                   <Text style={styles.gratItemText}>{g.text}</Text>
-                  <TouchableOpacity onPress={() => onDelete(g.ts)} style={styles.gratDelBtn}>
+                  <TouchableOpacity
+                    onPress={() => onDelete(g.ts)}
+                    style={styles.gratDelBtn}
+                    accessibilityLabel="Delete this gratitude entry"
+                    accessibilityRole="button"
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  >
                     <X size={14} color="#ffffff66" weight="thin" />
                   </TouchableOpacity>
                 </View>
@@ -855,6 +1046,191 @@ function GratitudePage({
           ))
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Rant
+// ===========================================================================
+
+function RantPage({
+  entries, onSave, onDelete, onBack,
+}: {
+  entries: RantEntry[];
+  onSave: (text: string) => void;
+  onDelete: (ts: number) => void;
+  onBack: () => void;
+}) {
+  const [text, setText] = useState('');
+
+  function commit() {
+    if (!text.trim()) return;
+    onSave(text);
+    setText('');
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Rant" accent="#FF5B9C" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
+        <Text style={styles.sectionSub}>
+          Naming the noise is the first step to quieting it. Rants are stored only on this device.
+          Sharing them with the AI Insights tool is off by default. You can opt in from the
+          AI Insights page.
+        </Text>
+
+        <Text style={[styles.sectionLabel, { marginTop: 14 }]}>WHAT'S ON YOUR MIND</Text>
+        <TextInput
+          style={[styles.gratInput, { minHeight: 140 }]}
+          placeholder="Let it out…"
+          placeholderTextColor="#ffffff55"
+          value={text}
+          onChangeText={setText}
+          multiline
+          maxLength={4000}
+        />
+        <TouchableOpacity onPress={commit} style={[styles.gratSaveBtn, { backgroundColor: '#FF5B9C' }]} activeOpacity={0.85}>
+          <Text style={styles.gratSaveText}>SAVE</Text>
+        </TouchableOpacity>
+
+        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>HISTORY</Text>
+        {entries.length === 0 ? (
+          <Text style={styles.emptyText}>Your first rant will live here.</Text>
+        ) : (
+          entries.map(r => (
+            <View key={r.ts} style={[styles.gratItem, { borderColor: '#FF5B9C44' }]}>
+              <View style={[styles.gratItemBar, { backgroundColor: '#FF5B9C' }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rantDate}>
+                  {new Date(r.ts).toLocaleString(undefined, {
+                    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+                  })}
+                </Text>
+                <Text style={styles.gratItemText}>{r.text}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => onDelete(r.ts)}
+                style={styles.gratDelBtn}
+                accessibilityLabel="Delete this rant"
+                accessibilityRole="button"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <X size={14} color="#ffffff66" weight="thin" />
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Manifestation
+// ===========================================================================
+
+function ManifestationPage({
+  entries, onSave, onToggle, onDelete, onBack,
+}: {
+  entries: ManifestEntry[];
+  onSave: (text: string) => void;
+  onToggle: (ts: number) => void;
+  onDelete: (ts: number) => void;
+  onBack: () => void;
+}) {
+  const [text, setText] = useState('');
+
+  function commit() {
+    if (!text.trim()) return;
+    onSave(text);
+    setText('');
+  }
+
+  const pending = entries.filter(e => !e.manifested);
+  const manifested = entries.filter(e => e.manifested);
+
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Manifestation" accent="#A45BFF" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
+        <Text style={styles.sectionSub}>
+          Writing what you're calling in clarifies it. Mark it manifested when it lands.
+          Stored on this device. Sharing it with AI Insights is on by default and can be
+          toggled from the AI Insights page.
+        </Text>
+
+        <Text style={[styles.sectionLabel, { marginTop: 14 }]}>NEW INTENTION</Text>
+        <TextInput
+          style={styles.gratInput}
+          placeholder="I am calling in…"
+          placeholderTextColor="#ffffff55"
+          value={text}
+          onChangeText={setText}
+          multiline
+          maxLength={500}
+        />
+        <TouchableOpacity onPress={commit} style={[styles.gratSaveBtn, { backgroundColor: '#A45BFF' }]} activeOpacity={0.85}>
+          <Text style={styles.gratSaveText}>ADD</Text>
+        </TouchableOpacity>
+
+        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>CALLING IN</Text>
+        {pending.length === 0 ? (
+          <Text style={styles.emptyText}>Nothing yet. Name what you're inviting.</Text>
+        ) : (
+          pending.map(m => (
+            <ManifestRow key={m.ts} item={m} onToggle={onToggle} onDelete={onDelete} />
+          ))
+        )}
+
+        {manifested.length > 0 ? (
+          <>
+            <Text style={[styles.sectionLabel, { marginTop: 24 }]}>MANIFESTED</Text>
+            {manifested.map(m => (
+              <ManifestRow key={m.ts} item={m} onToggle={onToggle} onDelete={onDelete} />
+            ))}
+          </>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+function ManifestRow({
+  item, onToggle, onDelete,
+}: {
+  item: ManifestEntry;
+  onToggle: (ts: number) => void;
+  onDelete: (ts: number) => void;
+}) {
+  return (
+    <View style={[styles.gratItem, { borderColor: '#A45BFF44' }]}>
+      <TouchableOpacity onPress={() => onToggle(item.ts)} activeOpacity={0.8} style={styles.manifestCheck}>
+        <View style={[
+          styles.manifestCheckBox,
+          item.manifested && { backgroundColor: '#A45BFF', borderColor: '#A45BFF' },
+        ]}>
+          {item.manifested ? <Text style={styles.manifestCheckMark}>✓</Text> : null}
+        </View>
+      </TouchableOpacity>
+      <Text style={[
+        styles.gratItemText,
+        item.manifested && { color: '#ffffff66', textDecorationLine: 'line-through' },
+        { flex: 1 },
+      ]}>
+        {item.text}
+      </Text>
+      <TouchableOpacity
+        onPress={() => onDelete(item.ts)}
+        style={styles.gratDelBtn}
+        accessibilityLabel="Delete this manifestation"
+        accessibilityRole="button"
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <X size={14} color="#ffffff66" weight="thin" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -877,9 +1253,9 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
       <ScrollView contentContainerStyle={styles.subBody}>
         <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
         <Text style={styles.sectionSub}>
-          When anxiety spikes, the mind loops on what isn't here. This exercise pulls attention
-          back into the body's actual sensory data — sight, touch, hearing, smell, taste —
-          short-circuiting the rumination. It's a standard tool in trauma-informed therapy and
+          When stress spikes, the mind loops on what isn't here. This exercise pulls attention
+          back into the body's actual sensory data. Sight, touch, hearing, smell, taste,
+          short-circuiting the rumination. It's a grounding practice taught widely and
           works in 60–90 seconds.
         </Text>
         <Text style={[styles.groundIntro, { marginTop: 16 }]}>
@@ -907,7 +1283,7 @@ const ROADMAP: Array<{ phase: string; items: Array<{ title: string; blurb: strin
     phase: 'NEXT UP',
     items: [
       { title: 'Custom routines & auto-sequencer', blurb: 'Build your own preset chains with smooth fades between steps.' },
-      { title: 'Built-in soundscapes',              blurb: 'Rain, ocean, forest, fireplace, brown noise — bundled and offline.' },
+      { title: 'Built-in soundscapes',              blurb: 'Rain, ocean, forest, fireplace, brown noise. Bundled and offline.' },
       { title: 'In-app natal chart',                blurb: 'Planet positions, houses, and aspects without leaving the app.' },
       { title: 'Bija mantra audio',                 blurb: 'Short loops of LAM / VAM / RAM / OM for chakra meditation.' },
     ],
@@ -972,6 +1348,200 @@ function SupportPage({ onBack }: { onBack: () => void }) {
           Donations are entirely optional. Thank you for being here either way.
         </Text>
       </ScrollView>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Safety & Disclaimer
+// ===========================================================================
+
+export function SafetyContent() {
+  return (
+    <>
+      <Text style={styles.sectionLabel}>HEARING SAFETY</Text>
+      <Text style={styles.safetyBody}>
+        Always begin at a low volume and raise gradually only if needed. Sustained
+        listening through headphones can damage hearing at high volumes regardless
+        of frequency. If anything feels piercing, sharp, or uncomfortable, stop
+        immediately and lower the volume.
+      </Text>
+
+      <Text style={[styles.sectionLabel, { marginTop: 18 }]}>NOT MEDICAL ADVICE</Text>
+      <Text style={styles.safetyBody}>
+        Simply Ambient is a wellness and mindfulness tool. It is not a medical device
+        and is not intended to diagnose, treat, cure, or prevent any disease, mental
+        health condition, or physiological state. Frequencies, breathwork, chakras,
+        horoscopes, mantras, mudras, and AI reflections in this app are presented for
+        contemplative and educational use only. They are not a substitute for
+        professional medical, psychological, or psychiatric care.
+      </Text>
+
+      <Text style={[styles.sectionLabel, { marginTop: 18 }]}>WHEN NOT TO USE</Text>
+      <Text style={styles.safetyBody}>
+        Do not use this app while driving, operating machinery, or in any context where
+        focused attention is required. Consult a qualified physician before using
+        binaural beats or breathwork if you are pregnant, have a pacemaker, history
+        of seizures or epilepsy, a heart condition, are prone to dissociation, or are
+        taking medication that affects the nervous system. Discontinue immediately and
+        seek care if you experience dizziness, nausea, headache, ringing in the ears,
+        chest pain, panic, or any unusual symptom.
+      </Text>
+
+      <Text style={[styles.sectionLabel, { marginTop: 18 }]}>YOUR DATA</Text>
+      <Text style={styles.safetyBody}>
+        All journal data (mood, gratitude, rants, manifestations, profile) is stored
+        only on this device. Nothing is uploaded automatically. Data leaves the device
+        only when you explicitly tap an analyse button on the AI Insights page, in which
+        case the sources you have toggled on are sent to Google Gemini using your own
+        API key. You control which sources are shared.
+      </Text>
+
+      <Text style={[styles.sectionLabel, { marginTop: 18 }]}>NO WARRANTY</Text>
+      <Text style={styles.safetyBody}>
+        This app is provided "as is" without warranty of any kind. Use is at your own
+        risk. By using Simply Ambient you acknowledge these terms and accept that the
+        developer is not liable for any direct or indirect harm, including hearing
+        damage, that may arise from use of the app. If you do not agree, do not use
+        the app.
+      </Text>
+    </>
+  );
+}
+
+const PRIVACY_POLICY_URL = 'https://kaytiwari.github.io/Simply-Ambient/privacy-policy.html';
+
+// Storage keys that user-entered data lives under. The "wipe all data"
+// button below removes every key here. Keep this in sync if new keys are added.
+const ALL_USER_DATA_KEYS = [
+  STORAGE_MOOD,
+  STORAGE_GRAT,
+  STORAGE_RANT,
+  STORAGE_MANIFEST,
+  STORAGE_PROFILE,
+  STORAGE_PARTNER,
+  STORAGE_GEMINI_KEY,
+  STORAGE_AI_SOURCES,
+  STORAGE_GRAT_REMINDER,
+  '@simply_ambient_streak_v1',
+  '@simply_ambient_userpresets_v1',
+  '@simply_ambient_mala_haptic_v1',
+  '@simply_ambient_tarot_v1',
+];
+
+function SafetyPage({ onBack }: { onBack: () => void }) {
+  const [confirmOpenLink, setConfirmOpenLink] = useState(false);
+  const [confirmWipe, setConfirmWipe] = useState(false);
+
+  function wipeAllData() {
+    AsyncStorage.multiRemove(ALL_USER_DATA_KEYS).catch(() => {});
+    setConfirmWipe(false);
+    Alert.alert(
+      'Data wiped',
+      'All journal data, profile, presets, and settings have been deleted from this device. Restart the app to see a fresh state.',
+    );
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Safety & Disclaimer" accent="#9aa0b4" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+        <SafetyContent />
+
+        <Text style={[styles.sectionLabel, { marginTop: 18 }]}>PRIVACY POLICY</Text>
+        <Text style={styles.safetyBody}>
+          The full privacy policy is published at{' '}
+          <Text style={styles.linkText} onPress={() => setConfirmOpenLink(true)}>
+            kaytiwari.github.io/Simply-Ambient
+          </Text>
+          . It explains exactly what data the app handles and what it does not.
+        </Text>
+
+        <Text style={[styles.sectionLabel, { marginTop: 22 }]}>RESET</Text>
+        <Text style={styles.safetyBody}>
+          Permanently delete every entry stored on this device: profile, mood log,
+          gratitude, rants, manifestations, presets, settings, AI key. Cannot be undone.
+        </Text>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => setConfirmWipe(true)}
+          style={styles.wipeBtn}
+          accessibilityLabel="Wipe all data on this device"
+        >
+          <Text style={styles.wipeBtnText}>WIPE ALL DATA</Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      <Modal
+        visible={confirmOpenLink}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmOpenLink(false)}
+      >
+        <View style={styles.linkConfirmBackdrop}>
+          <View style={styles.linkConfirmCard}>
+            <Text style={styles.linkConfirmTitle}>Open in browser?</Text>
+            <Text style={styles.linkConfirmUrl}>{PRIVACY_POLICY_URL}</Text>
+            <Text style={styles.linkConfirmHint}>You'll leave the app to view the privacy policy.</Text>
+            <View style={styles.linkConfirmActions}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setConfirmOpenLink(false)}
+                style={styles.linkConfirmCancelBtn}
+                accessibilityLabel="Cancel"
+              >
+                <Text style={styles.linkConfirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => {
+                  setConfirmOpenLink(false);
+                  Linking.openURL(PRIVACY_POLICY_URL).catch(() => {});
+                }}
+                style={styles.linkConfirmOpenBtn}
+                accessibilityLabel="Open privacy policy in browser"
+              >
+                <Text style={styles.linkConfirmOpenText}>Open</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={confirmWipe}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmWipe(false)}
+      >
+        <View style={styles.linkConfirmBackdrop}>
+          <View style={styles.linkConfirmCard}>
+            <Text style={styles.linkConfirmTitle}>Wipe all data?</Text>
+            <Text style={styles.linkConfirmHint}>
+              This permanently deletes every journal entry, your profile, all presets,
+              and settings stored on this device. There is no undo.
+            </Text>
+            <View style={styles.linkConfirmActions}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setConfirmWipe(false)}
+                style={styles.linkConfirmCancelBtn}
+                accessibilityLabel="Cancel wipe"
+              >
+                <Text style={styles.linkConfirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={wipeAllData}
+                style={[styles.linkConfirmOpenBtn, { backgroundColor: '#FF5B5B' }]}
+                accessibilityLabel="Confirm wipe all data"
+              >
+                <Text style={styles.linkConfirmOpenText}>WIPE</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1117,7 +1687,10 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
   const [answers, setAnswers] = useState<Array<0 | 1 | null>>([null, null, null, null]);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_PROFILE).then(v => v && setProfile(JSON.parse(v))).catch(() => {});
+    AsyncStorage.getItem(STORAGE_PROFILE).then(v => {
+      const parsed = safeParse<Profile>(v, {});
+      if (parsed && typeof parsed === 'object') setProfile(parsed);
+    }).catch(() => {});
   }, []);
 
   function update<K extends keyof Profile>(key: K, value: Profile[K]) {
@@ -1184,7 +1757,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
 
         <Text style={[styles.sectionLabel, { marginTop: 28 }]}>MBTI · 16 PERSONALITIES</Text>
         <Text style={styles.sectionSub}>
-          Four quick questions. Not a clinical assessment — just an indicator.
+          Four quick questions. Not a clinical assessment. Just an indicator.
         </Text>
         {MBTI_QUESTIONS.map((q, i) => (
           <View key={i} style={styles.mbtiCard}>
@@ -1233,7 +1806,10 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
 function NatalChartPage({ onBack }: { onBack: () => void }) {
   const [profile, setProfile] = useState<Profile>({});
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_PROFILE).then(v => v && setProfile(JSON.parse(v))).catch(() => {});
+    AsyncStorage.getItem(STORAGE_PROFILE).then(v => {
+      const parsed = safeParse<Profile>(v, {});
+      if (parsed && typeof parsed === 'object') setProfile(parsed);
+    }).catch(() => {});
   }, []);
 
   function openExternal() {
@@ -1251,7 +1827,7 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
         <Text style={styles.sectionLabel}>YOUR BIRTH DETAILS</Text>
         {profile.name || profile.birthDate ? (
           <View style={styles.compatCard}>
-            <Text style={styles.compatName}>{profile.name ?? '—'}</Text>
+            <Text style={styles.compatName}>{profile.name ?? '·'}</Text>
             <Text style={styles.compatMeta}>
               {profile.birthDate ?? 'Birth date not set'}
               {profile.birthTime ? ` · ${profile.birthTime}` : ' · time not set'}
@@ -1270,14 +1846,14 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
 
         <Text style={[styles.sectionLabel, { marginTop: 24 }]}>WHAT'S A NATAL CHART?</Text>
         <Text style={styles.cardSub}>
-          A natal chart is a snapshot of the sky at the moment you were born — the positions of
+          A natal chart is a snapshot of the sky at the moment you were born. The positions of
           the Sun, Moon, and planets across the zodiac and the twelve houses. Together they sketch
           a temperament map: not destiny, but inclinations.
         </Text>
 
         <View style={[styles.compatComingSoon, { borderColor: '#5B6CFF55' }]}>
           <Text style={[styles.compatComingTitle, { color: '#5B6CFF' }]}>
-            In-app chart — coming soon
+            In-app chart. Coming soon
           </Text>
           <Text style={styles.compatComingText}>
             A built-in chart with planet positions, houses, and aspects is in the works.
@@ -1306,7 +1882,7 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
 }
 
 // ===========================================================================
-//   Routines (basic — sample routines, simple sequencer scaffolded)
+//   Routines (basic. Sample routines, simple sequencer scaffolded)
 // ===========================================================================
 
 type RoutineStep = { label: string; minutes: number };
@@ -1353,7 +1929,7 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
         <Text style={styles.sectionLabel}>SAMPLE ROUTINES</Text>
         <Text style={styles.cardSub}>
           A routine chains preset frequencies for a longer session. The auto-sequencer
-          (transition between steps automatically) is in development — for now, follow the
+          (transition between steps automatically) is in development. For now, follow the
           steps manually using the Frequencies tab.
         </Text>
         {SAMPLE_ROUTINES.map(r => (
@@ -1371,7 +1947,7 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
         ))}
         <View style={[styles.compatComingSoon, { borderColor: '#9affc855' }]}>
           <Text style={[styles.compatComingTitle, { color: '#9affc8' }]}>
-            Custom routines & auto-sequencer — coming soon
+            Custom routines & auto-sequencer. Coming soon
           </Text>
           <Text style={styles.compatComingText}>
             You'll be able to build your own routines, save them, and have the app auto-transition
@@ -1384,7 +1960,7 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
 }
 
 // ===========================================================================
-//   Soundscapes (basic — descriptive list pending audio integration)
+//   Soundscapes (basic. Descriptive list pending audio integration)
 // ===========================================================================
 
 const SOUNDSCAPES: Array<{ id: string; name: string; blurb: string; color: string; glyph: string }> = [
@@ -1405,7 +1981,7 @@ function SoundscapesPage({ onBack }: { onBack: () => void }) {
         <Text style={styles.sectionLabel}>NATURAL AMBIENCE</Text>
         <Text style={styles.cardSub}>
           Built-in soundscapes that layer behind the binaural tones. Audio bundles are coming in
-          a follow-up update — for now you can pick any audio file from your device on the
+          a follow-up update. For now you can pick any audio file from your device on the
           Frequencies tab's Background Music card.
         </Text>
         {SOUNDSCAPES.map(s => (
@@ -1434,8 +2010,14 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
   const [partner, setPartner] = useState<Profile>({});
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_PROFILE).then(v => v && setSelf(JSON.parse(v))).catch(() => {});
-    AsyncStorage.getItem(STORAGE_PARTNER).then(v => v && setPartner(JSON.parse(v))).catch(() => {});
+    AsyncStorage.getItem(STORAGE_PROFILE).then(v => {
+      const parsed = safeParse<Profile>(v, {});
+      if (parsed && typeof parsed === 'object') setSelf(parsed);
+    }).catch(() => {});
+    AsyncStorage.getItem(STORAGE_PARTNER).then(v => {
+      const parsed = safeParse<Profile>(v, {});
+      if (parsed && typeof parsed === 'object') setPartner(parsed);
+    }).catch(() => {});
   }, []);
 
   function updatePartner<K extends keyof Profile>(key: K, value: Profile[K]) {
@@ -1451,7 +2033,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
         <Text style={styles.sectionLabel}>YOUR PROFILE</Text>
         {self.name || self.birthDate ? (
           <View style={styles.compatCard}>
-            <Text style={styles.compatName}>{self.name ?? '—'}</Text>
+            <Text style={styles.compatName}>{self.name ?? '·'}</Text>
             <Text style={styles.compatMeta}>
               {self.birthDate ?? 'No birth date set'}
               {self.birthTime ? ` · ${self.birthTime}` : ''}
@@ -1505,7 +2087,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
         />
 
         <View style={styles.compatComingSoon}>
-          <Text style={styles.compatComingTitle}>Synastry chart — coming soon</Text>
+          <Text style={styles.compatComingTitle}>Synastry chart. Coming soon</Text>
           <Text style={styles.compatComingText}>
             Full synastry (planet-by-planet alignment between two natal charts) will be added once
             the natal-chart pipeline is wired in. Your details are saved locally so the moment that
@@ -1521,19 +2103,38 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
 //   AI Insights (Gemini)
 // ===========================================================================
 
+const GEMINI_KEY_URL = 'https://aistudio.google.com/apikey';
+
 function InsightsPage({ onBack }: { onBack: () => void }) {
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
+  const [confirmOpenLink, setConfirmOpenLink] = useState(false);
+  const [sources, setSources] = useState<AISources>(DEFAULT_AI_SOURCES);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_GEMINI_KEY).then(v => v && setApiKey(v)).catch(() => {});
+    AsyncStorage.getItem(STORAGE_AI_SOURCES).then(v => {
+      if (!v) return;
+      try {
+        const parsed = JSON.parse(v) as Partial<AISources>;
+        setSources({ ...DEFAULT_AI_SOURCES, ...parsed });
+      } catch {}
+    }).catch(() => {});
   }, []);
 
   function saveKey(value: string) {
     setApiKey(value);
     AsyncStorage.setItem(STORAGE_GEMINI_KEY, value).catch(() => {});
   }
+
+  function toggleSource(k: AISourceKey) {
+    const next = { ...sources, [k]: !sources[k] };
+    setSources(next);
+    AsyncStorage.setItem(STORAGE_AI_SOURCES, JSON.stringify(next)).catch(() => {});
+  }
+
+  const enabledSourceCount = (Object.keys(sources) as AISourceKey[]).filter(k => sources[k]).length;
 
   async function runAnalysis(kind: 'journal' | 'tarot') {
     if (!apiKey.trim()) {
@@ -1545,25 +2146,66 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
     try {
       let prompt = '';
       if (kind === 'journal') {
-        const moodRaw = await AsyncStorage.getItem(STORAGE_MOOD);
-        const gratRaw = await AsyncStorage.getItem(STORAGE_GRAT);
-        const moods: MoodEntry[] = moodRaw ? JSON.parse(moodRaw) : [];
-        const grats: GratEntry[] = gratRaw ? JSON.parse(gratRaw) : [];
-        const moodLines = moods.slice(0, 30).map(m =>
-          `${new Date(m.ts).toISOString().slice(0, 10)} · mood ${m.value}/5 (${MOOD_LABELS[m.value - 1]})`,
-        ).join('\n');
-        const gratLines = grats.slice(0, 30).map(g =>
-          `${new Date(g.ts).toISOString().slice(0, 10)}: ${g.text}`,
-        ).join('\n');
+        const enabled = (Object.keys(sources) as AISourceKey[]).filter(k => sources[k]);
+        if (enabled.length === 0) {
+          Alert.alert('No data sources enabled', 'Toggle at least one source on below to give the AI something to reflect on.');
+          setLoading(false);
+          return;
+        }
+        const [moodRaw, gratRaw, rantRaw, manifestRaw] = await Promise.all([
+          sources.mood ? AsyncStorage.getItem(STORAGE_MOOD) : Promise.resolve(null),
+          sources.gratitude ? AsyncStorage.getItem(STORAGE_GRAT) : Promise.resolve(null),
+          sources.rant ? AsyncStorage.getItem(STORAGE_RANT) : Promise.resolve(null),
+          sources.manifestation ? AsyncStorage.getItem(STORAGE_MANIFEST) : Promise.resolve(null),
+        ]);
+        const moodsParsed = safeParse<MoodEntry[]>(moodRaw, []);
+        const gratsParsed = safeParse<GratEntry[]>(gratRaw, []);
+        const rantsParsed = safeParse<RantEntry[]>(rantRaw, []);
+        const manifestsParsed = safeParse<ManifestEntry[]>(manifestRaw, []);
+        const moods: MoodEntry[] = Array.isArray(moodsParsed) ? moodsParsed : [];
+        const grats: GratEntry[] = Array.isArray(gratsParsed) ? gratsParsed : [];
+        const rants: RantEntry[] = Array.isArray(rantsParsed) ? rantsParsed : [];
+        const manifests: ManifestEntry[] = Array.isArray(manifestsParsed) ? manifestsParsed : [];
+        const sections: string[] = [];
+        if (sources.mood) {
+          const moodLines = moods.slice(0, 30).map(m =>
+            `${new Date(m.ts).toISOString().slice(0, 10)} · mood ${m.value}/5 (${moodLabel(m.value)})`,
+          ).join('\n');
+          sections.push('MOOD ENTRIES (newest first):\n' + (moodLines || '(no entries)'));
+        }
+        if (sources.gratitude) {
+          const gratLines = grats.slice(0, 30).map(g =>
+            `${new Date(g.ts).toISOString().slice(0, 10)}: ${g.text}`,
+          ).join('\n');
+          sections.push('GRATITUDE ENTRIES (newest first):\n' + (gratLines || '(no entries)'));
+        }
+        if (sources.rant) {
+          const rantLines = rants.slice(0, 15).map(r =>
+            `${new Date(r.ts).toISOString().slice(0, 10)}: ${r.text.slice(0, 600)}`,
+          ).join('\n---\n');
+          sections.push('RANTS (newest first):\n' + (rantLines || '(no entries)'));
+        }
+        if (sources.manifestation) {
+          const manifestLines = manifests.slice(0, 30).map(m =>
+            `${m.manifested ? '[✓ manifested]' : '[calling in]'} ${m.text}`,
+          ).join('\n');
+          sections.push('MANIFESTATIONS:\n' + (manifestLines || '(no entries)'));
+        }
         prompt =
-          'You are a thoughtful, grounded reflection companion. The user has shared their recent ' +
-          'mood log and gratitude journal. Identify 3-5 themes you notice, gently. Be specific. ' +
-          'Avoid clichés, woo, or diagnoses. Keep it under 220 words.\n\n' +
-          'MOOD ENTRIES (newest first):\n' + (moodLines || '(no entries)') +
-          '\n\nGRATITUDE ENTRIES (newest first):\n' + (gratLines || '(no entries)');
+          'You are a thoughtful, grounded reflection companion writing entries for a dream-journal-style ' +
+          'reflection page. Identify 3-5 honest themes you notice across the data the user has chosen to share. ' +
+          'Be specific and gentle. If both manifestations and rants/mood are present, notice tension between ' +
+          'what they say they want and what they actually feel. Avoid clichés, woo, or diagnoses. ' +
+          'Write in flowing prose suitable for reading by candlelight. Under 260 words.\n\n' +
+          sections.join('\n\n');
       } else {
         const tarotRaw = await AsyncStorage.getItem('@simply_ambient_tarot_v1');
-        const card = tarotRaw ? JSON.parse(tarotRaw)?.card : null;
+        type TarotCardLite = { name?: string; meaning_up?: string; desc?: string };
+        const tarotParsed = safeParse<{ card?: TarotCardLite }>(tarotRaw, {});
+        const card: TarotCardLite | null =
+          (tarotParsed && typeof tarotParsed === 'object' && tarotParsed.card && typeof tarotParsed.card === 'object')
+            ? tarotParsed.card
+            : null;
         if (!card) {
           Alert.alert('No card drawn', 'Open the Horoscopes tab and draw a card first.');
           setLoading(false);
@@ -1571,7 +2213,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
         }
         prompt =
           'You are a thoughtful tarot interpreter. The user drew the following card. ' +
-          'Give a calm, grounded interpretation in plain language — what it might invite ' +
+          'Give a calm, grounded interpretation in plain language. What it might invite ' +
           'them to notice today. Avoid clichés or fortune-telling claims. Under 180 words.\n\n' +
           `Card: ${card.name}\n` +
           `Upright meaning: ${card.meaning_up ?? ''}\n` +
@@ -1599,13 +2241,21 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
     }
   }
 
+  const today = new Date().toLocaleDateString(undefined, {
+    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+  });
+
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="AI Insights" accent="#5BD0FF" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>GEMINI API KEY</Text>
         <Text style={styles.sectionSub}>
-          Free at aistudio.google.com. Saved on this device only.
+          Free at{' '}
+          <Text style={styles.linkText} onPress={() => setConfirmOpenLink(true)}>
+            aistudio.google.com
+          </Text>
+          . Saved on this device only.
         </Text>
         <TextInput
           style={styles.fieldInput}
@@ -1618,14 +2268,58 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
           secureTextEntry
         />
 
-        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>WHAT TO ANALYSE</Text>
+        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>SHARE WITH AI</Text>
+        <Text style={styles.sectionSub}>
+          Pick which journal data is sent to Google Gemini for the journal themes analysis.
+          Off by default for sensitive sources like rants.
+        </Text>
+        <View style={styles.aiSourceRow}>
+          {([
+            { id: 'mood',          label: 'Mood',          color: '#5BD0FF' },
+            { id: 'gratitude',     label: 'Gratitude',     color: '#FFB05B' },
+            { id: 'manifestation', label: 'Manifestation', color: '#A45BFF' },
+            { id: 'rant',          label: 'Rant',          color: '#FF5B9C' },
+          ] as Array<{ id: AISourceKey; label: string; color: string }>).map(s => {
+            const on = sources[s.id];
+            return (
+              <TouchableOpacity
+                key={s.id}
+                activeOpacity={0.85}
+                onPress={() => toggleSource(s.id)}
+                style={[
+                  styles.aiSourceChip,
+                  on
+                    ? { borderColor: s.color, backgroundColor: s.color + '22' }
+                    : { borderColor: 'rgba(255,255,255,0.18)' },
+                ]}
+              >
+                <Text style={[
+                  styles.aiSourceText,
+                  on ? { color: s.color } : { color: '#ffffff77' },
+                ]}>
+                  {on ? '✓ ' : ''}{s.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Text style={[styles.sectionLabel, { marginTop: 22 }]}>WHAT TO ANALYSE</Text>
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={() => runAnalysis('journal')}
-          style={[styles.aiBtn, { backgroundColor: '#5BD0FF' }]}
-          disabled={loading}
+          style={[
+            styles.aiBtn,
+            { backgroundColor: '#5BD0FF' },
+            (loading || enabledSourceCount === 0) && { opacity: 0.4 },
+          ]}
+          disabled={loading || enabledSourceCount === 0}
         >
-          <Text style={styles.aiBtnText}>JOURNAL THEMES (mood + gratitude)</Text>
+          <Text style={styles.aiBtnText}>
+            {enabledSourceCount === 0
+              ? 'JOURNAL THEMES (no sources enabled)'
+              : `JOURNAL THEMES (${enabledSourceCount} ${enabledSourceCount === 1 ? 'source' : 'sources'})`}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           activeOpacity={0.85}
@@ -1636,21 +2330,60 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
           <Text style={styles.aiBtnText}>INTERPRET TODAY'S TAROT</Text>
         </TouchableOpacity>
 
-        {loading ? (
-          <View style={styles.aiOutput}>
-            <ActivityIndicator color="#5BD0FF" />
-          </View>
-        ) : output ? (
-          <View style={styles.aiOutput}>
-            <Text style={styles.aiOutputText}>{output}</Text>
+        {(loading || output) ? (
+          <View style={styles.dreamPage}>
+            <Text style={styles.dreamDate}>{today}</Text>
+            <View style={styles.dreamRule} />
+            {loading ? (
+              <ActivityIndicator color="#A45BFF" style={{ marginTop: 16 }} />
+            ) : (
+              <Text style={styles.dreamBody}>{output}</Text>
+            )}
+            <Text style={styles.dreamSig}>· reflection</Text>
           </View>
         ) : null}
 
         <Text style={styles.aiFootnote}>
-          Powered by Google Gemini. Your prompts and journal data leave the app only when you press
-          a button above. No analysis is shared without your initiation.
+          Powered by Google Gemini. Only the data sources you've enabled above are sent, and only
+          when you tap an analyse button. Nothing leaves the app otherwise.
         </Text>
       </ScrollView>
+
+      <Modal
+        visible={confirmOpenLink}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmOpenLink(false)}
+      >
+        <View style={styles.linkConfirmBackdrop}>
+          <View style={styles.linkConfirmCard}>
+            <Text style={styles.linkConfirmTitle}>Open in browser?</Text>
+            <Text style={styles.linkConfirmUrl}>{GEMINI_KEY_URL}</Text>
+            <Text style={styles.linkConfirmHint}>
+              You'll leave the app to get a free Gemini API key from Google.
+            </Text>
+            <View style={styles.linkConfirmActions}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setConfirmOpenLink(false)}
+                style={styles.linkConfirmCancelBtn}
+              >
+                <Text style={styles.linkConfirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => {
+                  setConfirmOpenLink(false);
+                  Linking.openURL(GEMINI_KEY_URL).catch(() => {});
+                }}
+                style={styles.linkConfirmOpenBtn}
+              >
+                <Text style={styles.linkConfirmOpenText}>Open</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1737,6 +2470,28 @@ const styles = StyleSheet.create({
   },
   emptyText: { color: '#ffffff66', fontSize: 13, fontStyle: 'italic', marginTop: 8 },
 
+  safetyBody: {
+    color: '#ffffffcc',
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  wipeBtn: {
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#FF5B5B',
+    backgroundColor: 'rgba(255,91,91,0.10)',
+    alignItems: 'center',
+  },
+  wipeBtnText: {
+    color: '#FF5B5B',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+
   // Affirmations
   bigAffirmCard: {
     backgroundColor: 'rgba(0,0,0,0.30)',
@@ -1821,6 +2576,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-start',
     backgroundColor: 'rgba(0,0,0,0.20)',
     borderRadius: 12, padding: 12, marginBottom: 6,
+    borderWidth: 1, borderColor: 'transparent',
   },
   gratItemBar: {
     width: 3, alignSelf: 'stretch',
@@ -1830,6 +2586,17 @@ const styles = StyleSheet.create({
   gratItemText: { color: '#ffffffdd', fontSize: 14, lineHeight: 20, flex: 1 },
   gratDelBtn: { paddingHorizontal: 6, paddingVertical: 2 },
   gratDelText: { color: '#ffffff44', fontSize: 14 },
+
+  rantDate: { color: '#FF5B9C', fontSize: 10, letterSpacing: 1.5, fontWeight: '700', marginBottom: 4 },
+
+  manifestCheck: { paddingRight: 12, paddingTop: 1 },
+  manifestCheckBox: {
+    width: 22, height: 22, borderRadius: 6,
+    borderWidth: 1.5, borderColor: '#A45BFF99',
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  manifestCheckMark: { color: '#fff', fontSize: 13, fontWeight: '800', lineHeight: 14 },
 
   // Grounding
   groundIntro: {
@@ -2021,6 +2788,18 @@ const styles = StyleSheet.create({
     paddingVertical: 14, borderRadius: 12, marginTop: 10, alignItems: 'center',
   },
   aiBtnText: { color: '#0B0B1F', fontSize: 13, fontWeight: '800', letterSpacing: 1.5 },
+
+  aiSourceRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4,
+  },
+  aiSourceChip: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 999, borderWidth: 1.5,
+    backgroundColor: 'rgba(0,0,0,0.30)',
+  },
+  aiSourceText: {
+    fontSize: 12, fontWeight: '700', letterSpacing: 0.6,
+  },
   aiOutput: {
     marginTop: 16, padding: 14,
     backgroundColor: 'rgba(0,0,0,0.30)',
@@ -2033,4 +2812,77 @@ const styles = StyleSheet.create({
     color: '#ffffff66', fontSize: 11, fontStyle: 'italic',
     marginTop: 18, lineHeight: 16, textAlign: 'center',
   },
+
+  linkText: {
+    color: '#5BD0FF',
+    textDecorationLine: 'underline',
+    fontStyle: 'italic',
+  },
+
+  // Dream-journal output card for AI Insights
+  dreamPage: {
+    marginTop: 18, padding: 22,
+    backgroundColor: 'rgba(245, 230, 200, 0.06)',
+    borderRadius: 4,
+    borderWidth: 1, borderColor: 'rgba(217,179,92,0.28)',
+    shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+  },
+  dreamDate: {
+    color: '#d9b35c',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 16,
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  dreamRule: {
+    height: 1,
+    backgroundColor: 'rgba(217,179,92,0.30)',
+    marginVertical: 12,
+  },
+  dreamBody: {
+    color: '#f3ead4',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 17,
+    lineHeight: 26,
+    letterSpacing: 0.2,
+  },
+  dreamSig: {
+    color: '#d9b35c99',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginTop: 14,
+    textAlign: 'right',
+  },
+
+  // Link-confirm modal (used for opening Google API key page)
+  linkConfirmBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center', justifyContent: 'center', padding: 24,
+  },
+  linkConfirmCard: {
+    width: '100%', maxWidth: 360,
+    backgroundColor: '#0F1024',
+    borderRadius: 20, padding: 22,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+  },
+  linkConfirmTitle: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: 0.5 },
+  linkConfirmUrl: {
+    color: '#5BD0FF', fontSize: 12, marginTop: 10,
+    backgroundColor: 'rgba(91,208,255,0.10)',
+    padding: 8, borderRadius: 8,
+  },
+  linkConfirmHint: { color: '#ffffff88', fontSize: 12, marginTop: 12, lineHeight: 17 },
+  linkConfirmActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
+  linkConfirmCancelBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 12,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+  },
+  linkConfirmCancelText: { color: '#ffffffaa', fontSize: 13, fontWeight: '600', letterSpacing: 1 },
+  linkConfirmOpenBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+    backgroundColor: '#5BD0FF',
+  },
+  linkConfirmOpenText: { color: '#0B0B1F', fontSize: 13, fontWeight: '800', letterSpacing: 2 },
 });
