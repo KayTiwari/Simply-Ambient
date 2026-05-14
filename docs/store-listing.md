@@ -87,9 +87,9 @@ binaural,meditation,breathwork,chakra,solfeggio,manifestation,zen,sleep,focus,ca
 
 ## Required URLs
 
-- **Privacy policy**: https://kaytiwari.github.io/Simply-Ambient/privacy-policy.html (after Pages is enabled)
+- **Privacy policy**: https://likechess.github.io/Simply-Ambient/privacy-policy.html (after the GitHub account is renamed to `likechess` and Pages is enabled)
   - Source: `docs/privacy-policy.md`
-- **Support email**: tiwkay@gmail.com (the same address bug reports go to)
+- **Support email**: TODO — set a name-free support address (see note below)
 
 ## Screenshots
 
