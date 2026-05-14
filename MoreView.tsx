@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
+import * as Sentry from '@sentry/react-native';
 import {
   CaretLeft,
   CaretRight,
@@ -1470,6 +1471,20 @@ function SafetyPage({ onBack }: { onBack: () => void }) {
         >
           <Text style={styles.wipeBtnText}>WIPE ALL DATA</Text>
         </TouchableOpacity>
+
+        {/* TEMPORARY: Sentry verification button. Remove before the final
+            production submission once crash reporting is confirmed working. */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => {
+            Sentry.captureException(new Error('Sentry test event from Safety page'));
+            Alert.alert('Test event sent', 'Check the Sentry issues dashboard for "Sentry test event".');
+          }}
+          style={styles.sentryTestBtn}
+          accessibilityLabel="Send a test event to Sentry"
+        >
+          <Text style={styles.sentryTestBtnText}>SEND SENTRY TEST EVENT</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       <Modal
@@ -2490,6 +2505,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 2,
+  },
+  // TEMPORARY: styling for the Sentry verification button (remove with it).
+  sentryTestBtn: {
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+  },
+  sentryTestBtnText: {
+    color: '#ffffff88',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
   },
 
   // Affirmations
