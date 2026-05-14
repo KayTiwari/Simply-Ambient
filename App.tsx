@@ -45,27 +45,19 @@ import {
 import { Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import * as Sentry from '@sentry/react-native';
 
-// Sentry init. DSN injected at build time via the SENTRY_DSN env var so the
-// repo doesn't carry a secret. If the DSN is missing (e.g. local dev), Sentry
-// becomes a no-op rather than blocking startup.
-//
-// To enable on a real build:
-//   1. Create a free project at sentry.io and copy the DSN.
-//   2. Set SENTRY_DSN as an EAS secret:  eas secret:create --name SENTRY_DSN --value <dsn>
-//   3. Run eas build. Errors will start flowing in.
-const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN ?? '';
-if (SENTRY_DSN) {
-  Sentry.init({
-    dsn: SENTRY_DSN,
-    // Don't ship sensitive data. Journal entries / rants must never be auto-attached.
-    beforeSend(event) {
-      if (event.contexts) delete event.contexts.state;
-      return event;
-    },
-    tracesSampleRate: 0.1,
-    enableNativeCrashHandling: true,
-  });
-}
+// Sentry crash reporting. The DSN is a write-only public identifier — safe to
+// commit per Sentry's docs, it is not a secret. (The SENTRY_AUTH_TOKEN used for
+// source-map upload IS secret and lives only in EAS env vars / .env.local.)
+Sentry.init({
+  dsn: 'https://b666bcf55a78f568c3ed434cb8e55cef@o4511389012852736.ingest.us.sentry.io/4511389016195072',
+  // Don't ship sensitive data. Journal entries / rants must never be auto-attached.
+  beforeSend(event) {
+    if (event.contexts) delete event.contexts.state;
+    return event;
+  },
+  tracesSampleRate: 0.1,
+  enableNativeCrashHandling: true,
+});
 
 import BreathworkView from './BreathworkView';
 import ChakrasView from './ChakrasView';
