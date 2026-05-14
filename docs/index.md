@@ -15,4 +15,4 @@ A binaural frequency generator and grounded spiritual companion for iOS and Andr
 
 ## Repository
 
-[github.com/likechess/Simply-Ambient](https://github.com/likechess/Simply-Ambient)
+[github.com/KayTiwari/Simply-Ambient](https://github.com/KayTiwari/Simply-Ambient)

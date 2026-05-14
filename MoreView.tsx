@@ -1409,7 +1409,7 @@ export function SafetyContent() {
   );
 }
 
-const PRIVACY_POLICY_URL = 'https://likechess.github.io/Simply-Ambient/privacy-policy.html';
+const PRIVACY_POLICY_URL = 'https://kaytiwari.github.io/Simply-Ambient/privacy-policy.html';
 
 // Storage keys that user-entered data lives under. The "wipe all data"
 // button below removes every key here. Keep this in sync if new keys are added.
