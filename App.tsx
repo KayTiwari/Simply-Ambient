@@ -1387,7 +1387,7 @@ function AppContent() {
   );
 }
 
-export default function App() {
+export default Sentry.wrap(function App() {
   const [fontsLoaded] = useFonts({
     CormorantGaramond_400Regular,
     CormorantGaramond_500Medium,
@@ -1415,7 +1415,7 @@ export default function App() {
       </Animated.View>
     </SafeAreaProvider>
   );
-}
+});
 
 // ===========================================================================
 //   TabBar
