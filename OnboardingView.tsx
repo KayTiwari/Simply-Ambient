@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Picker } from '@react-native-picker/picker';
 
 const STORAGE_PROFILE = '@simply_ambient_profile_v1';
 
@@ -51,17 +52,41 @@ const RECS: Record<Intent, {
 
 type Step = 0 | 1 | 2 | 3 | 4;
 
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const CURRENT_YEAR = new Date().getFullYear();
+// Years newest-first so common adult birth years are near the top of the list.
+const BIRTH_YEARS = Array.from({ length: CURRENT_YEAR - 1920 + 1 }, (_, i) => CURRENT_YEAR - i);
+
+function daysInMonth(monthIndex: number, year: number): number {
+  // monthIndex is 0-based. Day 0 of next month = last day of this month.
+  if (monthIndex < 0) return 31;
+  return new Date(year || 2000, monthIndex + 1, 0).getDate();
+}
+
 export default function OnboardingView({ onDone }: { onDone: () => void }) {
   const [step, setStep] = useState<Step>(0);
   const [intent, setIntent] = useState<Intent | null>(null);
   const [name, setName] = useState('');
-  const [birthDate, setBirthDate] = useState(''); // YYYY-MM-DD
+  // Birth date as three independent selections; -1 / 0 mean "not picked".
+  const [birthMonth, setBirthMonth] = useState<number>(-1); // 0-based, -1 = unset
+  const [birthDay, setBirthDay] = useState<number>(0);      // 1-31, 0 = unset
+  const [birthYear, setBirthYear] = useState<number>(0);    // full year, 0 = unset
   const fade = useRef(new Animated.Value(1)).current;
+
+  const birthDayMax = daysInMonth(birthMonth, birthYear);
 
   function persistProfileAndDone() {
     const profile: Record<string, string> = {};
     if (name.trim()) profile.name = name.trim();
-    if (birthDate.trim()) profile.birthDate = birthDate.trim();
+    // Only store a birth date when all three parts are chosen.
+    if (birthMonth >= 0 && birthDay > 0 && birthYear > 0) {
+      const mm = String(birthMonth + 1).padStart(2, '0');
+      const dd = String(Math.min(birthDay, birthDayMax)).padStart(2, '0');
+      profile.birthDate = `${birthYear}-${mm}-${dd}`;
+    }
     if (Object.keys(profile).length > 0) {
       AsyncStorage.setItem(STORAGE_PROFILE, JSON.stringify(profile)).catch(() => {});
     }
@@ -96,7 +121,8 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
               <Text style={styles.intro}>
                 Binaural frequencies, breath techniques, chakras, horoscopes,
                 and a small set of grounded daily tools.{'\n\n'}
-                Use stereo headphones for the binaural effect to land.
+                You'll need stereo headphones or earbuds to experience binaural
+                frequencies. The effect only works when each ear hears its own tone.
               </Text>
             </View>
             <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={() => transition(1)}>
@@ -226,16 +252,48 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
               />
 
               <Text style={[styles.fieldLabel, { marginTop: 18 }]}>BIRTH DATE</Text>
-              <Text style={styles.fieldHint}>YYYY-MM-DD · used to suggest your zodiac sign</Text>
-              <TextInput
-                style={styles.fieldInput}
-                placeholder="1995-06-21"
-                placeholderTextColor="#ffffff55"
-                value={birthDate}
-                onChangeText={t => setBirthDate(t.replace(/[^0-9-]/g, '').slice(0, 10))}
-                keyboardType="numbers-and-punctuation"
-                autoCorrect={false}
-              />
+              <Text style={styles.fieldHint}>Used to suggest your zodiac sign</Text>
+              <View style={styles.dateRow}>
+                <View style={[styles.datePickerWrap, { flex: 1.4 }]}>
+                  <Picker
+                    selectedValue={birthMonth}
+                    onValueChange={(v) => setBirthMonth(Number(v))}
+                    dropdownIconColor="#ffffff99"
+                    style={styles.datePicker}
+                  >
+                    <Picker.Item label="Month" value={-1} color="#999" />
+                    {MONTHS.map((m, i) => (
+                      <Picker.Item key={m} label={m} value={i} />
+                    ))}
+                  </Picker>
+                </View>
+                <View style={[styles.datePickerWrap, { flex: 0.8 }]}>
+                  <Picker
+                    selectedValue={birthDay}
+                    onValueChange={(v) => setBirthDay(Number(v))}
+                    dropdownIconColor="#ffffff99"
+                    style={styles.datePicker}
+                  >
+                    <Picker.Item label="Day" value={0} color="#999" />
+                    {Array.from({ length: birthDayMax }, (_, i) => i + 1).map((d) => (
+                      <Picker.Item key={d} label={String(d)} value={d} />
+                    ))}
+                  </Picker>
+                </View>
+                <View style={[styles.datePickerWrap, { flex: 1 }]}>
+                  <Picker
+                    selectedValue={birthYear}
+                    onValueChange={(v) => setBirthYear(Number(v))}
+                    dropdownIconColor="#ffffff99"
+                    style={styles.datePicker}
+                  >
+                    <Picker.Item label="Year" value={0} color="#999" />
+                    {BIRTH_YEARS.map((y) => (
+                      <Picker.Item key={y} label={String(y)} value={y} />
+                    ))}
+                  </Picker>
+                </View>
+              </View>
             </View>
 
             <Text style={[styles.smallSub, { marginTop: 18 }]}>
@@ -446,5 +504,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
+  },
+  dateRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  datePickerWrap: {
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+  },
+  datePicker: {
+    color: '#fff',
   },
 });
