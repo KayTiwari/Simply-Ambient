@@ -1301,6 +1301,7 @@ const ROADMAP: Array<{ phase: string; items: Array<{ title: string; blurb: strin
     phase: 'CONSIDERING',
     items: [
       { title: 'Light theme',           blurb: 'Alternate palette for daytime use.' },
+      { title: 'Sleep mode',            blurb: 'Dimmed screen, gentle fade-out, optional white/brown-noise overlay for falling asleep.' },
       { title: 'Sacred geometry visualizer', blurb: 'Frequency-reactive cymatic patterns behind the play screen.' },
       { title: 'Shareable preset cards',   blurb: 'Render a beautiful image of a saved preset to share.' },
       { title: 'Yoga Nidra',              blurb: 'Guided body-scan audio or text.' },
