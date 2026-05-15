@@ -1933,8 +1933,15 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
           (transition between steps automatically) is in development. For now, follow the
           steps manually using the Frequencies tab.
         </Text>
-        {SAMPLE_ROUTINES.map(r => (
-          <View key={r.id} style={[styles.routineCard, { borderColor: r.color + '55' }]}>
+        {SAMPLE_ROUTINES.map((r, i) => (
+          <View
+            key={r.id}
+            style={[
+              styles.routineCard,
+              { borderColor: r.color + '55' },
+              i === 0 && { marginTop: 16 },
+            ]}
+          >
             <Text style={[styles.routineName, { color: r.color }]}>{r.name}</Text>
             <Text style={styles.routineDesc}>{r.description}</Text>
             {r.steps.map((s, i) => (
