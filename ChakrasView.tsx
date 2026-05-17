@@ -88,7 +88,6 @@ export default function ChakrasView({
                 styles.card,
                 {
                   borderColor: active ? c.color : c.color + '55',
-                  borderWidth: active ? 2 : 1,
                 },
               ]}
             >
