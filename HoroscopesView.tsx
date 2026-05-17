@@ -19,6 +19,21 @@ function horoscopeCacheKey(signId: string, period: string) {
 const TAROT_CACHE_KEY = '@simply_ambient_tarot_v1';
 const TAROT_TTL_MS = 24 * 60 * 60 * 1000;
 
+// freehoroscopeapi.com is on IST (UTC+5:30), so when it's late evening in
+// US timezones its "TODAY" is already the user's "tomorrow", and the
+// response text bakes in that date ("On May 17th, you might feel..."). We
+// strip the leading date phrase so the body is timezone-agnostic and stays
+// consistent with the local TODAY · <date> label in the header.
+function stripLeadingDate(text: string): string {
+  if (!text) return text;
+  const cleaned = text.replace(
+    /^On\s+(?:(?:Mon|Tues?|Wednes?|Thurs?|Fri|Satur?|Sun)(?:day)?,?\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+/i,
+    '',
+  );
+  if (cleaned === text) return text;
+  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
 type Period = 'daily' | 'monthly' | 'yearly';
 
 type Props = {
@@ -97,7 +112,7 @@ export default function HoroscopesView({
       if (cancelled || !raw) return;
       try {
         const cached = JSON.parse(raw) as { ts: number; text: string };
-        if (cached?.text) setHoroscope(cached.text);
+        if (cached?.text) setHoroscope(stripLeadingDate(cached.text));
       } catch {}
     }).catch(() => {});
 
@@ -129,8 +144,9 @@ export default function HoroscopesView({
           null;
         if (cancelled) return;
         if (text) {
-          setHoroscope(text);
-          AsyncStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), text })).catch(() => {});
+          const cleaned = stripLeadingDate(text);
+          setHoroscope(cleaned);
+          AsyncStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), text: cleaned })).catch(() => {});
         } else if (!raw) {
           setHoroscope(null);
         }

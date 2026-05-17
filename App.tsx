@@ -802,6 +802,11 @@ function AppContent() {
   const sleepTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sleepEndsAt, setSleepEndsAt] = useState<number | null>(null);
 
+  // Per-session audio-safety acknowledgement. Resets on cold start so users
+  // get the volume reminder once each new session before the first Play tap.
+  const [audioSafetyAck, setAudioSafetyAck] = useState(false);
+  const [showAudioSafetyModal, setShowAudioSafetyModal] = useState(false);
+
   const mySign = useMemo(
     () => (mySignId && ZODIAC.find(z => z.id === mySignId)) || todaysSign(),
     [mySignId],
@@ -1002,8 +1007,21 @@ function AppContent() {
   }
 
   function togglePlay() {
-    if (isTonePlaying || isToneLoading) stopTones();
-    else loadAndPlay(leftHz, rightHz);
+    if (isTonePlaying || isToneLoading) { stopTones(); return; }
+    // Show the audio-safety modal once per app session before the first
+    // Play. Confirmation actually starts playback. State resets on cold
+    // start (useState in App), so users get the reminder each new session.
+    if (!audioSafetyAck) {
+      setShowAudioSafetyModal(true);
+      return;
+    }
+    loadAndPlay(leftHz, rightHz);
+  }
+
+  function acknowledgeAudioSafetyAndPlay() {
+    setAudioSafetyAck(true);
+    setShowAudioSafetyModal(false);
+    loadAndPlay(leftHz, rightHz);
   }
 
   // Fire-rate-limited live update used while sliders are being dragged.
@@ -1374,6 +1392,50 @@ function AppContent() {
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* One-time-per-session audio safety reminder shown before the very
+          first Play tap. State resets on cold start so the user sees this
+          again next session. */}
+      <Modal
+        visible={showAudioSafetyModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAudioSafetyModal(false)}
+      >
+        <View style={styles.audioSafetyBackdrop}>
+          <View style={styles.audioSafetyCard}>
+            <Text style={styles.audioSafetyTitle}>Volume check</Text>
+            <Text style={styles.audioSafetyBody}>
+              Set your device volume to a low, comfortable level before tapping
+              Play. Binaural tones should feel gentle in stereo headphones or
+              earbuds. If anything feels piercing, sharp, or uncomfortable, stop
+              immediately and lower the volume.
+            </Text>
+            <Text style={styles.audioSafetyBody}>
+              Sustained loud headphone listening can damage hearing at any
+              frequency. You control the volume; use it carefully.
+            </Text>
+            <View style={styles.audioSafetyActions}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setShowAudioSafetyModal(false)}
+                style={styles.audioSafetyCancelBtn}
+                accessibilityLabel="Cancel"
+              >
+                <Text style={styles.audioSafetyCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={acknowledgeAudioSafetyAndPlay}
+                style={[styles.audioSafetySetBtn, { backgroundColor: beatColor }]}
+                accessibilityLabel="Acknowledge audio safety and start playback"
+              >
+                <Text style={styles.audioSafetySetText}>I UNDERSTAND, PLAY</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -2036,6 +2098,29 @@ const styles = StyleSheet.create({
   customSleepCancelText: { color: '#ffffffaa', fontSize: 13, fontWeight: '600', letterSpacing: 1 },
   customSleepSetBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
   customSleepSetText: { color: '#0B0B1F', fontSize: 13, fontWeight: '800', letterSpacing: 2 },
+
+  // Audio safety modal (once-per-session before first Play)
+  audioSafetyBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center', justifyContent: 'center', padding: 24,
+  },
+  audioSafetyCard: {
+    width: '100%', maxWidth: 380,
+    backgroundColor: '#0F1024',
+    borderRadius: 20, padding: 22,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+  },
+  audioSafetyTitle: { color: '#fff', fontSize: 18, fontWeight: '700', letterSpacing: 1, marginBottom: 14 },
+  audioSafetyBody: { color: '#ffffffcc', fontSize: 13, lineHeight: 20, marginBottom: 10 },
+  audioSafetyActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  audioSafetyCancelBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 12,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+  },
+  audioSafetyCancelText: { color: '#ffffffaa', fontSize: 13, fontWeight: '600', letterSpacing: 1 },
+  audioSafetySetBtn: { flex: 1.4, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
+  audioSafetySetText: { color: '#0B0B1F', fontSize: 12, fontWeight: '800', letterSpacing: 1.5 },
 
   bgCard: {
     marginTop: 22,

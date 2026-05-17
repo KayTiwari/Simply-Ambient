@@ -1411,6 +1411,7 @@ export function SafetyContent() {
 }
 
 const PRIVACY_POLICY_URL = 'https://kaytiwari.github.io/Simply-Ambient/privacy-policy.html';
+const TERMS_OF_SERVICE_URL = 'https://kaytiwari.github.io/Simply-Ambient/terms-of-service.html';
 
 // Storage keys that user-entered data lives under. The "wipe all data"
 // button below removes every key here. Keep this in sync if new keys are added.
@@ -1431,7 +1432,9 @@ const ALL_USER_DATA_KEYS = [
 ];
 
 function SafetyPage({ onBack }: { onBack: () => void }) {
-  const [confirmOpenLink, setConfirmOpenLink] = useState(false);
+  // Holds the URL to confirm-open, or null. Used by both the Privacy Policy
+  // and Terms of Service links so we have one confirm modal, two triggers.
+  const [pendingOpenUrl, setPendingOpenUrl] = useState<string | null>(null);
   const [confirmWipe, setConfirmWipe] = useState(false);
 
   function wipeAllData() {
@@ -1452,10 +1455,20 @@ function SafetyPage({ onBack }: { onBack: () => void }) {
         <Text style={[styles.sectionLabel, { marginTop: 18 }]}>PRIVACY POLICY</Text>
         <Text style={styles.safetyBody}>
           The full privacy policy is published at{' '}
-          <Text style={styles.linkText} onPress={() => setConfirmOpenLink(true)}>
+          <Text style={styles.linkText} onPress={() => setPendingOpenUrl(PRIVACY_POLICY_URL)}>
             kaytiwari.github.io/Simply-Ambient
           </Text>
           . It explains exactly what data the app handles and what it does not.
+        </Text>
+
+        <Text style={[styles.sectionLabel, { marginTop: 18 }]}>TERMS OF SERVICE</Text>
+        <Text style={styles.safetyBody}>
+          The full Terms of Service are published{' '}
+          <Text style={styles.linkText} onPress={() => setPendingOpenUrl(TERMS_OF_SERVICE_URL)}>
+            here
+          </Text>
+          . By using Simply Ambient you accept them. They include hearing-safety,
+          medical-disclaimer, liability, and dispute-resolution terms.
         </Text>
 
         <Text style={[styles.sectionLabel, { marginTop: 22 }]}>RESET</Text>
@@ -1474,20 +1487,20 @@ function SafetyPage({ onBack }: { onBack: () => void }) {
       </ScrollView>
 
       <Modal
-        visible={confirmOpenLink}
+        visible={pendingOpenUrl !== null}
         transparent
         animationType="fade"
-        onRequestClose={() => setConfirmOpenLink(false)}
+        onRequestClose={() => setPendingOpenUrl(null)}
       >
         <View style={styles.linkConfirmBackdrop}>
           <View style={styles.linkConfirmCard}>
             <Text style={styles.linkConfirmTitle}>Open in browser?</Text>
-            <Text style={styles.linkConfirmUrl}>{PRIVACY_POLICY_URL}</Text>
-            <Text style={styles.linkConfirmHint}>You'll leave the app to view the privacy policy.</Text>
+            <Text style={styles.linkConfirmUrl}>{pendingOpenUrl ?? ''}</Text>
+            <Text style={styles.linkConfirmHint}>You'll leave the app to view this document.</Text>
             <View style={styles.linkConfirmActions}>
               <TouchableOpacity
                 activeOpacity={0.85}
-                onPress={() => setConfirmOpenLink(false)}
+                onPress={() => setPendingOpenUrl(null)}
                 style={styles.linkConfirmCancelBtn}
                 accessibilityLabel="Cancel"
               >
@@ -1496,11 +1509,12 @@ function SafetyPage({ onBack }: { onBack: () => void }) {
               <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={() => {
-                  setConfirmOpenLink(false);
-                  Linking.openURL(PRIVACY_POLICY_URL).catch(() => {});
+                  const url = pendingOpenUrl;
+                  setPendingOpenUrl(null);
+                  if (url) Linking.openURL(url).catch(() => {});
                 }}
                 style={styles.linkConfirmOpenBtn}
-                accessibilityLabel="Open privacy policy in browser"
+                accessibilityLabel="Open link in browser"
               >
                 <Text style={styles.linkConfirmOpenText}>Open</Text>
               </TouchableOpacity>

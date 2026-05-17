@@ -12,6 +12,7 @@ A binaural frequency generator and grounded spiritual companion for iOS and Andr
 ## Documents
 
 - [Privacy Policy](privacy-policy.html)
+- [Terms of Service](terms-of-service.html)
 
 ## Repository
 
