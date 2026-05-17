@@ -3,10 +3,10 @@
 > **Your spiritual center.** A binaural frequency generator, breath-work companion, and ambient spiritual reference for Android and iOS.
 
 <p align="center">
-  <img src="screenshots/1.jpg" width="22%" alt="Frequencies tab" />
-  <img src="screenshots/2.jpg" width="22%" alt="Tuning preset" />
-  <img src="screenshots/3.jpg" width="22%" alt="Breath techniques" />
-  <img src="screenshots/4.jpg" width="22%" alt="Breath session" />
+  <img src="assets/1.jpg" width="22%" alt="Frequencies tab" />
+  <img src="assets/2.jpg" width="22%" alt="Presets and stillness timer" />
+  <img src="assets/3.jpg" width="22%" alt="Breath session, Box Breathing" />
+  <img src="assets/4.jpg" width="22%" alt="Chakras, Devanagari bijas" />
 </p>
 
 Simply Ambient pairs custom binaural beats with guided breath techniques and grounded spiritual content. Pick a brainwave band, tune each ear independently (or type the exact Hz), layer in your own background music, save your favorite mixes, and step through breath sessions with phase-aware animation. Cross-reference with the chakras and your daily horoscope.
