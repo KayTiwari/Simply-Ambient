@@ -243,8 +243,7 @@ Then either:
 ├── OnboardingView.tsx       # First-launch 3-step welcome → intent → recommendations
 ├── eas.json                 # EAS build profiles (development / preview / production)
 ├── app.json                 # Expo config (icon, splash, plugins)
-├── assets/                  # Icons + splash (minimal green leaf on white)
-├── screenshots/             # README screenshots
+├── assets/                  # Icons, splash, store graphics, README screenshots
 ├── index.ts                 # Expo entry point
 ├── package.json
 └── tsconfig.json
