@@ -316,3 +316,8 @@ Considering next (open for input):
 ## License
 
 No license set yet — code provided as-is.
+
+## Contributors
+
+- **Abhi K. Tiwari** (creator)
+- **Claude (Anthropic)**, AI pair programmer
