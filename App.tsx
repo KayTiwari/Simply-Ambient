@@ -31,6 +31,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import { Waveform, type IconProps } from 'phosphor-react-native';
 
 // expo-notifications was removed from Expo Go in SDK 53. We can still call its
 // APIs in a development / standalone build, but in Expo Go we soft no-op so
@@ -1043,6 +1044,7 @@ const SLEEP_TIMER_OPTIONS = [0, 5, 10, 15, 30, 60] as const; // minutes
 function AppContent() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('frequencies');
+  const [menuOpen, setMenuOpen] = useState(false);
   const [soundscapesInNav, setSoundscapesInNav] = useState(false);
   const tabFade = useRef(new Animated.Value(1)).current;
   const lastTab = useRef<Tab>(tab);
@@ -2152,7 +2154,7 @@ function TabBar({
         <TabButton label="Chakras"     glyph="✦" active={tab === 'chakras'}     accent={accent} onPress={() => onChange('chakras')} />
         <TabButton label="Horoscopes"  glyph="☽" active={tab === 'horoscopes'}  accent={accent} onPress={() => onChange('horoscopes')} />
         {soundscapesInNav ? (
-          <TabButton label="Sound" glyph="≋" active={tab === 'soundscapes'} accent={accent} onPress={() => onChange('soundscapes')} />
+          <TabButton label="Sound" Icon={Waveform} active={tab === 'soundscapes'} accent={accent} onPress={() => onChange('soundscapes')} />
         ) : null}
         <TabButton label="More"        glyph="⋯" active={tab === 'more'}        accent={accent} onPress={() => onChange('more')} />
       </View>
@@ -2161,11 +2163,25 @@ function TabBar({
 }
 
 function TabButton({
-  label, glyph, active, accent, onPress,
-}: { label: string; glyph: string; active: boolean; accent: string; onPress: () => void }) {
+  label, glyph, Icon, active, accent, onPress,
+}: {
+  label: string;
+  glyph?: string;
+  Icon?: React.ComponentType<IconProps>;
+  active: boolean;
+  accent: string;
+  onPress: () => void;
+}) {
+  const color = active ? accent : '#ffffff66';
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={styles.tabBtn}>
-      <Text style={[styles.tabGlyph, { color: active ? accent : '#ffffff66' }]}>{glyph}</Text>
+      {Icon ? (
+        <View style={styles.tabIconWrap}>
+          <Icon size={22} weight="duotone" color={color} />
+        </View>
+      ) : (
+        <Text style={[styles.tabGlyph, { color }]}>{glyph}</Text>
+      )}
       <Text style={[styles.tabLabel, { color: active ? accent : '#ffffff77' }]}>{label}</Text>
     </TouchableOpacity>
   );
@@ -3001,6 +3017,13 @@ const styles = StyleSheet.create({
   tabBtn: {
     flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 6,
   },
-  tabGlyph: { fontSize: 22, marginBottom: 2 },
+  tabGlyph: {
+    fontSize: 22,
+    marginBottom: 2,
+    minHeight: 24,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  tabIconWrap: { minHeight: 24, marginBottom: 2, alignItems: 'center', justifyContent: 'center' },
   tabLabel: { fontSize: 11, letterSpacing: 2, fontWeight: '600' },
 });
