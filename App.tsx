@@ -1052,7 +1052,7 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
 //   App
 // ===========================================================================
 
-type Tab = 'frequencies' | 'breath' | 'chakras' | 'horoscopes' | 'soundscapes' | 'more';
+type Tab = 'frequencies' | 'breath' | 'chakras' | 'horoscopes' | 'soundscapes';
 
 const STORAGE_KEY_NOTIF = '@simply_ambient_notif_pref_v1';
 const STORAGE_KEY_NAV_SOUNDSCAPES = '@simply_ambient_nav_soundscapes_v1';
@@ -1853,9 +1853,8 @@ function AppContent() {
           onChange={setTab}
           accent={beatColor}
           soundscapesInNav={soundscapesInNav}
-          menuOpen={menuOpen}
-          onOpenMenu={() => setMenuOpen(true)}
         />
+        <MoreLauncher accent={beatColor} onPress={() => setMenuOpen(true)} />
       </SafeAreaView>
 
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} accent={beatColor}>
@@ -2219,7 +2218,7 @@ function SlideMenu({
 
   if (!mounted) return null;
 
-  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [panelWidth, 0] });
+  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [-panelWidth, 0] });
 
   return (
     <View style={styles.menuLayer} pointerEvents={open ? 'auto' : 'none'}>
@@ -2266,15 +2265,11 @@ function TabBar({
   onChange,
   accent,
   soundscapesInNav,
-  menuOpen,
-  onOpenMenu,
 }: {
   tab: Tab;
   onChange: (t: Tab) => void;
   accent: string;
   soundscapesInNav: boolean;
-  menuOpen: boolean;
-  onOpenMenu: () => void;
 }) {
   return (
     <SafeAreaView edges={['bottom']} style={styles.tabBarSafe}>
@@ -2286,9 +2281,41 @@ function TabBar({
         {soundscapesInNav ? (
           <TabButton label="Sound" Icon={Waveform} active={tab === 'soundscapes'} accent={accent} onPress={() => onChange('soundscapes')} />
         ) : null}
-        <TabButton label="More" glyph="⋯" active={menuOpen} accent={accent} onPress={onOpenMenu} />
       </View>
     </SafeAreaView>
+  );
+}
+
+function MoreLauncher({
+  accent,
+  onPress,
+}: {
+  accent: string;
+  onPress: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <TouchableOpacity
+      activeOpacity={0.82}
+      onPress={onPress}
+      style={[
+        styles.moreLauncher,
+        {
+          bottom: insets.bottom + 86,
+          borderColor: accent + '55',
+        },
+      ]}
+      accessibilityLabel="Open more tools"
+      accessibilityRole="button"
+    >
+      <View style={[styles.moreLauncherRail, { backgroundColor: accent }]} />
+      <View style={styles.moreLauncherMarks}>
+        <View style={[styles.moreLauncherMark, { backgroundColor: accent }]} />
+        <View style={[styles.moreLauncherMark, { backgroundColor: accent, opacity: 0.68 }]} />
+        <View style={[styles.moreLauncherMark, { backgroundColor: accent, opacity: 0.42 }]} />
+      </View>
+      <Text style={styles.moreLauncherText}>more</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -3083,20 +3110,20 @@ const styles = StyleSheet.create({
   menuPanel: {
     position: 'absolute',
     top: 0,
-    right: 0,
+    left: 0,
     bottom: 0,
     overflow: 'hidden',
     backgroundColor: '#05050C',
-    borderLeftWidth: 1,
+    borderRightWidth: 1,
     shadowColor: '#000',
     shadowOpacity: 0.7,
     shadowRadius: 28,
-    shadowOffset: { width: -12, height: 0 },
+    shadowOffset: { width: 12, height: 0 },
     elevation: 28,
   },
   menuAccentRail: {
     position: 'absolute',
-    left: 0,
+    right: 0,
     top: 0,
     bottom: 0,
     width: 2,
@@ -3124,6 +3151,50 @@ const styles = StyleSheet.create({
   menuContent: {
     flex: 1,
     backgroundColor: 'rgba(5,5,12,0.78)',
+  },
+  moreLauncher: {
+    position: 'absolute',
+    left: 0,
+    width: 44,
+    minHeight: 78,
+    borderTopRightRadius: 18,
+    borderBottomRightRadius: 18,
+    borderWidth: 1,
+    borderLeftWidth: 0,
+    backgroundColor: 'rgba(5,5,12,0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 35,
+    shadowColor: '#000',
+    shadowOpacity: 0.32,
+    shadowRadius: 12,
+    shadowOffset: { width: 4, height: 6 },
+    elevation: 10,
+  },
+  moreLauncherRail: {
+    position: 'absolute',
+    left: 0,
+    top: 12,
+    bottom: 12,
+    width: 2,
+    opacity: 0.82,
+  },
+  moreLauncherMarks: {
+    gap: 4,
+    marginBottom: 7,
+    alignItems: 'center',
+  },
+  moreLauncherMark: {
+    width: 14,
+    height: 2,
+    borderRadius: 2,
+  },
+  moreLauncherText: {
+    color: '#ffffff88',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
   },
 
   miniPlayer: {
