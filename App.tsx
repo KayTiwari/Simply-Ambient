@@ -2150,10 +2150,9 @@ function MiniPlayer({
   );
 }
 
-// Slide-in overlay menu that replaces the old "More" tab. A translucent black
-// backdrop dims the app and the panel slides in from the right. Tapping the
-// backdrop or the close button dismisses it. Kept mounted only while open (or
-// animating out) so it never intercepts touches when closed.
+// Slide-in overlay menu that replaces the old "More" tab. The drawer keeps the
+// black direction, but gives it a real surface, edge light, and close target
+// so it feels designed instead of like an unstyled overlay.
 function SlideMenu({
   open,
   onClose,
@@ -2187,7 +2186,7 @@ function SlideMenu({
   const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [panelWidth, 0] });
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'auto' : 'none'}>
+    <View style={styles.menuLayer} pointerEvents={open ? 'auto' : 'none'}>
       <TouchableWithoutFeedback onPress={onClose} accessibilityLabel="Close menu">
         <Animated.View style={[StyleSheet.absoluteFill, styles.menuBackdrop, { opacity: progress }]} />
       </TouchableWithoutFeedback>
@@ -2196,20 +2195,31 @@ function SlideMenu({
           styles.menuPanel,
           {
             width: panelWidth,
-            paddingTop: insets.top + 14,
-            paddingBottom: insets.bottom + 10,
             transform: [{ translateX }],
             borderColor: accent + '33',
           },
         ]}
       >
-        <View style={styles.menuHeader}>
-          <Text style={styles.menuTitle}>More</Text>
-          <TouchableOpacity onPress={onClose} style={styles.menuClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Close menu">
-            <Text style={styles.menuCloseText}>✕</Text>
-          </TouchableOpacity>
+        <LinearGradient
+          colors={['rgba(255,255,255,0.10)', 'rgba(255,255,255,0.02)', 'rgba(255,255,255,0)']}
+          locations={[0, 0.38, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <View style={[styles.menuAccentRail, { backgroundColor: accent }]} pointerEvents="none" />
+        <TouchableOpacity
+          onPress={onClose}
+          style={[styles.menuClose, { top: insets.top + 14 }]}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel="Close menu"
+        >
+          <Text style={styles.menuCloseText}>✕</Text>
+        </TouchableOpacity>
+        <View style={[styles.menuContent, { paddingTop: insets.top + 8, paddingBottom: insets.bottom }]}>
+          {children}
         </View>
-        <View style={{ flex: 1 }}>{children}</View>
       </Animated.View>
     </View>
   );
@@ -2385,6 +2395,14 @@ function FrequenciesView(props: FreqViewProps) {
             </>
           )}
         </TouchableOpacity>
+
+        <SoundscapeBar
+          soundscapes={props.soundscapes}
+          activeId={props.activeSoundscapeId}
+          playing={props.isSoundscapePlaying}
+          accent={beatColor}
+          onToggle={props.onToggleSoundscape}
+        />
       </View>
 
       <FrequencyControl
@@ -3027,6 +3045,60 @@ const styles = StyleSheet.create({
   modalBtnGhostText: { color: '#fff', fontWeight: '600' },
   modalBtnPrimary: { backgroundColor: '#9affc8' },
   modalBtnPrimaryText: { color: '#0B0B1F', fontWeight: '700' },
+
+  menuLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 60,
+    elevation: 60,
+  },
+  menuBackdrop: {
+    backgroundColor: 'rgba(0,0,0,0.74)',
+  },
+  menuPanel: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden',
+    backgroundColor: '#05050C',
+    borderLeftWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.7,
+    shadowRadius: 28,
+    shadowOffset: { width: -12, height: 0 },
+    elevation: 28,
+  },
+  menuAccentRail: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 2,
+    opacity: 0.82,
+  },
+  menuClose: {
+    position: 'absolute',
+    right: 14,
+    zIndex: 2,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  menuCloseText: {
+    color: '#ffffffcc',
+    fontSize: 16,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  menuContent: {
+    flex: 1,
+    backgroundColor: 'rgba(5,5,12,0.78)',
+  },
 
   miniPlayer: {
     flexDirection: 'row',
