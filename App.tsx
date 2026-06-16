@@ -141,7 +141,7 @@ export async function getStreak(): Promise<number> {
 const DEFAULT_LEFT = 200;
 const DEFAULT_RIGHT = 210;
 const TONE_FILE_PATH = `${FileSystem.cacheDirectory}binaural-tone.wav`;
-const SOUNDSCAPE_FILE_PREFIX = `${FileSystem.cacheDirectory}simply-ambient-soundscape-`;
+const SOUNDSCAPE_FILE_PREFIX = `${FileSystem.cacheDirectory}simply-ambient-soundscape-v3-`;
 const SLIDE_THROTTLE_MS = 220;
 const PALETTE_CROSSFADE_MS = 2600;
 
@@ -202,7 +202,7 @@ const SOUNDSCAPES: Soundscape[] = [
   { id: 'rain',   name: 'Soft Rain',      blurb: 'A steady veil with tiny drops near the edge of attention.', color: '#5BD0FF',   Icon: CloudRain },
   { id: 'ocean',  name: 'Ocean Tide',     blurb: 'Long swells for downshifting into sleep or recovery.',      color: '#5B6CFF',   Icon: Waves },
   { id: 'forest', name: 'Forest Air',     blurb: 'Leaf wash with a few distant, breathy chirps.',             color: '#9affc8',   Icon: TreeEvergreen },
-  { id: 'fire',   name: 'Hearth',         blurb: 'Warm crackle under the tones, quiet and close.',            color: '#FFB05B',   Icon: Campfire },
+  { id: 'fire',   name: 'Crackling Fire', blurb: 'Live ember snaps and soft flame bed, close but not static.', color: '#FFB05B',   Icon: Campfire },
   { id: 'white',  name: 'White Noise',    blurb: 'Even masking for busy rooms and brittle silence.',          color: '#ffffffcc', Icon: WaveSquare },
   { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer masking with less edge than white noise.',           color: '#FFD0E1',   Icon: WaveSine },
   { id: 'brown',  name: 'Brown Noise',    blurb: 'Low, dense, and grounding for a heavy nervous system.',     color: '#8A6B4A',   Icon: WaveTriangle },
@@ -602,8 +602,12 @@ function buildSoundscapeWav(kind: SoundscapeKey): string {
   let rain = 0;
   let leftDrift = 0;
   let rightDrift = 0;
+  let rainDropLeft = 0;
+  let rainDropRight = 0;
+  let fireCrackle = 0;
+  let firePop = 0;
 
-  return buildStereoWav(2, (t, i) => {
+  return buildStereoWav(kind === 'fire' ? 6 : 2, (t, i) => {
     const white = rnd();
     pink = pink * 0.92 + white * 0.08;
     brown = Math.max(-1, Math.min(1, brown + white * 0.025));
@@ -614,14 +618,21 @@ function buildSoundscapeWav(kind: SoundscapeKey): string {
     const panLeft = 0.96 + leftDrift * 0.04;
     const panRight = 0.96 + rightDrift * 0.04;
     const chirp = Math.sin(twoPi * (1600 + 900 * Math.sin(t * twoPi * 0.17)) * t);
-    const drop = (i % 4139 === 0 || i % 5779 === 0) ? 0.8 : 0;
+    if (rnd() > 0.99945) rainDropLeft += 0.45 + Math.abs(rnd()) * 0.35;
+    if (rnd() > 0.99950) rainDropRight += 0.42 + Math.abs(rnd()) * 0.32;
+    rainDropLeft *= 0.90;
+    rainDropRight *= 0.90;
     const tide = Math.sin(twoPi * 0.34 * t) * 0.18 + Math.sin(twoPi * 0.71 * t) * 0.08;
-    const ember = Math.abs(white) > 0.975 ? white * 0.8 : white * 0.08;
+    const flame = brown * 0.09 + pink * 0.08 + Math.sin(twoPi * 1.7 * t) * 0.015;
+    if (rnd() > 0.935) fireCrackle += (0.35 + Math.abs(rnd()) * 0.65) * (rnd() > 0 ? 1 : -1);
+    if (rnd() > 0.9975) firePop += (0.8 + Math.abs(rnd()) * 0.5) * (rnd() > 0 ? 1 : -1);
+    fireCrackle *= 0.72;
+    firePop *= 0.90;
 
     switch (kind) {
       case 'rain': {
-        const s = rain * 0.22 + drop * 0.12;
-        return [s * panLeft, (rain * 0.20 + drop * 0.08) * panRight];
+        const mist = pink * 0.09 + rain * 0.08 + brown * 0.025;
+        return [(mist + rainDropLeft * 0.08) * panLeft, (mist * 0.92 + rainDropRight * 0.075) * panRight];
       }
       case 'ocean': {
         const foam = pink * 0.13 + tide;
@@ -633,8 +644,9 @@ function buildSoundscapeWav(kind: SoundscapeKey): string {
         return [(leaves + birds) * panLeft, (leaves * 0.9 + birds * 0.6) * panRight];
       }
       case 'fire': {
-        const s = pink * 0.07 + ember * 0.22;
-        return [s * panLeft, (pink * 0.06 + ember * 0.18) * panRight];
+        const sparkLeft = fireCrackle * 0.22 + firePop * 0.18;
+        const sparkRight = fireCrackle * 0.15 + firePop * 0.24;
+        return [(flame + sparkLeft) * panLeft, (flame * 0.88 + sparkRight) * panRight];
       }
       case 'pink':
         return [pink * 0.24 * panLeft, pink * 0.22 * panRight];
@@ -747,6 +759,10 @@ class WebSoundscapeEngine {
   private rain = 0;
   private phase = 0;
   private kind: SoundscapeKey = 'rain';
+  private rainDropLeft = 0;
+  private rainDropRight = 0;
+  private fireCrackle = 0;
+  private firePop = 0;
 
   async play(kind: SoundscapeKey, volume: number) {
     this.kind = kind;
@@ -815,13 +831,23 @@ class WebSoundscapeEngine {
     const t = this.phase;
     const twoPi = Math.PI * 2;
     const tide = Math.sin(twoPi * 0.34 * t) * 0.18 + Math.sin(twoPi * 0.71 * t) * 0.08;
-    const ember = Math.abs(white) > 0.975 ? white * 0.8 : white * 0.08;
+    if (this.random() > 0.99945) this.rainDropLeft += 0.45 + Math.abs(this.random()) * 0.35;
+    if (this.random() > 0.99950) this.rainDropRight += 0.42 + Math.abs(this.random()) * 0.32;
+    this.rainDropLeft *= 0.90;
+    this.rainDropRight *= 0.90;
+    const flame = this.brown * 0.09 + this.pink * 0.08 + Math.sin(twoPi * 1.7 * t) * 0.015;
+    if (this.random() > 0.935) this.fireCrackle += (0.35 + Math.abs(this.random()) * 0.65) * (this.random() > 0 ? 1 : -1);
+    if (this.random() > 0.9975) this.firePop += (0.8 + Math.abs(this.random()) * 0.5) * (this.random() > 0 ? 1 : -1);
+    this.fireCrackle *= 0.72;
+    this.firePop *= 0.90;
     const chirp = Math.sin(twoPi * (1600 + 900 * Math.sin(t * twoPi * 0.17)) * t);
     const birds = Math.floor(t * sampleRate) % 17111 < 140 ? chirp * 0.035 : 0;
 
     switch (this.kind) {
-      case 'rain':
-        return [this.rain * 0.22, this.rain * 0.20];
+      case 'rain': {
+        const mist = this.pink * 0.09 + this.rain * 0.08 + this.brown * 0.025;
+        return [mist + this.rainDropLeft * 0.08, mist * 0.92 + this.rainDropRight * 0.075];
+      }
       case 'ocean':
         return [this.pink * 0.13 + tide, this.pink * 0.12 + tide * 0.9];
       case 'forest': {
@@ -829,7 +855,7 @@ class WebSoundscapeEngine {
         return [leaves + birds, leaves * 0.9 + birds * 0.6];
       }
       case 'fire':
-        return [this.pink * 0.07 + ember * 0.22, this.pink * 0.06 + ember * 0.18];
+        return [flame + this.fireCrackle * 0.22 + this.firePop * 0.18, flame * 0.88 + this.fireCrackle * 0.15 + this.firePop * 0.24];
       case 'pink':
         return [this.pink * 0.24, this.pink * 0.22];
       case 'brown':
