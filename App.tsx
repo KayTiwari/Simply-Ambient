@@ -387,7 +387,7 @@ function bandFor(beat: number): { name: string; color: string; key: BandKey } {
 
 // Configure foreground display only outside Expo Go, where this raises a
 // removed-API warning under SDK 53+.
-if (!IS_EXPO_GO) {
+if (!IS_EXPO_GO && Platform.OS !== 'web') {
   try {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
@@ -401,6 +401,7 @@ if (!IS_EXPO_GO) {
 }
 
 async function scheduleAffirmationNotifs(pref: NotifPref) {
+  if (Platform.OS === 'web') return; // Local scheduled notifs aren't supported in the browser
   if (IS_EXPO_GO) return; // No real scheduling in Expo Go on SDK 53+
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
@@ -504,6 +505,96 @@ function buildWav(leftHz: number, rightHz: number): string {
     view.setInt16(off, r, true); off += 2;
   }
   return bytesToBase64(new Uint8Array(buffer));
+}
+
+// ---------------------------------------------------------------------------
+//   Web binaural engine
+// ---------------------------------------------------------------------------
+// On native we loop a 1-second WAV, which is fine because the audio system
+// loops the file seamlessly. Browsers restart a looped buffer with an audible
+// gap, so on web we generate the tones live with two oscillators panned hard
+// left and right through a channel merger. That is gapless by construction and
+// also lets us glide between frequencies without a restart. Matches the native
+// WAV amplitude (0.28) so loudness is consistent across platforms.
+const WEB_TONE_GAIN = 0.28;
+
+class WebToneEngine {
+  private ctx: AudioContext | null = null;
+  private master: GainNode | null = null;
+  private left: OscillatorNode | null = null;
+  private right: OscillatorNode | null = null;
+
+  async play(l: number, r: number) {
+    if (!this.ctx) {
+      const AC: typeof AudioContext =
+        (window as any).AudioContext || (window as any).webkitAudioContext;
+      this.ctx = new AC();
+    }
+    const ctx = this.ctx;
+    // Browsers start the context suspended until a user gesture resumes it.
+    if (ctx.state === 'suspended') await ctx.resume();
+
+    if (this.left && this.right) {
+      // Already running: glide to the new frequencies instead of restarting.
+      const t = ctx.currentTime;
+      this.left.frequency.linearRampToValueAtTime(l, t + 0.03);
+      this.right.frequency.linearRampToValueAtTime(r, t + 0.03);
+      return;
+    }
+
+    const master = ctx.createGain();
+    master.gain.value = 0;
+    master.connect(ctx.destination);
+
+    // Hard channel separation: each oscillator feeds exactly one ear.
+    const merger = ctx.createChannelMerger(2);
+    merger.connect(master);
+
+    const left = ctx.createOscillator();
+    left.type = 'sine';
+    left.frequency.value = l;
+    left.connect(merger, 0, 0);
+    left.start();
+
+    const right = ctx.createOscillator();
+    right.type = 'sine';
+    right.frequency.value = r;
+    right.connect(merger, 0, 1);
+    right.start();
+
+    this.master = master;
+    this.left = left;
+    this.right = right;
+
+    // Short fade-in to avoid a click on start.
+    const t = ctx.currentTime;
+    master.gain.linearRampToValueAtTime(WEB_TONE_GAIN, t + 0.04);
+  }
+
+  stop() {
+    const ctx = this.ctx;
+    const master = this.master;
+    const left = this.left;
+    const right = this.right;
+    this.master = null;
+    this.left = null;
+    this.right = null;
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    if (master) {
+      try { master.gain.cancelScheduledValues(t); } catch {}
+      try { master.gain.setValueAtTime(master.gain.value, t); } catch {}
+      try { master.gain.linearRampToValueAtTime(0, t + 0.05); } catch {}
+    }
+    // Stop the oscillators after the fade so we don't click on the way out.
+    setTimeout(() => {
+      try { left?.stop(); } catch {}
+      try { right?.stop(); } catch {}
+      try { left?.disconnect(); } catch {}
+      try { right?.disconnect(); } catch {}
+      try { master?.disconnect(); } catch {}
+    }, 80);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -881,6 +972,8 @@ function AppContent() {
   const tonePlayerRef = useRef<AudioPlayer | null>(null);
   const tonePlayGenRef = useRef(0);
   const bgPlayerRef = useRef<AudioPlayer | null>(null);
+  // Web-only: gapless oscillator engine, created lazily on first play.
+  const webToneRef = useRef<WebToneEngine | null>(null);
 
   // Refs that always reflect latest values, for use inside throttle callbacks.
   const stateRef = useRef({ leftHz, rightHz, isTonePlaying });
@@ -921,6 +1014,7 @@ function AppContent() {
       })
       .catch(() => {});
     return () => {
+      try { webToneRef.current?.stop(); } catch {}
       try { tonePlayerRef.current?.release(); } catch {}
       try { tonePlayerRef.current?.remove?.(); } catch {}
       try { bgPlayerRef.current?.release(); } catch {}
@@ -938,18 +1032,30 @@ function AppContent() {
     const myGen = ++tonePlayGenRef.current;
     setIsToneLoading(true);
     try {
+      // Web: drive the oscillator engine directly. No WAV, no looping, so no
+      // seam. Repeated calls (e.g. dragging a slider) glide the frequencies.
+      if (Platform.OS === 'web') {
+        if (!webToneRef.current) webToneRef.current = new WebToneEngine();
+        await webToneRef.current.play(clampHz(l), clampHz(r));
+        if (myGen !== tonePlayGenRef.current) {
+          try { webToneRef.current.stop(); } catch {}
+          return;
+        }
+        setIsTonePlaying(true);
+        return;
+      }
+
       // Yield so the UI can update before we synthesize.
       await new Promise(resolve => setTimeout(resolve, 0));
       const base64 = buildWav(clampHz(l), clampHz(r));
       if (myGen !== tonePlayGenRef.current) return;
 
-      // Write WAV to a stable on-disk path; reload via file URI.
+      // Native writes the synthesized WAV to a cache file and plays the file
+      // URI (with a cache-busting query so the audio system re-reads it).
       await FileSystem.writeAsStringAsync(TONE_FILE_PATH, base64, {
         encoding: FileSystem.EncodingType.Base64,
       });
       if (myGen !== tonePlayGenRef.current) return;
-
-      // Cache-bust query so the audio system actually re-reads the file.
       const source = { uri: `${TONE_FILE_PATH}?v=${Date.now()}` };
 
       const existing = tonePlayerRef.current;
@@ -993,6 +1099,12 @@ function AppContent() {
       slideTimeoutRef.current = null;
     }
     slidePendingRef.current = null;
+    if (Platform.OS === 'web') {
+      try { webToneRef.current?.stop(); } catch {}
+      setIsTonePlaying(false);
+      setIsToneLoading(false);
+      return;
+    }
     const player = tonePlayerRef.current;
     tonePlayerRef.current = null;
     if (player) {
