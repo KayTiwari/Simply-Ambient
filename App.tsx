@@ -954,16 +954,16 @@ function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
 }
 
 // Wrapper that crossfades between palettes when the active band changes.
-// Symmetric crossfade: as the new layer fades in to 1, the old fades out to 0
-// in lockstep. Avoids the muddy "both at full opacity" overlap and the snap
-// when the old layer used to unmount at full opacity.
+// Keep layers in one keyed stack so the incoming palette is not remounted when
+// it becomes the only visible layer. Remounting resets the internal drift/fade
+// animations and reads as a snap right after the crossfade completes.
 function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) {
   type LayerSpec = { band: BandKey; key: number; opacity: Animated.Value };
   const counter = useRef(0);
-  const [active, setActive] = useState<LayerSpec>(() => ({
-    band, key: 0, opacity: new Animated.Value(1),
-  }));
-  const [incoming, setIncoming] = useState<LayerSpec | null>(null);
+  const [layers, setLayers] = useState<LayerSpec[]>(() => [
+    { band, key: 0, opacity: new Animated.Value(1) },
+  ]);
+  const layersRef = useRef<LayerSpec[]>(layers);
   // Tracks the currently running crossfade so a rapid band change can cancel it
   // before its completion callback fires and clobbers the new state. Generation
   // counter is the belt-and-suspenders fallback in case stop() races.
@@ -971,11 +971,16 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
   const generationRef = useRef(0);
 
   useEffect(() => {
-    if (band === active.band || (incoming && incoming.band === band)) return;
+    layersRef.current = layers;
+  }, [layers]);
+
+  useEffect(() => {
+    const currentLayers = layersRef.current;
+    const topLayer = currentLayers[currentLayers.length - 1];
+    if (topLayer?.band === band) return;
 
     // Cancel any in-flight crossfade. Without this, the old start() callback
-    // still fires later and overwrites active/incoming, leaving the screen
-    // with no visible palette layer (active at opacity 0, incoming nulled).
+    // still fires later and overwrites the stack, leaving stale layers visible.
     if (runningAnimRef.current) {
       runningAnimRef.current.stop();
       runningAnimRef.current = null;
@@ -989,7 +994,9 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
       key: counter.current,
       opacity: new Animated.Value(0),
     };
-    setIncoming(layer);
+    const nextLayers = [...currentLayers, layer];
+    layersRef.current = nextLayers;
+    setLayers(nextLayers);
     const anim = Animated.parallel([
       Animated.timing(layer.opacity, {
         toValue: 1,
@@ -997,37 +1004,36 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
         easing: Easing.inOut(Easing.sin),
         useNativeDriver: true,
       }),
-      Animated.timing(active.opacity, {
-        toValue: 0,
-        duration: PALETTE_CROSSFADE_MS,
-        easing: Easing.inOut(Easing.sin),
-        useNativeDriver: true,
-      }),
+      ...currentLayers.map((existingLayer) =>
+        Animated.timing(existingLayer.opacity, {
+          toValue: 0,
+          duration: PALETTE_CROSSFADE_MS,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        })
+      ),
     ]);
     runningAnimRef.current = anim;
     anim.start(({ finished }) => {
-      // Late callbacks from cancelled animations must NOT promote the stale
-      // layer or null out the current incoming. Two checks: finished flag
+      // Late callbacks from cancelled animations must NOT replace the current
+      // stack with a stale layer. Two checks: finished flag
       // (stop() should make this false) AND generation match (in case stop()
       // races and the callback still reports finished=true).
       if (!finished) return;
       if (myGeneration !== generationRef.current) return;
       runningAnimRef.current = null;
-      setActive(layer);
-      setIncoming(null);
+      layersRef.current = [layer];
+      setLayers([layer]);
     });
-  }, [band, active.band, active.opacity, incoming]);
+  }, [band]);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity: active.opacity }]}>
-        <PaletteLayer band={active.band} playing={playing} />
-      </Animated.View>
-      {incoming ? (
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: incoming.opacity }]}>
-          <PaletteLayer band={incoming.band} playing={playing} />
+      {layers.map((layer) => (
+        <Animated.View key={layer.key} style={[StyleSheet.absoluteFill, { opacity: layer.opacity }]}>
+          <PaletteLayer band={layer.band} playing={playing} />
         </Animated.View>
-      ) : null}
+      ))}
     </View>
   );
 }
