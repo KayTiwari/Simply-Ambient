@@ -2048,7 +2048,6 @@ function SoundscapesView({
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <View style={styles.enso} />
         <Text style={styles.ambience}>Simply Ambient</Text>
         <Text style={styles.title}>Soundscapes</Text>
         <View style={styles.dividerRow}>
@@ -2336,7 +2335,7 @@ function TabBar({
         <TabButton label="Chakras"     glyph="✦" active={tab === 'chakras'}     accent={accent} onPress={() => onChange('chakras')} />
         <TabButton label="Horoscopes"  glyph="☽" active={tab === 'horoscopes'}  accent={accent} onPress={() => onChange('horoscopes')} />
         {soundscapesInNav ? (
-          <TabButton label="Sound" Icon={Waveform} active={tab === 'soundscapes'} accent={accent} onPress={() => onChange('soundscapes')} />
+          <TabButton label="Soundscapes" Icon={Waveform} active={tab === 'soundscapes'} accent={accent} onPress={() => onChange('soundscapes')} />
         ) : null}
       </View>
     </SafeAreaView>
