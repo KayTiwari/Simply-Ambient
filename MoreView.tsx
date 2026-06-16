@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Slider from '@react-native-community/slider';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import {
   CaretLeft,
@@ -98,6 +99,22 @@ type Props = {
   affirmationLoading: boolean;
   onRefreshAffirmation: () => void;
   isExpoGo: boolean;
+  soundscapes: SoundscapeOption[];
+  activeSoundscapeId: string | null;
+  isSoundscapePlaying: boolean;
+  soundscapeVolume: number;
+  onToggleSoundscape: (id: string) => void;
+  onChangeSoundscapeVolume: (v: number) => void;
+  soundscapesInNav: boolean;
+  onToggleSoundscapesInNav: (next: boolean) => void;
+};
+
+type SoundscapeOption = {
+  id: string;
+  name: string;
+  blurb: string;
+  glyph: string;
+  color: string;
 };
 
 type SubPage =
@@ -160,6 +177,14 @@ export default function MoreView({
   notifPref, onChangeNotifPref,
   affirmation, affirmationLoading, onRefreshAffirmation,
   isExpoGo,
+  soundscapes,
+  activeSoundscapeId,
+  isSoundscapePlaying,
+  soundscapeVolume,
+  onToggleSoundscape,
+  onChangeSoundscapeVolume,
+  soundscapesInNav,
+  onToggleSoundscapesInNav,
 }: Props) {
   const [moodLog, setMoodLog] = useState<MoodEntry[]>([]);
   const [gratitude, setGratitude] = useState<GratEntry[]>([]);
@@ -282,6 +307,8 @@ export default function MoreView({
           gratitudeCount={gratitude.length}
           streak={streak}
           onOpen={open}
+          soundscapesInNav={soundscapesInNav}
+          onToggleSoundscapesInNav={onToggleSoundscapesInNav}
         />
       </Animated.View>
 
@@ -308,7 +335,17 @@ export default function MoreView({
             <RoutinesPage onBack={close} />
           )}
           {page === 'soundscapes' && (
-            <SoundscapesPage onBack={close} />
+            <SoundscapesPage
+              onBack={close}
+              soundscapes={soundscapes}
+              activeSoundscapeId={activeSoundscapeId}
+              isSoundscapePlaying={isSoundscapePlaying}
+              soundscapeVolume={soundscapeVolume}
+              onToggleSoundscape={onToggleSoundscape}
+              onChangeSoundscapeVolume={onChangeSoundscapeVolume}
+              soundscapesInNav={soundscapesInNav}
+              onToggleSoundscapesInNav={onToggleSoundscapesInNav}
+            />
           )}
           {page === 'affirmations' && (
             <AffirmationsPage
@@ -388,9 +425,20 @@ type HubProps = {
   gratitudeCount: number;
   streak: number;
   onOpen: (p: Exclude<SubPage, null>) => void;
+  soundscapesInNav: boolean;
+  onToggleSoundscapesInNav: (next: boolean) => void;
 };
 
-function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak, onOpen }: HubProps) {
+function Hub({
+  notifPref,
+  affirmationPreview,
+  moodToday,
+  gratitudeCount,
+  streak,
+  onOpen,
+  soundscapesInNav,
+  onToggleSoundscapesInNav,
+}: HubProps) {
   // Weekly insights. Computed inline from local data
   const [weekly, setWeekly] = useState<{
     moodAvg: number | null;
@@ -521,6 +569,9 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
           color="#5BD0FF"
           label="Soundscapes"
           preview="Rain · ocean · forest · white noise"
+          extra={soundscapesInNav ? 'In nav' : 'Pin'}
+          extraColor={soundscapesInNav ? '#5BD0FF' : '#ffffff99'}
+          onExtraPress={() => onToggleSoundscapesInNav(!soundscapesInNav)}
           onPress={() => onOpen('soundscapes')}
         />
         <HubItem
@@ -603,7 +654,7 @@ function Hub({ notifPref, affirmationPreview, moodToday, gratitudeCount, streak,
 }
 
 function HubItem({
-  glyph, Icon, color, label, preview, extra, extraColor, onPress,
+  glyph, Icon, color, label, preview, extra, extraColor, onPress, onExtraPress,
 }: {
   // Either a unicode glyph (kept for spiritual symbols: ensō, flower, sparkle)
   // or a Phosphor icon component (used for utility items: Routines, Bug, etc.)
@@ -615,6 +666,7 @@ function HubItem({
   extra?: string | null;
   extraColor?: string;
   onPress: () => void;
+  onExtraPress?: () => void;
 }) {
   return (
     <TouchableOpacity
@@ -634,7 +686,14 @@ function HubItem({
         <Text style={styles.hubPreview} numberOfLines={1}>{preview}</Text>
       </View>
       {extra ? (
-        <Text style={[styles.hubExtra, { color: extraColor ?? '#ffffff99' }]}>{extra}</Text>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={onExtraPress}
+          disabled={!onExtraPress}
+          style={onExtraPress ? styles.hubExtraBtn : undefined}
+        >
+          <Text style={[styles.hubExtra, { color: extraColor ?? '#ffffff99' }]}>{extra}</Text>
+        </TouchableOpacity>
       ) : null}
       <CaretRight size={20} color="#ffffff66" weight="thin" />
     </TouchableOpacity>
@@ -1985,29 +2044,95 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
 //   Soundscapes
 // ===========================================================================
 
-const SOUNDSCAPES: Array<{ id: string; name: string; blurb: string; color: string; glyph: string }> = [
-  { id: 'rain',   name: 'Soft Rain',      blurb: 'Steady, gentle rainfall',           color: '#5BD0FF', glyph: '☂' },
-  { id: 'ocean',  name: 'Ocean Waves',    blurb: 'Slow tide, long breaths',           color: '#5B6CFF', glyph: '≋' },
-  { id: 'forest', name: 'Forest',         blurb: 'Wind through trees, distant birds', color: '#9affc8', glyph: '⌘' },
-  { id: 'fire',   name: 'Crackling Fire', blurb: 'Hearth on a quiet night',           color: '#FFB05B', glyph: '✧' },
-  { id: 'white',  name: 'White Noise',    blurb: 'Even-spectrum static, masks distractions', color: '#ffffffcc', glyph: '≣' },
-  { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer than white, balanced frequencies',  color: '#FFD0E1', glyph: '≣' },
-  { id: 'brown',  name: 'Brown Noise',    blurb: 'Deep, low-frequency rumble',        color: '#8A6B4A', glyph: '≣' },
-];
+function SoundscapesPage({
+  onBack,
+  soundscapes,
+  activeSoundscapeId,
+  isSoundscapePlaying,
+  soundscapeVolume,
+  onToggleSoundscape,
+  onChangeSoundscapeVolume,
+  soundscapesInNav,
+  onToggleSoundscapesInNav,
+}: {
+  onBack: () => void;
+  soundscapes: SoundscapeOption[];
+  activeSoundscapeId: string | null;
+  isSoundscapePlaying: boolean;
+  soundscapeVolume: number;
+  onToggleSoundscape: (id: string) => void;
+  onChangeSoundscapeVolume: (v: number) => void;
+  soundscapesInNav: boolean;
+  onToggleSoundscapesInNav: (next: boolean) => void;
+}) {
+  const activeName = activeSoundscapeId
+    ? soundscapes.find(s => s.id === activeSoundscapeId)?.name ?? 'Ambient layer'
+    : 'No layer selected';
 
-function SoundscapesPage({ onBack }: { onBack: () => void }) {
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Soundscapes" accent="#5BD0FF" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody}>
         <Text style={styles.sectionLabel}>NATURAL AMBIENCE</Text>
         <Text style={styles.cardSub}>
-          Built-in soundscapes now live on the Frequencies tab. Layer rain, ocean,
-          forest air, hearth, and noise colors under your binaural tones, then set
-          a stillness timer for a soft fade-out.
+          Layer subtle generated ambience under your binaural tones. It stays local
+          and follows you through the app in the mini-player.
         </Text>
-        {SOUNDSCAPES.map(s => (
-          <View key={s.id} style={[styles.soundscapeCard, { borderColor: s.color + '55' }]}>
+
+        <View style={[styles.soundscapeControlCard, { borderColor: '#5BD0FF55' }]}>
+          <View style={styles.soundscapeTopRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.soundscapeActiveLabel}>CURRENT</Text>
+              <Text style={styles.soundscapeActiveName}>{activeName}</Text>
+              <Text style={styles.soundscapeActiveMeta}>
+                {isSoundscapePlaying ? 'Playing now' : 'Paused'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => onToggleSoundscapesInNav(!soundscapesInNav)}
+              style={[
+                styles.navPinBtn,
+                soundscapesInNav && { borderColor: '#5BD0FF', backgroundColor: '#5BD0FF22' },
+              ]}
+            >
+              <Text style={[styles.navPinText, soundscapesInNav && { color: '#5BD0FF' }]}>
+                {soundscapesInNav ? 'IN NAV' : 'ADD TO NAV'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {activeSoundscapeId ? (
+            <View style={{ marginTop: 14 }}>
+              <Text style={styles.soundscapeVolLabel}>VOLUME · {Math.round(soundscapeVolume * 100)}%</Text>
+              <Slider
+                style={{ width: '100%', height: 34 }}
+                minimumValue={0}
+                maximumValue={1}
+                value={soundscapeVolume}
+                minimumTrackTintColor="#d9b35c"
+                maximumTrackTintColor="rgba(255,255,255,0.12)"
+                thumbTintColor="#d9b35c"
+                onValueChange={onChangeSoundscapeVolume}
+              />
+            </View>
+          ) : null}
+        </View>
+
+        {soundscapes.map(s => {
+          const active = activeSoundscapeId === s.id && isSoundscapePlaying;
+          return (
+          <TouchableOpacity
+            key={s.id}
+            activeOpacity={0.85}
+            onPress={() => onToggleSoundscape(s.id)}
+            style={[
+              styles.soundscapeCard,
+              {
+                borderColor: active ? s.color : s.color + '55',
+                backgroundColor: active ? s.color + '18' : 'rgba(0,0,0,0.18)',
+              },
+            ]}
+          >
             <View style={[styles.soundscapeGlyphBox, { backgroundColor: s.color + '22', borderColor: s.color }]}>
               <Text style={[styles.soundscapeGlyph, { color: s.color }]}>{s.glyph}</Text>
             </View>
@@ -2015,9 +2140,12 @@ function SoundscapesPage({ onBack }: { onBack: () => void }) {
               <Text style={styles.soundscapeName}>{s.name}</Text>
               <Text style={styles.soundscapeBlurb}>{s.blurb}</Text>
             </View>
-            <Text style={styles.soundscapeSoon}>LIVE</Text>
-          </View>
-        ))}
+            <Text style={[styles.soundscapeSoon, active && { color: s.color }]}>
+              {active ? 'STOP' : 'PLAY'}
+            </Text>
+          </TouchableOpacity>
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -2448,6 +2576,7 @@ const styles = StyleSheet.create({
   hubGlyph: { fontSize: 20, fontWeight: '700' },
   hubLabel: { color: '#fff', fontSize: 15, fontWeight: '600', letterSpacing: 0.3 },
   hubPreview: { color: '#ffffff88', fontSize: 12, marginTop: 2, lineHeight: 16 },
+  hubExtraBtn: { paddingHorizontal: 4, paddingVertical: 4, marginRight: 4 },
   hubExtra: { fontSize: 12, fontWeight: '700', letterSpacing: 1, marginRight: 10 },
   hubChevron: { color: '#ffffff66', fontSize: 22 },
 
@@ -2697,6 +2826,44 @@ const styles = StyleSheet.create({
   routineStepTime: { color: '#ffffff88', fontSize: 12 },
 
   // Soundscapes
+  soundscapeControlCard: {
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    marginTop: 14,
+    marginBottom: 12,
+  },
+  soundscapeTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  soundscapeActiveLabel: {
+    color: '#ffffff80',
+    fontSize: 10,
+    letterSpacing: 2,
+    fontWeight: '700',
+  },
+  soundscapeActiveName: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  soundscapeActiveMeta: { color: '#ffffff88', fontSize: 12, marginTop: 2 },
+  soundscapeVolLabel: {
+    color: '#ffffff80',
+    fontSize: 10,
+    letterSpacing: 1.5,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  navPinBtn: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  navPinText: { color: '#ffffff99', fontSize: 10, fontWeight: '800', letterSpacing: 1.4 },
   soundscapeCard: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.30)',
