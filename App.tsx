@@ -1856,9 +1856,7 @@ function AppContent() {
           accent={beatColor}
           soundscapesInNav={soundscapesInNav}
         />
-        {tab !== 'soundscapes' ? (
-          <MoreLauncher accent={beatColor} onPress={() => setMenuOpen(true)} />
-        ) : null}
+        <MoreLauncher accent={beatColor} onPress={() => setMenuOpen(true)} />
       </SafeAreaView>
 
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} accent={beatColor}>
