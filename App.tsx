@@ -141,7 +141,7 @@ export async function getStreak(): Promise<number> {
 const DEFAULT_LEFT = 200;
 const DEFAULT_RIGHT = 210;
 const TONE_FILE_PATH = `${FileSystem.cacheDirectory}binaural-tone.wav`;
-const SOUNDSCAPE_FILE_PREFIX = `${FileSystem.cacheDirectory}simply-ambient-soundscape-v3-`;
+const SOUNDSCAPE_FILE_PREFIX = `${FileSystem.cacheDirectory}simply-ambient-soundscape-v4-`;
 const SLIDE_THROTTLE_MS = 220;
 const PALETTE_CROSSFADE_MS = 2600;
 
@@ -202,11 +202,26 @@ const SOUNDSCAPES: Soundscape[] = [
   { id: 'rain',   name: 'Soft Rain',      blurb: 'A steady veil with tiny drops near the edge of attention.', color: '#5BD0FF',   Icon: CloudRain },
   { id: 'ocean',  name: 'Ocean Tide',     blurb: 'Long swells for downshifting into sleep or recovery.',      color: '#5B6CFF',   Icon: Waves },
   { id: 'forest', name: 'Forest Air',     blurb: 'Leaf wash with a few distant, breathy chirps.',             color: '#9affc8',   Icon: TreeEvergreen },
-  { id: 'fire',   name: 'Crackling Fire', blurb: 'Live ember snaps and soft flame bed, close but not static.', color: '#FFB05B',   Icon: Campfire },
+  { id: 'fire',   name: 'Hearth',         blurb: 'A real campfire bed with natural ember crackle.',            color: '#FFB05B',   Icon: Campfire },
   { id: 'white',  name: 'White Noise',    blurb: 'Even masking for busy rooms and brittle silence.',          color: '#ffffffcc', Icon: WaveSquare },
   { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer masking with less edge than white noise.',           color: '#FFD0E1',   Icon: WaveSine },
   { id: 'brown',  name: 'Brown Noise',    blurb: 'Low, dense, and grounding for a heavy nervous system.',     color: '#8A6B4A',   Icon: WaveTriangle },
 ];
+
+const REMOTE_SOUNDSCAPES: Partial<Record<SoundscapeKey, { url: string; extension: 'mp3' }>> = {
+  rain: {
+    url: 'https://upload.wikimedia.org/wikipedia/commons/d/dc/Bourne_woods_rain_2020-05-10_0800.mp3',
+    extension: 'mp3',
+  },
+  fire: {
+    url: 'https://upload.wikimedia.org/wikipedia/commons/transcoded/b/b1/Campfire_sound_ambience.ogg/Campfire_sound_ambience.ogg.mp3',
+    extension: 'mp3',
+  },
+  white: {
+    url: 'https://bigsoundbank.com/UPLOAD/mp3/1037.mp3',
+    extension: 'mp3',
+  },
+};
 
 export type Chakra = {
   id: string;
@@ -763,9 +778,26 @@ class WebSoundscapeEngine {
   private rainDropRight = 0;
   private fireCrackle = 0;
   private firePop = 0;
+  private media: any = null;
 
   async play(kind: SoundscapeKey, volume: number) {
     this.kind = kind;
+    const remote = REMOTE_SOUNDSCAPES[kind];
+    const AudioCtor = (globalThis as any).Audio;
+    if (remote && typeof AudioCtor === 'function') {
+      this.stopSynthetic();
+      if (!this.media || this.media.src !== remote.url) {
+        this.stopMedia();
+        this.media = new AudioCtor(remote.url);
+        this.media.loop = true;
+        this.media.preload = 'auto';
+      }
+      this.media.volume = Math.max(0, Math.min(1, volume)) * 0.7;
+      await this.media.play();
+      return;
+    }
+
+    this.stopMedia();
     if (!this.ctx) {
       const AC: typeof AudioContext =
         (window as any).AudioContext || (window as any).webkitAudioContext;
@@ -798,6 +830,10 @@ class WebSoundscapeEngine {
   }
 
   setVolume(volume: number) {
+    if (this.media) {
+      this.media.volume = Math.max(0, Math.min(1, volume)) * 0.7;
+      return;
+    }
     const ctx = this.ctx;
     const gain = this.gain;
     if (!ctx || !gain) return;
@@ -808,6 +844,19 @@ class WebSoundscapeEngine {
   }
 
   stop() {
+    this.stopMedia();
+    this.stopSynthetic();
+  }
+
+  private stopMedia() {
+    const media = this.media;
+    this.media = null;
+    if (!media) return;
+    try { media.pause(); } catch {}
+    try { media.currentTime = 0; } catch {}
+  }
+
+  private stopSynthetic() {
     const ctx = this.ctx;
     const gain = this.gain;
     const processor = this.processor;
@@ -1690,6 +1739,18 @@ function AppContent() {
   async function ensureSoundscapeUri(id: SoundscapeKey) {
     const cached = soundscapeCacheRef.current[id];
     if (cached) return cached;
+    const remote = REMOTE_SOUNDSCAPES[id];
+    if (remote) {
+      const uri = `${SOUNDSCAPE_FILE_PREFIX}${id}.${remote.extension}`;
+      try {
+        const info = await FileSystem.getInfoAsync(uri);
+        if (!info.exists) await FileSystem.downloadAsync(remote.url, uri);
+        soundscapeCacheRef.current[id] = uri;
+        return uri;
+      } catch (e) {
+        console.warn('remote soundscape download failed, using generated fallback', e);
+      }
+    }
     const base64 = buildSoundscapeWav(id);
     const uri = `${SOUNDSCAPE_FILE_PREFIX}${id}.wav`;
     await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
@@ -1707,7 +1768,7 @@ function AppContent() {
         return;
       }
       const uri = await ensureSoundscapeUri(id);
-      const source = { uri: `${uri}?v=1` };
+      const source = { uri };
       if (!soundscapePlayerRef.current || activeSoundscapeId !== id) {
         try { soundscapePlayerRef.current?.release(); } catch {}
         try { soundscapePlayerRef.current?.remove?.(); } catch {}
