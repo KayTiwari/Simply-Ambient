@@ -2175,7 +2175,7 @@ function MiniPlayer({
         ]}
         accessibilityLabel={hasSoundscape ? (soundscapePlaying ? 'Stop soundscape' : 'Play soundscape') : 'Choose a soundscape'}
       >
-        <Text style={[styles.miniSoundscapeText, soundscapePlaying && { color: accent }]}>♪</Text>
+        <Waveform size={18} weight="duotone" color={soundscapePlaying ? accent : '#ffffffcc'} />
       </TouchableOpacity>
       <TouchableOpacity
         activeOpacity={0.85}
@@ -3313,7 +3313,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.14)',
   },
-  miniSoundscapeText: { color: '#ffffffcc', fontSize: 16, fontWeight: '700' },
 
   tabBarSafe: {
     backgroundColor: 'rgba(0,0,0,0.55)',
