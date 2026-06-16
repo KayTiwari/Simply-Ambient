@@ -2395,14 +2395,6 @@ function FrequenciesView(props: FreqViewProps) {
             </>
           )}
         </TouchableOpacity>
-
-        <SoundscapeBar
-          soundscapes={props.soundscapes}
-          activeId={props.activeSoundscapeId}
-          playing={props.isSoundscapePlaying}
-          accent={beatColor}
-          onToggle={props.onToggleSoundscape}
-        />
       </View>
 
       <FrequencyControl
