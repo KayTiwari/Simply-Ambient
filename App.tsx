@@ -77,10 +77,10 @@ import {
   comfortableCarrier,
   btoaFallback,
 } from './lib/binauralMath';
+import { NOTIF_AFFIRMATIONS } from './lib/affirmations';
 const STORAGE_KEY = '@binaural_user_presets_v1';
 const STORAGE_KEY_ZODIAC = '@simply_ambient_zodiac_v1';
 const STORAGE_KEY_STREAK = '@simply_ambient_streak_v1';
-const STORAGE_KEY_SESSIONS = '@simply_ambient_sessions_v1';
 export const STORAGE_KEY_PROFILE = '@simply_ambient_profile_v1';
 export const STORAGE_KEY_PARTNER = '@simply_ambient_partner_v1';
 export const STORAGE_KEY_GEMINI = '@simply_ambient_gemini_key_v1';
@@ -182,15 +182,6 @@ type Soundscape = {
   blurb: string;
   glyph: string;
   color: string;
-};
-
-type SessionEntry = {
-  id: string;
-  ts: number;
-  name: string;
-  beatHz: number;
-  minutes: number | null;
-  layer?: string | null;
 };
 
 const SOUNDSCAPES: Soundscape[] = [
@@ -443,7 +434,7 @@ async function scheduleAffirmationNotifs(pref: NotifPref) {
       ? [{ hour: 9, minute: 0 }]
       : [{ hour: 9, minute: 0 }, { hour: 13, minute: 0 }, { hour: 18, minute: 0 }];
     for (const t of times) {
-      const aff = NOTIF_AFFIRMATIONS[Math.floor(Math.random() * NOTIF_AFFIRMATIONS.length)];
+      const aff = randomAffirmation();
       await Notifications.scheduleNotificationAsync({
         content: { title: 'Simply Ambient', body: aff },
         trigger: {
@@ -456,6 +447,10 @@ async function scheduleAffirmationNotifs(pref: NotifPref) {
   } catch (e) {
     console.warn('notification scheduling failed', e);
   }
+}
+
+function randomAffirmation() {
+  return NOTIF_AFFIRMATIONS[Math.floor(Math.random() * NOTIF_AFFIRMATIONS.length)];
 }
 
 // ---------------------------------------------------------------------------
@@ -1039,35 +1034,15 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
 //   App
 // ===========================================================================
 
-type Tab = 'today' | 'frequencies' | 'breath' | 'chakras' | 'horoscopes' | 'soundscapes' | 'more';
+type Tab = 'frequencies' | 'breath' | 'chakras' | 'horoscopes' | 'soundscapes' | 'more';
 
 const STORAGE_KEY_NOTIF = '@simply_ambient_notif_pref_v1';
 const STORAGE_KEY_NAV_SOUNDSCAPES = '@simply_ambient_nav_soundscapes_v1';
 const SLEEP_TIMER_OPTIONS = [0, 5, 10, 15, 30, 60] as const; // minutes
 
-// Static pool used when scheduling local push notifications (we can't fetch
-// at notification trigger time; the body is set when scheduled).
-const NOTIF_AFFIRMATIONS = [
-  'You are exactly where you need to be.',
-  'Every breath is a fresh beginning.',
-  'What you seek is seeking you.',
-  'Your presence is enough.',
-  'Energy flows where attention goes.',
-  'You attract what you vibrate.',
-  'Be still, and know.',
-  'The mind quiets when the body softens.',
-  'You are allowed to take your time.',
-  'Trust the next step, even if you cannot see it.',
-  'As within, so without.',
-  'Today is a small piece of a larger unfolding.',
-  'Soften. Listen. Receive.',
-  'Your worth is not contingent on output.',
-  'Breathe in. Breathe out. Begin again.',
-];
-
 function AppContent() {
   const insets = useSafeAreaInsets();
-  const [tab, setTab] = useState<Tab>('today');
+  const [tab, setTab] = useState<Tab>('frequencies');
   const [soundscapesInNav, setSoundscapesInNav] = useState(false);
   const tabFade = useRef(new Animated.Value(1)).current;
   const lastTab = useRef<Tab>(tab);
@@ -1128,7 +1103,6 @@ function AppContent() {
   const [activeSoundscapeId, setActiveSoundscapeId] = useState<SoundscapeKey | null>(null);
   const [isSoundscapePlaying, setIsSoundscapePlaying] = useState(false);
   const [soundscapeVolume, setSoundscapeVolume] = useState(0.42);
-  const [sessionHistory, setSessionHistory] = useState<SessionEntry[]>([]);
 
   const [lunar] = useState(() => lunarPhase());
   const [mySignId, setMySignId] = useState<string | null>(null);
@@ -1147,11 +1121,6 @@ function AppContent() {
   // get the volume reminder once each new session before the first Play tap.
   const [audioSafetyAck, setAudioSafetyAck] = useState(false);
   const [showAudioSafetyModal, setShowAudioSafetyModal] = useState(false);
-  const pendingStartRef = useRef<{
-    name: string;
-    minutes: number | null;
-    soundscapeId?: SoundscapeKey;
-  } | null>(null);
 
   const mySign = useMemo(
     () => (mySignId && ZODIAC.find(z => z.id === mySignId)) || todaysSign(),
@@ -1173,13 +1142,7 @@ function AppContent() {
   async function refreshAffirmation() {
     setAffLoading(true);
     try {
-      const res = await fetch('https://www.affirmations.dev');
-      if (!res.ok) throw new Error('bad response');
-      const json = await res.json();
-      setAffirmation(json?.affirmation ?? null);
-    } catch {
-      // Fallback to static pool
-      setAffirmation(NOTIF_AFFIRMATIONS[Math.floor(Math.random() * NOTIF_AFFIRMATIONS.length)]);
+      setAffirmation(randomAffirmation());
     } finally {
       setAffLoading(false);
     }
@@ -1274,15 +1237,6 @@ function AppContent() {
         }
       })
       .catch(() => {});
-    AsyncStorage.getItem(STORAGE_KEY_SESSIONS)
-      .then(raw => {
-        if (!raw) return;
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) setSessionHistory(parsed);
-        } catch {}
-      })
-      .catch(() => {});
     return () => {
       try { webToneRef.current?.stop(); } catch {}
       try { tonePlayerRef.current?.release(); } catch {}
@@ -1298,23 +1252,6 @@ function AppContent() {
   useEffect(() => {
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(userPresets)).catch(() => {});
   }, [userPresets]);
-
-  function recordSession(name: string, minutes: number | null = sleepMinutes || null) {
-    const entry: SessionEntry = {
-      id: `s_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      ts: Date.now(),
-      name,
-      beatHz: Math.round(Math.abs(leftHz - rightHz)),
-      minutes,
-      layer: activeSoundscape?.name ?? (isBgPlaying ? 'Imported audio' : null),
-    };
-    setSessionHistory(curr => {
-      const next = [entry, ...curr].slice(0, 30);
-      AsyncStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(next)).catch(() => {});
-      return next;
-    });
-    recordActivity().catch(() => {});
-  }
 
   // --- Audio core ----------------------------------------------------------
 
@@ -1459,21 +1396,15 @@ function AppContent() {
     // Play. Confirmation actually starts playback. State resets on cold
     // start (useState in App), so users get the reminder each new session.
     if (!audioSafetyAck) {
-      pendingStartRef.current = { name: displayBandName, minutes: sleepMinutes || null };
       setShowAudioSafetyModal(true);
       return;
     }
-    recordSession(displayBandName);
     loadAndPlay(leftHz, rightHz);
   }
 
   function acknowledgeAudioSafetyAndPlay() {
     setAudioSafetyAck(true);
     setShowAudioSafetyModal(false);
-    const pending = pendingStartRef.current;
-    pendingStartRef.current = null;
-    if (pending?.soundscapeId) playSoundscape(pending.soundscapeId);
-    recordSession(pending?.name ?? displayBandName, pending?.minutes ?? (sleepMinutes || null));
     loadAndPlay(leftHz, rightHz);
   }
 
@@ -1782,69 +1713,6 @@ function AppContent() {
     }
   }
 
-  const todaySuggestion = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 11) {
-      return {
-        label: 'Morning Focus',
-        presetId: 'beta',
-        minutes: 15,
-        soundscapeId: 'forest' as SoundscapeKey,
-        copy: 'A little heat, then clear attention.',
-      };
-    }
-    if (hour < 17) {
-      return {
-        label: 'Steady Work',
-        presetId: 'alpha',
-        minutes: 20,
-        soundscapeId: 'pink' as SoundscapeKey,
-        copy: 'Relaxed alertness without the edge.',
-      };
-    }
-    if (hour < 21) {
-      return {
-        label: 'Evening Wind-down',
-        presetId: 'theta',
-        minutes: 20,
-        soundscapeId: 'ocean' as SoundscapeKey,
-        copy: 'Unhook from the day slowly.',
-      };
-    }
-    return {
-      label: 'Deep Rest',
-      presetId: 'delta',
-      minutes: 30,
-      soundscapeId: 'brown' as SoundscapeKey,
-      copy: 'Low, simple, and sleep-friendly.',
-    };
-  }, []);
-
-  function startTodaySession() {
-    const preset = PRESETS.find(p => p.id === todaySuggestion.presetId) ?? PRESETS[0];
-    const half = preset.beatHz / 2;
-    const l = clampHz(preset.carrier - half);
-    const r = clampHz(preset.carrier + half);
-    setLeftHz(l);
-    setRightHz(r);
-    setActivePresetId(preset.id);
-    setActiveBand(preset.band);
-    setSleepTimer(todaySuggestion.minutes);
-    setTab('frequencies');
-    if (!audioSafetyAck) {
-      pendingStartRef.current = {
-        name: todaySuggestion.label,
-        minutes: todaySuggestion.minutes,
-        soundscapeId: todaySuggestion.soundscapeId,
-      };
-      setShowAudioSafetyModal(true);
-      return;
-    }
-    playSoundscape(todaySuggestion.soundscapeId);
-    recordSession(todaySuggestion.label, todaySuggestion.minutes);
-    loadAndPlay(l, r);
-  }
-
   // --- Render --------------------------------------------------------------
 
   return (
@@ -1864,18 +1732,6 @@ function AppContent() {
           style={{ flex: 1 }}
         >
           <Animated.View style={{ flex: 1, opacity: tabFade }}>
-            {tab === 'today' && (
-              <TodayView
-                suggestion={todaySuggestion}
-                sessions={sessionHistory}
-                lunar={lunar}
-                mySign={mySign}
-                onStart={startTodaySession}
-                onOpenFrequencies={() => setTab('frequencies')}
-                onOpenBreath={() => setTab('breath')}
-                onOpenMore={() => setTab('more')}
-              />
-            )}
             {tab === 'frequencies' && (
               <FrequenciesView
                 leftHz={leftHz} rightHz={rightHz}
@@ -2033,10 +1889,7 @@ function AppContent() {
         visible={showAudioSafetyModal}
         transparent
         animationType="fade"
-        onRequestClose={() => {
-          pendingStartRef.current = null;
-          setShowAudioSafetyModal(false);
-        }}
+        onRequestClose={() => setShowAudioSafetyModal(false)}
       >
         <View style={styles.audioSafetyBackdrop}>
           <View style={styles.audioSafetyCard}>
@@ -2054,10 +1907,7 @@ function AppContent() {
             <View style={styles.audioSafetyActions}>
               <TouchableOpacity
                 activeOpacity={0.85}
-                onPress={() => {
-                  pendingStartRef.current = null;
-                  setShowAudioSafetyModal(false);
-                }}
+                onPress={() => setShowAudioSafetyModal(false)}
                 style={styles.audioSafetyCancelBtn}
                 accessibilityLabel="Cancel"
               >
@@ -2112,128 +1962,6 @@ export default Sentry.wrap(function App() {
 // ===========================================================================
 //   TabBar
 // ===========================================================================
-
-function TodayView({
-  suggestion,
-  sessions,
-  lunar,
-  mySign,
-  onStart,
-  onOpenFrequencies,
-  onOpenBreath,
-  onOpenMore,
-}: {
-  suggestion: {
-    label: string;
-    presetId: string;
-    minutes: number;
-    soundscapeId: SoundscapeKey;
-    copy: string;
-  };
-  sessions: SessionEntry[];
-  lunar: { glyph: string; name: string; illum: number };
-  mySign: Zodiac;
-  onStart: () => void;
-  onOpenFrequencies: () => void;
-  onOpenBreath: () => void;
-  onOpenMore: () => void;
-}) {
-  const recent = sessions.slice(0, 4);
-  const todayCount = sessions.filter(s => new Date(s.ts).toDateString() === new Date().toDateString()).length;
-  const suggestedPreset = PRESETS.find(p => p.id === suggestion.presetId) ?? PRESETS[0];
-  const soundscape = SOUNDSCAPES.find(s => s.id === suggestion.soundscapeId);
-
-  return (
-    <ScrollView
-      contentContainerStyle={styles.todayScroll}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.todayHeader}>
-        <Text style={styles.todayKicker}>SIMPLY AMBIENT</Text>
-        <Text style={styles.todayTitle}>Right now</Text>
-        <Text style={styles.todaySub}>
-          {lunar.glyph} {lunar.name} moon · {mySign.name} season
-        </Text>
-      </View>
-
-      <View style={[styles.ritualCard, { borderColor: suggestedPreset.color + '66' }]}>
-        <View style={styles.ritualTopRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.ritualLabel}>SUGGESTED SESSION</Text>
-            <Text style={styles.ritualTitle}>{suggestion.label}</Text>
-            <Text style={styles.ritualCopy}>{suggestion.copy}</Text>
-          </View>
-          <View style={[styles.ritualGlyph, { borderColor: suggestedPreset.color, backgroundColor: suggestedPreset.color + '22' }]}>
-            <Text style={[styles.ritualGlyphText, { color: suggestedPreset.color }]}>∿</Text>
-          </View>
-        </View>
-
-        <View style={styles.ritualMetaRow}>
-          <View style={styles.ritualMetaPill}>
-            <Text style={styles.ritualMetaLabel}>TONE</Text>
-            <Text style={styles.ritualMetaValue}>{suggestedPreset.name} · {suggestedPreset.beatHz} Hz</Text>
-          </View>
-          <View style={styles.ritualMetaPill}>
-            <Text style={styles.ritualMetaLabel}>LAYER</Text>
-            <Text style={styles.ritualMetaValue}>{soundscape?.name ?? 'Ambient'}</Text>
-          </View>
-          <View style={styles.ritualMetaPill}>
-            <Text style={styles.ritualMetaLabel}>TIMER</Text>
-            <Text style={styles.ritualMetaValue}>{suggestion.minutes} min</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          activeOpacity={0.88}
-          onPress={onStart}
-          style={[styles.ritualStartBtn, { backgroundColor: suggestedPreset.color }]}
-        >
-          <Text style={styles.ritualStartText}>BEGIN RITUAL</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.quickRow}>
-        <TouchableOpacity activeOpacity={0.85} onPress={onOpenFrequencies} style={styles.quickCard}>
-          <Text style={styles.quickGlyph}>∿</Text>
-          <Text style={styles.quickTitle}>Tune</Text>
-        </TouchableOpacity>
-        <TouchableOpacity activeOpacity={0.85} onPress={onOpenBreath} style={styles.quickCard}>
-          <Text style={styles.quickGlyph}>○</Text>
-          <Text style={styles.quickTitle}>Breathe</Text>
-        </TouchableOpacity>
-        <TouchableOpacity activeOpacity={0.85} onPress={onOpenMore} style={styles.quickCard}>
-          <Text style={styles.quickGlyph}>✦</Text>
-          <Text style={styles.quickTitle}>Reflect</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.historyCard}>
-        <View style={styles.historyHeader}>
-          <Text style={styles.historyLabel}>PRACTICE</Text>
-          <Text style={styles.historyCount}>{todayCount ? `${todayCount} today` : 'start today'}</Text>
-        </View>
-        {recent.length === 0 ? (
-          <Text style={styles.historyEmpty}>Your recent sessions will appear here.</Text>
-        ) : (
-          recent.map(s => (
-            <View key={s.id} style={styles.historyRow}>
-              <View style={styles.historyDot} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.historyName}>{s.name}</Text>
-                <Text style={styles.historyMeta}>
-                  {new Date(s.ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                  {' · '}
-                  {s.minutes ? `${s.minutes} min` : `${s.beatHz} Hz`}
-                  {s.layer ? ` · ${s.layer}` : ''}
-                </Text>
-              </View>
-            </View>
-          ))
-        )}
-      </View>
-    </ScrollView>
-  );
-}
 
 function SoundscapesView({
   soundscapes,
@@ -2419,7 +2147,6 @@ function TabBar({
   return (
     <SafeAreaView edges={['bottom']} style={styles.tabBarSafe}>
       <View style={styles.tabBar}>
-        <TabButton label="Today" glyph="◐" active={tab === 'today'} accent={accent} onPress={() => onChange('today')} />
         <TabButton label="Frequencies" glyph="∿" active={tab === 'frequencies'} accent={accent} onPress={() => onChange('frequencies')} />
         <TabButton label="Breath"      glyph="○" active={tab === 'breath'}      accent={accent} onPress={() => onChange('breath')} />
         <TabButton label="Chakras"     glyph="✦" active={tab === 'chakras'}     accent={accent} onPress={() => onChange('chakras')} />
@@ -2913,109 +2640,6 @@ const styles = StyleSheet.create({
     marginTop: 18, letterSpacing: 0.5, textAlign: 'center',
     paddingHorizontal: 24, fontWeight: '300',
   },
-  todayScroll: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 12 : 8,
-    paddingBottom: 120,
-  },
-  todayHeader: { marginBottom: 16 },
-  todayKicker: {
-    color: '#d9b35c',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 3,
-  },
-  todayTitle: {
-    color: '#fff',
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 46,
-    lineHeight: 50,
-    marginTop: 4,
-  },
-  todaySub: { color: '#ffffff88', fontSize: 13, marginTop: 4 },
-  ritualCard: {
-    backgroundColor: 'rgba(0,0,0,0.32)',
-    borderWidth: 1,
-    borderRadius: 22,
-    padding: 18,
-  },
-  ritualTopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
-  ritualLabel: { color: '#ffffff80', fontSize: 10, letterSpacing: 2, fontWeight: '800' },
-  ritualTitle: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '800',
-    marginTop: 8,
-    letterSpacing: 0.3,
-  },
-  ritualCopy: { color: '#ffffff99', fontSize: 13, lineHeight: 19, marginTop: 5 },
-  ritualGlyph: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ritualGlyphText: { fontSize: 25, fontWeight: '800' },
-  ritualMetaRow: { flexDirection: 'row', gap: 8, marginTop: 18 },
-  ritualMetaPill: {
-    flex: 1,
-    minHeight: 58,
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    backgroundColor: 'rgba(255,255,255,0.055)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  ritualMetaLabel: { color: '#ffffff66', fontSize: 9, fontWeight: '800', letterSpacing: 1.4 },
-  ritualMetaValue: { color: '#fff', fontSize: 11, fontWeight: '700', marginTop: 4, lineHeight: 14 },
-  ritualStartBtn: {
-    minHeight: 56,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
-  },
-  ritualStartText: { color: '#0B0B1F', fontSize: 13, fontWeight: '900', letterSpacing: 2.4 },
-  quickRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  quickCard: {
-    flex: 1,
-    borderRadius: 16,
-    minHeight: 76,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.24)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  quickGlyph: { color: '#d9b35c', fontSize: 24, fontWeight: '800' },
-  quickTitle: { color: '#ffffffcc', fontSize: 12, fontWeight: '800', letterSpacing: 1, marginTop: 4 },
-  historyCard: {
-    marginTop: 14,
-    backgroundColor: 'rgba(0,0,0,0.24)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 18,
-    padding: 16,
-  },
-  historyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  historyLabel: { color: '#ffffff80', fontSize: 10, letterSpacing: 2, fontWeight: '800' },
-  historyCount: { color: '#d9b35c', fontSize: 11, fontWeight: '800', letterSpacing: 1 },
-  historyEmpty: { color: '#ffffff66', fontSize: 12, marginTop: 12, fontStyle: 'italic' },
-  historyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 12,
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
-  },
-  historyDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#d9b35c', marginRight: 11 },
-  historyName: { color: '#fff', fontSize: 13, fontWeight: '800' },
-  historyMeta: { color: '#ffffff77', fontSize: 11, marginTop: 2 },
-
   beatCard: {
     backgroundColor: 'rgba(0,0,0,0.30)',
     borderWidth: 1, borderRadius: 24,
