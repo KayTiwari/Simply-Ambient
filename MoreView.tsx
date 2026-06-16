@@ -2874,7 +2874,12 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginRight: 12, borderWidth: 1,
   },
-  soundscapeGlyph: { fontSize: 20, fontWeight: '700' },
+  soundscapeGlyph: {
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 1,
+    fontFamily: 'Courier',
+  },
   soundscapeName: { color: '#fff', fontSize: 14, fontWeight: '600' },
   soundscapeBlurb: { color: '#ffffff88', fontSize: 12, marginTop: 2 },
   soundscapeSoon: {

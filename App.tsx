@@ -185,13 +185,13 @@ type Soundscape = {
 };
 
 const SOUNDSCAPES: Soundscape[] = [
-  { id: 'rain',   name: 'Soft Rain',      blurb: 'A steady veil with tiny drops near the edge of attention.', color: '#5BD0FF', glyph: '╱╱' },
-  { id: 'ocean',  name: 'Ocean Tide',     blurb: 'Long swells for downshifting into sleep or recovery.',      color: '#5B6CFF', glyph: '≋' },
-  { id: 'forest', name: 'Forest Air',     blurb: 'Leaf wash with a few distant, breathy chirps.',             color: '#9affc8', glyph: '⌁' },
-  { id: 'fire',   name: 'Hearth',         blurb: 'Warm crackle under the tones, quiet and close.',            color: '#FFB05B', glyph: '◠' },
-  { id: 'white',  name: 'White Noise',    blurb: 'Even masking for busy rooms and brittle silence.',          color: '#ffffffcc', glyph: '▒' },
-  { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer masking with less edge than white noise.',           color: '#FFD0E1', glyph: '░' },
-  { id: 'brown',  name: 'Brown Noise',    blurb: 'Low, dense, and grounding for a heavy nervous system.',     color: '#8A6B4A', glyph: '▂' },
+  { id: 'rain',   name: 'Soft Rain',      blurb: 'A steady veil with tiny drops near the edge of attention.', color: '#5BD0FF', glyph: '//' },
+  { id: 'ocean',  name: 'Ocean Tide',     blurb: 'Long swells for downshifting into sleep or recovery.',      color: '#5B6CFF', glyph: '~~' },
+  { id: 'forest', name: 'Forest Air',     blurb: 'Leaf wash with a few distant, breathy chirps.',             color: '#9affc8', glyph: 'Y' },
+  { id: 'fire',   name: 'Hearth',         blurb: 'Warm crackle under the tones, quiet and close.',            color: '#FFB05B', glyph: '^' },
+  { id: 'white',  name: 'White Noise',    blurb: 'Even masking for busy rooms and brittle silence.',          color: '#ffffffcc', glyph: '##' },
+  { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer masking with less edge than white noise.',           color: '#FFD0E1', glyph: '::' },
+  { id: 'brown',  name: 'Brown Noise',    blurb: 'Low, dense, and grounding for a heavy nervous system.',     color: '#8A6B4A', glyph: '__' },
 ];
 
 export type Chakra = {
@@ -2801,7 +2801,12 @@ const styles = StyleSheet.create({
     padding: 14,
     justifyContent: 'space-between',
   },
-  soundscapeTileGlyph: { fontSize: 24, fontWeight: '800', letterSpacing: 1.4 },
+  soundscapeTileGlyph: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : undefined,
+  },
   soundscapeTileName: { color: '#fff', fontSize: 15, fontWeight: '800', marginTop: 8 },
   soundscapeTileBlurb: { color: '#ffffff77', fontSize: 11, lineHeight: 15, marginTop: 5 },
   soundscapeTileAction: { fontSize: 10, fontWeight: '900', letterSpacing: 1.6, marginTop: 12 },
