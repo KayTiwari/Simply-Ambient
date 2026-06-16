@@ -2293,17 +2293,13 @@ function MoreLauncher({
   accent: string;
   onPress: () => void;
 }) {
-  const insets = useSafeAreaInsets();
   return (
     <TouchableOpacity
       activeOpacity={0.82}
       onPress={onPress}
       style={[
         styles.moreLauncher,
-        {
-          bottom: insets.bottom + 86,
-          borderColor: accent + '55',
-        },
+        { borderColor: accent + '55' },
       ]}
       accessibilityLabel="Open more tools"
       accessibilityRole="button"
@@ -2314,7 +2310,7 @@ function MoreLauncher({
         <View style={[styles.moreLauncherMark, { backgroundColor: accent, opacity: 0.68 }]} />
         <View style={[styles.moreLauncherMark, { backgroundColor: accent, opacity: 0.42 }]} />
       </View>
-      <Text style={styles.moreLauncherText}>more</Text>
+      <Text style={styles.moreLauncherText}>More</Text>
     </TouchableOpacity>
   );
 }
@@ -3154,46 +3150,49 @@ const styles = StyleSheet.create({
   },
   moreLauncher: {
     position: 'absolute',
-    left: 0,
-    width: 44,
-    minHeight: 78,
-    borderTopRightRadius: 18,
-    borderBottomRightRadius: 18,
+    top: 14,
+    left: 14,
+    minWidth: 82,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1,
-    borderLeftWidth: 0,
     backgroundColor: 'rgba(5,5,12,0.72)',
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    paddingHorizontal: 12,
     zIndex: 35,
     shadowColor: '#000',
     shadowOpacity: 0.32,
     shadowRadius: 12,
-    shadowOffset: { width: 4, height: 6 },
+    shadowOffset: { width: 0, height: 6 },
     elevation: 10,
   },
   moreLauncherRail: {
     position: 'absolute',
-    left: 0,
-    top: 12,
-    bottom: 12,
+    left: 6,
+    top: 8,
+    bottom: 8,
     width: 2,
+    borderRadius: 2,
     opacity: 0.82,
   },
   moreLauncherMarks: {
     gap: 4,
-    marginBottom: 7,
+    marginLeft: 4,
+    marginRight: 8,
     alignItems: 'center',
   },
   moreLauncherMark: {
-    width: 14,
+    width: 12,
     height: 2,
     borderRadius: 2,
   },
   moreLauncherText: {
     color: '#ffffff88',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 1.1,
+    letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
 
