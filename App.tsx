@@ -127,6 +127,7 @@ export async function getStreak(): Promise<number> {
 const DEFAULT_LEFT = 200;
 const DEFAULT_RIGHT = 210;
 const TONE_FILE_PATH = `${FileSystem.cacheDirectory}binaural-tone.wav`;
+const SOUNDSCAPE_FILE_PREFIX = `${FileSystem.cacheDirectory}simply-ambient-soundscape-`;
 const SLIDE_THROTTLE_MS = 220;
 
 type BandKey =
@@ -171,6 +172,26 @@ type TuningPreset = {
   blurb: string;
   origin: 'solfeggio' | 'natural' | 'cosmic' | 'archaeo' | 'scientific';
 };
+
+type SoundscapeKey = 'rain' | 'ocean' | 'forest' | 'fire' | 'white' | 'pink' | 'brown';
+
+type Soundscape = {
+  id: SoundscapeKey;
+  name: string;
+  blurb: string;
+  glyph: string;
+  color: string;
+};
+
+const SOUNDSCAPES: Soundscape[] = [
+  { id: 'rain',   name: 'Soft Rain',      blurb: 'A steady veil with tiny drops near the edge of attention.', color: '#5BD0FF', glyph: '╱╱' },
+  { id: 'ocean',  name: 'Ocean Tide',     blurb: 'Long swells for downshifting into sleep or recovery.',      color: '#5B6CFF', glyph: '≋' },
+  { id: 'forest', name: 'Forest Air',     blurb: 'Leaf wash with a few distant, breathy chirps.',             color: '#9affc8', glyph: '⌁' },
+  { id: 'fire',   name: 'Hearth',         blurb: 'Warm crackle under the tones, quiet and close.',            color: '#FFB05B', glyph: '◠' },
+  { id: 'white',  name: 'White Noise',    blurb: 'Even masking for busy rooms and brittle silence.',          color: '#ffffffcc', glyph: '▒' },
+  { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer masking with less edge than white noise.',           color: '#FFD0E1', glyph: '░' },
+  { id: 'brown',  name: 'Brown Noise',    blurb: 'Low, dense, and grounding for a heavy nervous system.',     color: '#8A6B4A', glyph: '▂' },
+];
 
 export type Chakra = {
   id: string;
@@ -505,6 +526,106 @@ function buildWav(leftHz: number, rightHz: number): string {
     view.setInt16(off, r, true); off += 2;
   }
   return bytesToBase64(new Uint8Array(buffer));
+}
+
+function seededNoise(seed: number) {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return (s / 0xffffffff) * 2 - 1;
+  };
+}
+
+function buildStereoWav(
+  seconds: number,
+  sampleFn: (t: number, i: number) => [number, number],
+): string {
+  const sampleRate = 44100;
+  const numSamples = Math.floor(sampleRate * seconds);
+  const numChannels = 2;
+  const blockAlign = numChannels * 2;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = numSamples * blockAlign;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+  writeAscii(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeAscii(view, 8, 'WAVE');
+  writeAscii(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, 16, true);
+  writeAscii(view, 36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let off = 44;
+  for (let i = 0; i < numSamples; i++) {
+    const [left, right] = sampleFn(i / sampleRate, i);
+    const l = Math.max(-1, Math.min(1, left));
+    const r = Math.max(-1, Math.min(1, right));
+    view.setInt16(off, Math.round(l * 32767), true); off += 2;
+    view.setInt16(off, Math.round(r * 32767), true); off += 2;
+  }
+  return bytesToBase64(new Uint8Array(buffer));
+}
+
+function buildSoundscapeWav(kind: SoundscapeKey): string {
+  const rnd = seededNoise(
+    kind.split('').reduce((acc, ch) => acc + ch.charCodeAt(0) * 37, 7919),
+  );
+  const twoPi = Math.PI * 2;
+  let pink = 0;
+  let brown = 0;
+  let rain = 0;
+  let leftDrift = 0;
+  let rightDrift = 0;
+
+  return buildStereoWav(2, (t, i) => {
+    const white = rnd();
+    pink = pink * 0.92 + white * 0.08;
+    brown = Math.max(-1, Math.min(1, brown + white * 0.025));
+    rain = rain * 0.72 + white * 0.28;
+    leftDrift = leftDrift * 0.995 + rnd() * 0.005;
+    rightDrift = rightDrift * 0.995 + rnd() * 0.005;
+
+    const panLeft = 0.96 + leftDrift * 0.04;
+    const panRight = 0.96 + rightDrift * 0.04;
+    const chirp = Math.sin(twoPi * (1600 + 900 * Math.sin(t * twoPi * 0.17)) * t);
+    const drop = (i % 4139 === 0 || i % 5779 === 0) ? 0.8 : 0;
+    const tide = Math.sin(twoPi * 0.34 * t) * 0.18 + Math.sin(twoPi * 0.71 * t) * 0.08;
+    const ember = Math.abs(white) > 0.975 ? white * 0.8 : white * 0.08;
+
+    switch (kind) {
+      case 'rain': {
+        const s = rain * 0.22 + drop * 0.12;
+        return [s * panLeft, (rain * 0.20 + drop * 0.08) * panRight];
+      }
+      case 'ocean': {
+        const foam = pink * 0.13 + tide;
+        return [foam * panLeft, (pink * 0.12 + tide * 0.9) * panRight];
+      }
+      case 'forest': {
+        const leaves = pink * 0.10 + Math.sin(twoPi * 0.09 * t) * 0.04;
+        const birds = i % 17111 < 140 ? chirp * 0.035 : 0;
+        return [(leaves + birds) * panLeft, (leaves * 0.9 + birds * 0.6) * panRight];
+      }
+      case 'fire': {
+        const s = pink * 0.07 + ember * 0.22;
+        return [s * panLeft, (pink * 0.06 + ember * 0.18) * panRight];
+      }
+      case 'pink':
+        return [pink * 0.24 * panLeft, pink * 0.22 * panRight];
+      case 'brown':
+        return [brown * 0.25 * panLeft, brown * 0.23 * panRight];
+      case 'white':
+      default:
+        return [white * 0.18 * panLeft, rnd() * 0.18 * panRight];
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -879,6 +1000,9 @@ function AppContent() {
   const [bgUri, setBgUri] = useState<string | null>(null);
   const [isBgPlaying, setIsBgPlaying] = useState(false);
   const [bgVolume, setBgVolume] = useState(0.5);
+  const [activeSoundscapeId, setActiveSoundscapeId] = useState<SoundscapeKey | null>(null);
+  const [isSoundscapePlaying, setIsSoundscapePlaying] = useState(false);
+  const [soundscapeVolume, setSoundscapeVolume] = useState(0.42);
 
   const [lunar] = useState(() => lunarPhase());
   const [mySignId, setMySignId] = useState<string | null>(null);
@@ -957,7 +1081,7 @@ function AppContent() {
         sleepTimeoutRef.current = null;
         setSleepMinutes(0);
         setSleepEndsAt(null);
-        if (stateRef.current.isTonePlaying) stopTones();
+        fadeOutSession();
       }, minutes * 60 * 1000);
     } else {
       setSleepEndsAt(null);
@@ -972,6 +1096,8 @@ function AppContent() {
   const tonePlayerRef = useRef<AudioPlayer | null>(null);
   const tonePlayGenRef = useRef(0);
   const bgPlayerRef = useRef<AudioPlayer | null>(null);
+  const soundscapePlayerRef = useRef<AudioPlayer | null>(null);
+  const soundscapeCacheRef = useRef<Partial<Record<SoundscapeKey, string>>>({});
   // Web-only: gapless oscillator engine, created lazily on first play.
   const webToneRef = useRef<WebToneEngine | null>(null);
 
@@ -992,6 +1118,9 @@ function AppContent() {
     : null;
   const activeChakra = activePresetId && activePresetId.startsWith('cr-')
     ? CHAKRAS.find(c => c.id === activePresetId) ?? null
+    : null;
+  const activeSoundscape = activeSoundscapeId
+    ? SOUNDSCAPES.find(s => s.id === activeSoundscapeId) ?? null
     : null;
   const beatColor =
     activeBand === 'none' ? '#9aa0b4' :
@@ -1019,6 +1148,8 @@ function AppContent() {
       try { tonePlayerRef.current?.remove?.(); } catch {}
       try { bgPlayerRef.current?.release(); } catch {}
       try { bgPlayerRef.current?.remove?.(); } catch {}
+      try { soundscapePlayerRef.current?.release(); } catch {}
+      try { soundscapePlayerRef.current?.remove?.(); } catch {}
     };
   }, []);
 
@@ -1116,6 +1247,50 @@ function AppContent() {
     }
     setIsTonePlaying(false);
     setIsToneLoading(false);
+  }
+
+  function fadeNativePlayer(player: AudioPlayer | null, target: number, durationMs = 2500) {
+    if (!player) return Promise.resolve();
+    const start = typeof player.volume === 'number' ? player.volume : 1;
+    const steps = 18;
+    let step = 0;
+    return new Promise<void>(resolve => {
+      const interval = setInterval(() => {
+        step += 1;
+        const p = step / steps;
+        try { player.volume = start + (target - start) * p; } catch {}
+        if (step >= steps) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, Math.max(16, durationMs / steps));
+    });
+  }
+
+  async function fadeOutSession() {
+    const tone = tonePlayerRef.current;
+    const bg = bgPlayerRef.current;
+    const soundscape = soundscapePlayerRef.current;
+    if (Platform.OS === 'web') {
+      stopTones();
+    } else {
+      await Promise.all([
+        fadeNativePlayer(tone, 0),
+        fadeNativePlayer(bg, 0),
+        fadeNativePlayer(soundscape, 0),
+      ]);
+      if (tone) stopTones();
+    }
+    if (bg) {
+      try { bg.pause(); } catch {}
+      try { bg.volume = bgVolume; } catch {}
+      setIsBgPlaying(false);
+    }
+    if (soundscape) {
+      try { soundscape.pause(); } catch {}
+      try { soundscape.volume = soundscapeVolume; } catch {}
+      setIsSoundscapePlaying(false);
+    }
   }
 
   function togglePlay() {
@@ -1368,6 +1543,66 @@ function AppContent() {
     setBgUri(null);
   }
 
+  async function ensureSoundscapeUri(id: SoundscapeKey) {
+    const cached = soundscapeCacheRef.current[id];
+    if (cached) return cached;
+    const base64 = buildSoundscapeWav(id);
+    const uri = `${SOUNDSCAPE_FILE_PREFIX}${id}.wav`;
+    await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
+    soundscapeCacheRef.current[id] = uri;
+    return uri;
+  }
+
+  async function playSoundscape(id: SoundscapeKey) {
+    try {
+      const uri = await ensureSoundscapeUri(id);
+      const source = { uri: `${uri}?v=1` };
+      if (!soundscapePlayerRef.current || activeSoundscapeId !== id) {
+        try { soundscapePlayerRef.current?.release(); } catch {}
+        try { soundscapePlayerRef.current?.remove?.(); } catch {}
+        const p = createAudioPlayer(source);
+        p.loop = true;
+        p.volume = soundscapeVolume;
+        soundscapePlayerRef.current = p;
+      } else {
+        soundscapePlayerRef.current.volume = soundscapeVolume;
+      }
+      soundscapePlayerRef.current.play();
+      setActiveSoundscapeId(id);
+      setIsSoundscapePlaying(true);
+    } catch (e) {
+      console.warn('soundscape failed', e);
+    }
+  }
+
+  function stopSoundscape() {
+    try { soundscapePlayerRef.current?.pause(); } catch {}
+    setIsSoundscapePlaying(false);
+  }
+
+  function toggleSoundscape(id: SoundscapeKey) {
+    if (activeSoundscapeId === id && isSoundscapePlaying) {
+      stopSoundscape();
+      return;
+    }
+    playSoundscape(id);
+  }
+
+  function changeSoundscapeVolume(v: number) {
+    setSoundscapeVolume(v);
+    if (soundscapePlayerRef.current) soundscapePlayerRef.current.volume = v;
+  }
+
+  function stopEverything() {
+    setSleepTimer(0);
+    stopTones();
+    stopSoundscape();
+    if (isBgPlaying) {
+      try { bgPlayerRef.current?.pause(); } catch {}
+      setIsBgPlaying(false);
+    }
+  }
+
   // --- Render --------------------------------------------------------------
 
   return (
@@ -1404,6 +1639,10 @@ function AppContent() {
                 bgFileName={bgFileName}
                 isBgPlaying={isBgPlaying}
                 bgVolume={bgVolume}
+                soundscapes={SOUNDSCAPES}
+                activeSoundscapeId={activeSoundscapeId}
+                isSoundscapePlaying={isSoundscapePlaying}
+                soundscapeVolume={soundscapeVolume}
                 beatColor={beatColor}
                 onCommitLeft={commitLeft}
                 onCommitRight={commitRight}
@@ -1419,6 +1658,8 @@ function AppContent() {
                 onToggleBg={toggleBg}
                 onChangeBgVolume={changeBgVolume}
                 onClearBg={clearBg}
+                onToggleSoundscape={toggleSoundscape}
+                onChangeSoundscapeVolume={changeSoundscapeVolume}
               />
             )}
             {tab === 'breath' && (
@@ -1465,6 +1706,19 @@ function AppContent() {
           </Animated.View>
         </KeyboardAvoidingView>
 
+        <MiniPlayer
+          visible={isTonePlaying || isToneLoading || isSoundscapePlaying || isBgPlaying || sleepEndsAt != null}
+          title={displayBandName}
+          beat={beat}
+          accent={beatColor}
+          isTonePlaying={isTonePlaying}
+          isToneLoading={isToneLoading}
+          sleepEndsAt={sleepEndsAt}
+          soundscapeName={activeSoundscape?.name ?? (isBgPlaying ? 'Imported audio' : null)}
+          onTogglePlay={togglePlay}
+          onOpen={() => setTab('frequencies')}
+          onStopAll={stopEverything}
+        />
         <TabBar tab={tab} onChange={setTab} accent={beatColor} />
       </SafeAreaView>
 
@@ -1587,6 +1841,87 @@ export default Sentry.wrap(function App() {
 //   TabBar
 // ===========================================================================
 
+function formatRemaining(ms: number) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function MiniPlayer({
+  visible,
+  title,
+  beat,
+  accent,
+  isTonePlaying,
+  isToneLoading,
+  sleepEndsAt,
+  soundscapeName,
+  onTogglePlay,
+  onOpen,
+  onStopAll,
+}: {
+  visible: boolean;
+  title: string;
+  beat: number;
+  accent: string;
+  isTonePlaying: boolean;
+  isToneLoading: boolean;
+  sleepEndsAt: number | null;
+  soundscapeName: string | null;
+  onTogglePlay: () => void;
+  onOpen: () => void;
+  onStopAll: () => void;
+}) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (!visible || !sleepEndsAt) return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [visible, sleepEndsAt]);
+
+  if (!visible) return null;
+  const timerText = sleepEndsAt ? formatRemaining(sleepEndsAt - now) : null;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onOpen}
+      style={[styles.miniPlayer, { borderColor: accent + '66' }]}
+      accessibilityLabel="Open current sound session"
+    >
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={onTogglePlay}
+        style={[styles.miniPlayBtn, { backgroundColor: isTonePlaying ? '#fff' : accent }]}
+        accessibilityLabel={isTonePlaying ? 'Pause tones' : 'Play tones'}
+      >
+        {isToneLoading ? (
+          <ActivityIndicator color="#0B0B1F" size="small" />
+        ) : (
+          <Text style={styles.miniPlayText}>{isTonePlaying ? 'Ⅱ' : '▶'}</Text>
+        )}
+      </TouchableOpacity>
+      <View style={styles.miniBody}>
+        <Text style={styles.miniTitle} numberOfLines={1}>{title} · {beat.toFixed(0)} Hz</Text>
+        <Text style={styles.miniMeta} numberOfLines={1}>
+          {soundscapeName ? soundscapeName : 'Pure binaural tone'}
+          {timerText ? ` · fades in ${timerText}` : ''}
+        </Text>
+      </View>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={onStopAll}
+        style={styles.miniStopBtn}
+        accessibilityLabel="Stop all audio"
+      >
+        <Text style={styles.miniStopText}>×</Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+}
+
 function TabBar({ tab, onChange, accent }: { tab: Tab; onChange: (t: Tab) => void; accent: string }) {
   return (
     <SafeAreaView edges={['bottom']} style={styles.tabBarSafe}>
@@ -1633,6 +1968,10 @@ type FreqViewProps = {
   bgFileName: string | null;
   isBgPlaying: boolean;
   bgVolume: number;
+  soundscapes: Soundscape[];
+  activeSoundscapeId: SoundscapeKey | null;
+  isSoundscapePlaying: boolean;
+  soundscapeVolume: number;
   beatColor: string;
   onCommitLeft: (v: number) => void;
   onCommitRight: (v: number) => void;
@@ -1648,6 +1987,8 @@ type FreqViewProps = {
   onToggleBg: () => void;
   onChangeBgVolume: (v: number) => void;
   onClearBg: () => void;
+  onToggleSoundscape: (id: SoundscapeKey) => void;
+  onChangeSoundscapeVolume: (v: number) => void;
 };
 
 function FrequenciesView(props: FreqViewProps) {
@@ -1655,7 +1996,9 @@ function FrequenciesView(props: FreqViewProps) {
     leftHz, rightHz, beat, band, activeBand, activeTuning, activeChakra, activePresetId,
     sleepMinutes, onSetSleepTimer,
     isTonePlaying, isToneLoading, userPresets,
-    bgFileName, isBgPlaying, bgVolume, beatColor,
+    bgFileName, isBgPlaying, bgVolume,
+    soundscapes, activeSoundscapeId, isSoundscapePlaying, soundscapeVolume,
+    beatColor,
   } = props;
 
   const [customSleepOpen, setCustomSleepOpen] = useState(false);
@@ -1710,6 +2053,21 @@ function FrequenciesView(props: FreqViewProps) {
                 : band.name}
           </Text>
         </View>
+        <TouchableOpacity
+          activeOpacity={0.88}
+          onPress={props.onTogglePlay}
+          style={[styles.primarySessionBtn, { backgroundColor: isTonePlaying ? '#fff' : beatColor }]}
+          accessibilityLabel={isTonePlaying ? 'Stop binaural session' : 'Start binaural session'}
+        >
+          {isToneLoading ? (
+            <ActivityIndicator color="#0B0B1F" />
+          ) : (
+            <>
+              <Text style={styles.primarySessionMark}>{isTonePlaying ? 'Ⅱ' : '▶'}</Text>
+              <Text style={styles.primarySessionText}>{isTonePlaying ? 'STOP SESSION' : 'START SESSION'}</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
 
       <FrequencyControl
@@ -1793,18 +2151,6 @@ function FrequenciesView(props: FreqViewProps) {
           );
         })}
       </ScrollView>
-
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={props.onTogglePlay}
-        style={[styles.playBtn, { backgroundColor: isTonePlaying ? '#fff' : beatColor }]}
-      >
-        {isToneLoading ? (
-          <ActivityIndicator color="#0B0B1F" />
-        ) : (
-          <Text style={styles.playText}>{isTonePlaying ? 'STOP' : 'PLAY'}</Text>
-        )}
-      </TouchableOpacity>
 
       <View style={styles.sleepRow}>
         <Text style={styles.sleepLabel}>STILLNESS · auto-end</Text>
@@ -1891,6 +2237,52 @@ function FrequenciesView(props: FreqViewProps) {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      <View style={styles.bgCard}>
+        <View style={styles.soundscapeHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionLabel}>SOUNDSCAPES</Text>
+            <Text style={styles.sectionSub}>Generated on-device and mixed under the tones</Text>
+          </View>
+          <Text style={styles.soundscapeVolumeText}>{Math.round(soundscapeVolume * 100)}%</Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.soundscapeRow}>
+          {soundscapes.map(s => {
+            const active = activeSoundscapeId === s.id && isSoundscapePlaying;
+            return (
+              <TouchableOpacity
+                key={s.id}
+                activeOpacity={0.85}
+                onPress={() => props.onToggleSoundscape(s.id)}
+                style={[
+                  styles.soundscapeChip,
+                  {
+                    borderColor: active ? s.color : s.color + '55',
+                    backgroundColor: active ? s.color + '22' : 'rgba(255,255,255,0.045)',
+                  },
+                ]}
+              >
+                <Text style={[styles.soundscapeGlyph, { color: s.color }]}>{s.glyph}</Text>
+                <Text style={styles.soundscapeName}>{s.name}</Text>
+                <Text style={styles.soundscapeBlurb} numberOfLines={2}>{s.blurb}</Text>
+                <Text style={[styles.soundscapeState, { color: active ? s.color : '#ffffff66' }]}>
+                  {active ? 'PLAYING' : 'TAP TO LAYER'}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+        <Slider
+          style={{ width: '100%', height: 34, marginTop: 6 }}
+          minimumValue={0}
+          maximumValue={1}
+          value={soundscapeVolume}
+          minimumTrackTintColor="#d9b35c"
+          maximumTrackTintColor="rgba(255,255,255,0.12)"
+          thumbTintColor="#d9b35c"
+          onValueChange={props.onChangeSoundscapeVolume}
+        />
+      </View>
 
       <View style={styles.bgCard}>
         <Text style={styles.sectionLabel}>BACKGROUND MUSIC</Text>
@@ -2106,6 +2498,33 @@ const styles = StyleSheet.create({
   },
   bandDot: { width: 7, height: 7, borderRadius: 4, marginRight: 8 },
   bandText: { fontWeight: '600', fontSize: 12, letterSpacing: 1.5 },
+  primarySessionBtn: {
+    minHeight: 58,
+    borderRadius: 18,
+    marginTop: 16,
+    paddingHorizontal: 18,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 7,
+  },
+  primarySessionMark: {
+    color: '#0B0B1F',
+    fontSize: 17,
+    fontWeight: '800',
+    marginRight: 10,
+  },
+  primarySessionText: {
+    color: '#0B0B1F',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 2.2,
+  },
 
   freqCard: {
     backgroundColor: 'rgba(0,0,0,0.28)',
@@ -2181,6 +2600,37 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.25)',
   },
   sleepPillText: { color: '#ffffff99', fontSize: 11, fontWeight: '600', letterSpacing: 1 },
+  soundscapeHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  soundscapeVolumeText: {
+    color: '#d9b35c',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.8,
+    marginTop: 10,
+  },
+  soundscapeRow: { paddingRight: 12, paddingTop: 2, paddingBottom: 8 },
+  soundscapeChip: {
+    width: 152,
+    minHeight: 144,
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    marginRight: 10,
+    justifyContent: 'space-between',
+  },
+  soundscapeGlyph: {
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    marginBottom: 8,
+  },
+  soundscapeName: { color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 0.3 },
+  soundscapeBlurb: { color: '#ffffff77', fontSize: 11, lineHeight: 15, marginTop: 5 },
+  soundscapeState: { fontSize: 9, fontWeight: '800', letterSpacing: 1.6, marginTop: 10 },
 
   customSleepBackdrop: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
@@ -2298,6 +2748,42 @@ const styles = StyleSheet.create({
   modalBtnGhostText: { color: '#fff', fontWeight: '600' },
   modalBtnPrimary: { backgroundColor: '#9affc8' },
   modalBtnPrimaryText: { color: '#0B0B1F', fontWeight: '700' },
+
+  miniPlayer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 14,
+    marginBottom: 8,
+    padding: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    backgroundColor: 'rgba(8,8,22,0.92)',
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  miniPlayBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniPlayText: { color: '#0B0B1F', fontSize: 16, fontWeight: '900' },
+  miniBody: { flex: 1, marginHorizontal: 12 },
+  miniTitle: { color: '#fff', fontSize: 13, fontWeight: '800', letterSpacing: 0.6 },
+  miniMeta: { color: '#ffffff88', fontSize: 11, marginTop: 2 },
+  miniStopBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  miniStopText: { color: '#ffffffcc', fontSize: 20, lineHeight: 22, fontWeight: '500' },
 
   tabBarSafe: {
     backgroundColor: 'rgba(0,0,0,0.55)',

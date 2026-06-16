@@ -1982,7 +1982,7 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
 }
 
 // ===========================================================================
-//   Soundscapes (basic. Descriptive list pending audio integration)
+//   Soundscapes
 // ===========================================================================
 
 const SOUNDSCAPES: Array<{ id: string; name: string; blurb: string; color: string; glyph: string }> = [
@@ -2002,9 +2002,9 @@ function SoundscapesPage({ onBack }: { onBack: () => void }) {
       <ScrollView contentContainerStyle={styles.subBody}>
         <Text style={styles.sectionLabel}>NATURAL AMBIENCE</Text>
         <Text style={styles.cardSub}>
-          Built-in soundscapes that layer behind the binaural tones. Audio bundles are coming in
-          a follow-up update. For now you can pick any audio file from your device on the
-          Frequencies tab's Background Music card.
+          Built-in soundscapes now live on the Frequencies tab. Layer rain, ocean,
+          forest air, hearth, and noise colors under your binaural tones, then set
+          a stillness timer for a soft fade-out.
         </Text>
         {SOUNDSCAPES.map(s => (
           <View key={s.id} style={[styles.soundscapeCard, { borderColor: s.color + '55' }]}>
@@ -2015,7 +2015,7 @@ function SoundscapesPage({ onBack }: { onBack: () => void }) {
               <Text style={styles.soundscapeName}>{s.name}</Text>
               <Text style={styles.soundscapeBlurb}>{s.blurb}</Text>
             </View>
-            <Text style={styles.soundscapeSoon}>SOON</Text>
+            <Text style={styles.soundscapeSoon}>LIVE</Text>
           </View>
         ))}
       </ScrollView>
