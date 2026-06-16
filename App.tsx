@@ -876,17 +876,17 @@ function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
     }
     const a = Animated.loop(
       Animated.sequence([
-        Animated.timing(xfade, { toValue: 1, duration: 13000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(xfade, { toValue: 0, duration: 13000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(xfade, { toValue: 1, duration: 11200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(xfade, { toValue: 0, duration: 11200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     );
     const b = Animated.loop(
-      Animated.timing(drift, { toValue: 1, duration: 50000, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(drift, { toValue: 1, duration: 43000, easing: Easing.linear, useNativeDriver: true }),
     );
     const c = Animated.loop(
       Animated.sequence([
-        Animated.timing(wash, { toValue: 1, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(wash, { toValue: 0, duration: 9000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(wash, { toValue: 1, duration: 7800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(wash, { toValue: 0, duration: 7800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     );
     drift.setValue(0);
@@ -896,8 +896,8 @@ function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
 
   const op1 = xfade.interpolate({ inputRange: [0, 1], outputRange: [0.95, 0.20] });
   const op2 = xfade.interpolate({ inputRange: [0, 1], outputRange: [0.20, 0.95] });
-  const driftY = drift.interpolate({ inputRange: [0, 1], outputRange: [0, -SCREEN_H * 0.18] });
-  const washOpacity = wash.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.7] });
+  const driftY = drift.interpolate({ inputRange: [0, 1], outputRange: [0, -SCREEN_H * 0.22] });
+  const washOpacity = wash.interpolate({ inputRange: [0, 1], outputRange: [0.38, 0.76] });
 
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.base[0], overflow: 'hidden' }]} pointerEvents="none">
