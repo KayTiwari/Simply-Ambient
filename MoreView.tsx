@@ -23,7 +23,6 @@ import {
   ArrowsClockwise,
   X,
   Plus,
-  Stack,
   Waveform,
   Smiley,
   CloudLightning,
@@ -537,28 +536,28 @@ function Hub({
           onPress={() => onOpen('profile')}
         />
         <HubItem
-          glyph="✧"
+          glyph="☌"
           color="#5B6CFF"
           label="Natal Chart"
           preview="Western planetary positions"
           onPress={() => onOpen('natal')}
         />
         <HubItem
-          glyph="∞"
+          glyph="⚭"
           color="#FF8FB1"
           label="Compatibility"
           preview="Match your sign with another"
           onPress={() => onOpen('compatibility')}
         />
         <HubItem
-          glyph="✦"
+          glyph="⌬"
           color="#5BD0FF"
           label="AI Insights"
           preview="Reflections on your journal & tarot"
           onPress={() => onOpen('insights')}
         />
         <HubItem
-          Icon={Stack}
+          glyph="⟁"
           color="#9affc8"
           label="Routines"
           preview="Chain presets into sessions"
@@ -575,7 +574,7 @@ function Hub({
           onPress={() => onOpen('soundscapes')}
         />
         <HubItem
-          glyph="✦"
+          glyph="☉"
           color="#9affc8"
           label="Daily Affirmation"
           preview={affirmationPreview ? `“${affirmationPreview}”` : 'Anchor a single thought for the day'}
@@ -621,7 +620,7 @@ function Hub({
           onPress={() => onOpen('manifestation')}
         />
         <HubItem
-          glyph="◊"
+          glyph="⌖"
           color="#5B6CFF"
           label="5-4-3-2-1 Grounding"
           preview="Anxiety reset through the five senses"
