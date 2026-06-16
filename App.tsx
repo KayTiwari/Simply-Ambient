@@ -2326,25 +2326,48 @@ function MoreLauncher({
   accent: string;
   onPress: () => void;
 }) {
+  const insets = useSafeAreaInsets();
+  const launcherY = useRef(new Animated.Value(96)).current;
+  const launcherStartYRef = useRef(96);
+  const minY = insets.top + 10;
+  const maxY = Math.max(minY, SCREEN_H - insets.bottom - 164);
+  const dragRange = Math.max(1, maxY - minY);
+
   const openPanResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gesture) =>
-        gesture.dx > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+        Math.max(Math.abs(gesture.dx), Math.abs(gesture.dy)) > 8,
+      onPanResponderGrant: () => {
+        launcherY.stopAnimation((value) => {
+          launcherStartYRef.current = typeof value === 'number' ? value : launcherStartYRef.current;
+        });
+      },
+      onPanResponderMove: (_, gesture) => {
+        if (Math.abs(gesture.dy) > Math.abs(gesture.dx)) {
+          launcherY.setValue(clamp01((launcherStartYRef.current + gesture.dy - minY) / dragRange) * dragRange + minY);
+        }
+      },
       onPanResponderRelease: (_, gesture) => {
-        if (gesture.dx > 24 || gesture.vx > 0.55) onPress();
+        if ((gesture.dx > 24 && Math.abs(gesture.dx) > Math.abs(gesture.dy)) || gesture.vx > 0.55) onPress();
       },
     })
   ).current;
 
   return (
-    <TouchableOpacity
+    <Animated.View
       {...openPanResponder.panHandlers}
-      activeOpacity={0.82}
-      onPress={onPress}
       style={[
-        styles.moreLauncher,
-        { borderColor: accent + '55' },
+        styles.moreLauncherSlot,
+        { transform: [{ translateY: launcherY }] },
       ]}
+    >
+      <TouchableOpacity
+        activeOpacity={0.82}
+        onPress={onPress}
+        style={[
+          styles.moreLauncher,
+          { borderColor: accent + '55' },
+        ]}
       accessibilityLabel="Open more tools"
       accessibilityRole="button"
     >
@@ -2355,7 +2378,8 @@ function MoreLauncher({
         <View style={[styles.moreLauncherMark, { backgroundColor: accent, opacity: 0.42 }]} />
       </View>
       <Text style={styles.moreLauncherText}>More</Text>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -3192,10 +3216,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(5,5,12,0.78)',
   },
-  moreLauncher: {
+  moreLauncherSlot: {
     position: 'absolute',
-    top: 14,
+    top: 0,
     left: 14,
+    zIndex: 35,
+    elevation: 10,
+  },
+  moreLauncher: {
     minWidth: 82,
     height: 38,
     borderRadius: 19,
@@ -3205,7 +3233,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
     paddingHorizontal: 12,
-    zIndex: 35,
     shadowColor: '#000',
     shadowOpacity: 0.32,
     shadowRadius: 12,
