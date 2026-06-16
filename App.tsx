@@ -1828,6 +1828,12 @@ function AppContent() {
           isToneLoading={isToneLoading}
           sleepEndsAt={sleepEndsAt}
           soundscapeName={activeSoundscape?.name ?? (isBgPlaying ? 'Imported audio' : null)}
+          soundscapePlaying={isSoundscapePlaying}
+          hasSoundscape={activeSoundscapeId != null}
+          onSoundscapePress={() => {
+            if (activeSoundscapeId) toggleSoundscape(activeSoundscapeId);
+            else setTab('soundscapes');
+          }}
           onTogglePlay={togglePlay}
           onOpen={() => setTab('frequencies')}
           onStopAll={stopEverything}
@@ -2085,6 +2091,9 @@ function MiniPlayer({
   isToneLoading,
   sleepEndsAt,
   soundscapeName,
+  soundscapePlaying,
+  hasSoundscape,
+  onSoundscapePress,
   onTogglePlay,
   onOpen,
   onStopAll,
@@ -2097,6 +2106,9 @@ function MiniPlayer({
   isToneLoading: boolean;
   sleepEndsAt: number | null;
   soundscapeName: string | null;
+  soundscapePlaying: boolean;
+  hasSoundscape: boolean;
+  onSoundscapePress: () => void;
   onTogglePlay: () => void;
   onOpen: () => void;
   onStopAll: () => void;
@@ -2138,6 +2150,17 @@ function MiniPlayer({
           {timerText ? ` · fades in ${timerText}` : ''}
         </Text>
       </View>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={onSoundscapePress}
+        style={[
+          styles.miniSoundscapeBtn,
+          soundscapePlaying && { backgroundColor: accent + '33', borderColor: accent },
+        ]}
+        accessibilityLabel={hasSoundscape ? (soundscapePlaying ? 'Stop soundscape' : 'Play soundscape') : 'Choose a soundscape'}
+      >
+        <Text style={[styles.miniSoundscapeText, soundscapePlaying && { color: accent }]}>♪</Text>
+      </TouchableOpacity>
       <TouchableOpacity
         activeOpacity={0.85}
         onPress={onStopAll}
@@ -3127,6 +3150,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   miniStopText: { color: '#ffffffcc', fontSize: 20, lineHeight: 22, fontWeight: '500' },
+  miniSoundscapeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  miniSoundscapeText: { color: '#ffffffcc', fontSize: 16, fontWeight: '700' },
 
   tabBarSafe: {
     backgroundColor: 'rgba(0,0,0,0.55)',
