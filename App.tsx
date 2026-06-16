@@ -1854,7 +1854,9 @@ function AppContent() {
           accent={beatColor}
           soundscapesInNav={soundscapesInNav}
         />
-        <MoreLauncher accent={beatColor} onPress={() => setMenuOpen(true)} />
+        {tab !== 'soundscapes' ? (
+          <MoreLauncher accent={beatColor} onPress={() => setMenuOpen(true)} />
+        ) : null}
       </SafeAreaView>
 
       <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} accent={beatColor}>
@@ -2961,22 +2963,22 @@ const styles = StyleSheet.create({
   },
   soundscapeNowMeta: { color: '#ffffff88', fontSize: 12, marginTop: 4 },
   soundscapeVolumeRow: { marginTop: 16 },
-  soundscapeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  soundscapeGrid: { gap: 10 },
   soundscapeTile: {
-    width: (SCREEN_W - 50) / 2,
-    minHeight: 154,
+    width: '100%',
+    minHeight: 126,
     borderRadius: 18,
     borderWidth: 1,
-    padding: 14,
+    padding: 16,
     justifyContent: 'space-between',
   },
   soundscapeTileGlyph: {
-    height: 30,
+    height: 32,
     justifyContent: 'center',
   },
-  soundscapeTileName: { color: '#fff', fontSize: 15, fontWeight: '800', marginTop: 8 },
-  soundscapeTileBlurb: { color: '#ffffff77', fontSize: 11, lineHeight: 15, marginTop: 5 },
-  soundscapeTileAction: { fontSize: 10, fontWeight: '900', letterSpacing: 1.6, marginTop: 12 },
+  soundscapeTileName: { color: '#fff', fontSize: 17, fontWeight: '800', marginTop: 10 },
+  soundscapeTileBlurb: { color: '#ffffff77', fontSize: 12, lineHeight: 17, marginTop: 6 },
+  soundscapeTileAction: { fontSize: 10, fontWeight: '900', letterSpacing: 1.6, marginTop: 14 },
 
   customSleepBackdrop: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
