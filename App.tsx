@@ -1085,7 +1085,7 @@ function AppContent() {
   function setSoundscapesPinned(next: boolean) {
     setSoundscapesInNav(next);
     AsyncStorage.setItem(STORAGE_KEY_NAV_SOUNDSCAPES, next ? '1' : '0').catch(() => {});
-    if (!next && tab === 'soundscapes') setTab('more');
+    if (!next && tab === 'soundscapes') setTab('frequencies');
   }
 
   function dismissOnboarding() {
@@ -1816,24 +1816,6 @@ function AppContent() {
                 onChangeSoundscapeVolume={changeSoundscapeVolume}
               />
             )}
-            {tab === 'more' && (
-              <MoreView
-                notifPref={notifPref}
-                onChangeNotifPref={changeNotifPref}
-                affirmation={affirmation}
-                affirmationLoading={affLoading}
-                onRefreshAffirmation={refreshAffirmation}
-                isExpoGo={IS_EXPO_GO}
-                soundscapes={SOUNDSCAPES}
-                activeSoundscapeId={activeSoundscapeId}
-                isSoundscapePlaying={isSoundscapePlaying}
-                soundscapeVolume={soundscapeVolume}
-                onToggleSoundscape={(id) => toggleSoundscape(id as SoundscapeKey)}
-                onChangeSoundscapeVolume={changeSoundscapeVolume}
-                soundscapesInNav={soundscapesInNav}
-                onToggleSoundscapesInNav={setSoundscapesPinned}
-              />
-            )}
           </Animated.View>
         </KeyboardAvoidingView>
 
@@ -1850,8 +1832,34 @@ function AppContent() {
           onOpen={() => setTab('frequencies')}
           onStopAll={stopEverything}
         />
-        <TabBar tab={tab} onChange={setTab} accent={beatColor} soundscapesInNav={soundscapesInNav} />
+        <TabBar
+          tab={tab}
+          onChange={setTab}
+          accent={beatColor}
+          soundscapesInNav={soundscapesInNav}
+          menuOpen={menuOpen}
+          onOpenMenu={() => setMenuOpen(true)}
+        />
       </SafeAreaView>
+
+      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} accent={beatColor}>
+        <MoreView
+          notifPref={notifPref}
+          onChangeNotifPref={changeNotifPref}
+          affirmation={affirmation}
+          affirmationLoading={affLoading}
+          onRefreshAffirmation={refreshAffirmation}
+          isExpoGo={IS_EXPO_GO}
+          soundscapes={SOUNDSCAPES}
+          activeSoundscapeId={activeSoundscapeId}
+          isSoundscapePlaying={isSoundscapePlaying}
+          soundscapeVolume={soundscapeVolume}
+          onToggleSoundscape={(id) => toggleSoundscape(id as SoundscapeKey)}
+          onChangeSoundscapeVolume={changeSoundscapeVolume}
+          soundscapesInNav={soundscapesInNav}
+          onToggleSoundscapesInNav={setSoundscapesPinned}
+        />
+      </SlideMenu>
 
       {onboardingChecked && showOnboarding ? (
         <View style={StyleSheet.absoluteFill}>
@@ -2142,16 +2150,85 @@ function MiniPlayer({
   );
 }
 
+// Slide-in overlay menu that replaces the old "More" tab. A translucent black
+// backdrop dims the app and the panel slides in from the right. Tapping the
+// backdrop or the close button dismisses it. Kept mounted only while open (or
+// animating out) so it never intercepts touches when closed.
+function SlideMenu({
+  open,
+  onClose,
+  accent,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  accent: string;
+  children: React.ReactNode;
+}) {
+  const insets = useSafeAreaInsets();
+  const panelWidth = Math.min(420, Math.round(Dimensions.get('window').width * 0.86));
+  const progress = useRef(new Animated.Value(0)).current;
+  const [mounted, setMounted] = useState(open);
+
+  useEffect(() => {
+    if (open) setMounted(true);
+    Animated.timing(progress, {
+      toValue: open ? 1 : 0,
+      duration: open ? 260 : 200,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished && !open) setMounted(false);
+    });
+  }, [open, progress]);
+
+  if (!mounted) return null;
+
+  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [panelWidth, 0] });
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'auto' : 'none'}>
+      <TouchableWithoutFeedback onPress={onClose} accessibilityLabel="Close menu">
+        <Animated.View style={[StyleSheet.absoluteFill, styles.menuBackdrop, { opacity: progress }]} />
+      </TouchableWithoutFeedback>
+      <Animated.View
+        style={[
+          styles.menuPanel,
+          {
+            width: panelWidth,
+            paddingTop: insets.top + 14,
+            paddingBottom: insets.bottom + 10,
+            transform: [{ translateX }],
+            borderColor: accent + '33',
+          },
+        ]}
+      >
+        <View style={styles.menuHeader}>
+          <Text style={styles.menuTitle}>More</Text>
+          <TouchableOpacity onPress={onClose} style={styles.menuClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Close menu">
+            <Text style={styles.menuCloseText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={{ flex: 1 }}>{children}</View>
+      </Animated.View>
+    </View>
+  );
+}
+
 function TabBar({
   tab,
   onChange,
   accent,
   soundscapesInNav,
+  menuOpen,
+  onOpenMenu,
 }: {
   tab: Tab;
   onChange: (t: Tab) => void;
   accent: string;
   soundscapesInNav: boolean;
+  menuOpen: boolean;
+  onOpenMenu: () => void;
 }) {
   return (
     <SafeAreaView edges={['bottom']} style={styles.tabBarSafe}>
@@ -2163,7 +2240,7 @@ function TabBar({
         {soundscapesInNav ? (
           <TabButton label="Sound" Icon={Waveform} active={tab === 'soundscapes'} accent={accent} onPress={() => onChange('soundscapes')} />
         ) : null}
-        <TabButton label="More"        glyph="⋯" active={tab === 'more'}        accent={accent} onPress={() => onChange('more')} />
+        <TabButton label="More" glyph="⋯" active={menuOpen} accent={accent} onPress={onOpenMenu} />
       </View>
     </SafeAreaView>
   );
