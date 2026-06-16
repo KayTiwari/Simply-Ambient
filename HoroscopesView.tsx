@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,6 +19,26 @@ function horoscopeCacheKey(signId: string, period: string) {
 }
 const TAROT_CACHE_KEY = '@simply_ambient_tarot_v1';
 const TAROT_TTL_MS = 24 * 60 * 60 * 1000;
+
+// freehoroscopeapi.com sends no CORS headers, so the browser build routes
+// through our same-origin Vercel proxy (/api/*). Native fetches the API
+// directly. Both return the identical response shape.
+const ON_WEB = Platform.OS === 'web';
+function tarotUrl(n: number): string {
+  return ON_WEB
+    ? `/api/tarot?n=${n}`
+    : `https://freehoroscopeapi.com/api/v1/tarot/cards/random?n=${n}`;
+}
+function horoscopeUrl(period: string, signName: string): string {
+  if (ON_WEB) {
+    return period === 'daily'
+      ? `/api/horoscope?period=daily&sign=${encodeURIComponent(signName)}&day=TODAY`
+      : `/api/horoscope?period=monthly&sign=${encodeURIComponent(signName)}`;
+  }
+  return period === 'daily'
+    ? `https://freehoroscopeapi.com/api/v1/get-horoscope/daily?sign=${signName}&day=TODAY`
+    : `https://freehoroscopeapi.com/api/v1/get-horoscope/monthly?sign=${signName}`;
+}
 
 // freehoroscopeapi.com is on IST (UTC+5:30), so when it's late evening in
 // US timezones its "TODAY" is already the user's "tomorrow", and the
@@ -62,7 +83,7 @@ export default function HoroscopesView({
 
   function drawTarot(force = false) {
     setTarotLoading(true);
-    fetch('https://freehoroscopeapi.com/api/v1/tarot/cards/random?n=1')
+    fetch(tarotUrl(1))
       .then(r => (r.ok ? r.json() : null))
       .then(json => {
         const c = json?.cards?.[0];
@@ -116,10 +137,7 @@ export default function HoroscopesView({
       } catch {}
     }).catch(() => {});
 
-    const url =
-      period === 'daily'
-        ? `https://freehoroscopeapi.com/api/v1/get-horoscope/daily?sign=${mySign.name}&day=TODAY`
-        : `https://freehoroscopeapi.com/api/v1/get-horoscope/monthly?sign=${mySign.name}`;
+    const url = horoscopeUrl(period, mySign.name);
 
     (async () => {
       const raw = await AsyncStorage.getItem(cacheKey).catch(() => null);
