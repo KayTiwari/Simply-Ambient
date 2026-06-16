@@ -131,6 +131,7 @@ const DEFAULT_RIGHT = 210;
 const TONE_FILE_PATH = `${FileSystem.cacheDirectory}binaural-tone.wav`;
 const SOUNDSCAPE_FILE_PREFIX = `${FileSystem.cacheDirectory}simply-ambient-soundscape-`;
 const SLIDE_THROTTLE_MS = 220;
+const PALETTE_CROSSFADE_MS = 2600;
 
 type BandKey =
   | 'none' | 'delta' | 'theta' | 'alpha' | 'beta' | 'gamma' | 'tuning'
@@ -992,14 +993,14 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
     const anim = Animated.parallel([
       Animated.timing(layer.opacity, {
         toValue: 1,
-        duration: 1400,
-        easing: Easing.inOut(Easing.cubic),
+        duration: PALETTE_CROSSFADE_MS,
+        easing: Easing.inOut(Easing.sin),
         useNativeDriver: true,
       }),
       Animated.timing(active.opacity, {
         toValue: 0,
-        duration: 1400,
-        easing: Easing.inOut(Easing.cubic),
+        duration: PALETTE_CROSSFADE_MS,
+        easing: Easing.inOut(Easing.sin),
         useNativeDriver: true,
       }),
     ]);
