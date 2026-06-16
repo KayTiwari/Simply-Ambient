@@ -71,6 +71,17 @@ type TarotCard = {
   desc?: string;
 };
 
+// Spreads layered on top of the daily Card of the Moment. Each draws N cards
+// and labels them by classic position so the pull reads as a spread, not a pile.
+type SpreadSize = 1 | 3 | 5;
+const SPREAD_SIZES: SpreadSize[] = [1, 3, 5];
+const SPREAD_LABEL: Record<SpreadSize, string> = { 1: 'Single', 3: 'Three', 5: 'Five' };
+const SPREAD_POSITIONS: Record<SpreadSize, string[]> = {
+  1: ['Your card'],
+  3: ['Past', 'Present', 'Future'],
+  5: ['You', 'Challenge', 'Past', 'Future', 'Outcome'],
+};
+
 export default function HoroscopesView({
   zodiac, mySign, lunar, onSelectMyZodiac,
 }: Props) {
@@ -80,6 +91,24 @@ export default function HoroscopesView({
 
   const [tarot, setTarot] = useState<TarotCard | null>(null);
   const [tarotLoading, setTarotLoading] = useState(false);
+
+  const [spreadSize, setSpreadSize] = useState<SpreadSize | null>(null);
+  const [spread, setSpread] = useState<TarotCard[] | null>(null);
+  const [spreadLoading, setSpreadLoading] = useState(false);
+
+  function drawSpread(n: SpreadSize) {
+    setSpreadSize(n);
+    setSpread(null);
+    setSpreadLoading(true);
+    fetch(tarotUrl(n))
+      .then(r => (r.ok ? r.json() : null))
+      .then(json => {
+        const cards = json?.cards;
+        if (Array.isArray(cards) && cards.length) setSpread(cards.slice(0, n));
+      })
+      .catch(() => {})
+      .finally(() => setSpreadLoading(false));
+  }
 
   function drawTarot(force = false) {
     setTarotLoading(true);
@@ -332,6 +361,48 @@ export default function HoroscopesView({
           )}
         </View>
 
+        {/* TAROT SPREADS */}
+        <View style={[styles.tarotCard, { borderColor: '#A45BFF55' }]}>
+          <Text style={styles.cardLabel}>DRAW A SPREAD</Text>
+          <View style={styles.spreadBtnRow}>
+            {SPREAD_SIZES.map(n => {
+              const active = spreadSize === n;
+              return (
+                <TouchableOpacity
+                  key={n}
+                  onPress={() => drawSpread(n)}
+                  style={[styles.spreadBtn, active && { borderColor: '#A45BFF', backgroundColor: '#A45BFF22' }]}
+                  accessibilityLabel={`Draw ${n}-card spread`}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.spreadBtnText, active && { color: '#C9A2FF' }]}>{SPREAD_LABEL[n]}</Text>
+                  <Text style={[styles.spreadBtnSub, active && { color: '#C9A2FF99' }]}>
+                    {n} {n === 1 ? 'card' : 'cards'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {spreadLoading ? (
+            <ActivityIndicator color="#A45BFF" style={{ marginVertical: 22 }} />
+          ) : spread && spreadSize ? (
+            <View style={styles.spreadList}>
+              {spread.map((c, i) => (
+                <View key={i} style={styles.spreadItem}>
+                  <Text style={styles.spreadPos}>{SPREAD_POSITIONS[spreadSize][i] ?? `Card ${i + 1}`}</Text>
+                  <Text style={styles.spreadCardName}>{c.name}</Text>
+                  {c.meaning_up ? (
+                    <Text style={styles.spreadCardMeaning} numberOfLines={3}>{c.meaning_up}</Text>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.tarotMeaning}>Choose a spread to lay the cards.</Text>
+          )}
+        </View>
+
         <Text style={styles.footnote}>
           Horoscopes and tarot are fetched from a free public API.
           Take what resonates, leave the rest.
@@ -453,4 +524,21 @@ const styles = StyleSheet.create({
   },
   tarotMeaning: { color: '#ffffffdd', fontSize: 13, lineHeight: 19, marginBottom: 8 },
   tarotDesc: { color: '#ffffff88', fontSize: 12, lineHeight: 17, fontStyle: 'italic' },
+  spreadBtnRow: { flexDirection: 'row', gap: 8, marginTop: 12, marginBottom: 2 },
+  spreadBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center',
+  },
+  spreadBtnText: { color: '#ffffffdd', fontSize: 13, fontWeight: '700', letterSpacing: 0.4 },
+  spreadBtnSub: { color: '#ffffff66', fontSize: 10, fontWeight: '600', marginTop: 2, letterSpacing: 0.4 },
+  spreadList: { marginTop: 16, gap: 14 },
+  spreadItem: { borderLeftWidth: 2, borderLeftColor: '#A45BFF', paddingLeft: 12 },
+  spreadPos: { color: '#A45BFF', fontSize: 10, fontWeight: '800', letterSpacing: 1.6, textTransform: 'uppercase' },
+  spreadCardName: { color: '#fff', fontSize: 15, fontWeight: '700', marginTop: 3 },
+  spreadCardMeaning: { color: '#ffffff99', fontSize: 12, lineHeight: 17, marginTop: 3 },
 });
