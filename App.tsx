@@ -8,6 +8,7 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   ScrollView,
   StyleSheet,
@@ -77,6 +78,7 @@ import MoreView, { type NotifPref } from './MoreView';
 import OnboardingView from './OnboardingView';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
 // MIN_HZ / MAX_HZ / clampHz / comfortableCarrier / btoaFallback live in
 // lib/binauralMath so they can be unit-tested in plain Node without React
@@ -2205,18 +2207,46 @@ function SlideMenu({
   const panelWidth = Math.min(420, Math.round(Dimensions.get('window').width * 0.86));
   const progress = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(open);
+  const closeDragStartRef = useRef(1);
+
+  const animateMenuTo = (toValue: number, duration: number, done?: () => void) => {
+    Animated.timing(progress, {
+      toValue,
+      duration,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished) done?.();
+    });
+  };
+
+  const closePanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy) && gesture.dx < 0,
+      onPanResponderGrant: () => {
+        progress.stopAnimation((value) => {
+          closeDragStartRef.current = typeof value === 'number' ? value : 1;
+        });
+      },
+      onPanResponderMove: (_, gesture) => {
+        progress.setValue(clamp01(closeDragStartRef.current + gesture.dx / panelWidth));
+      },
+      onPanResponderRelease: (_, gesture) => {
+        const shouldClose = gesture.dx < -panelWidth * 0.24 || gesture.vx < -0.65;
+        if (shouldClose) onClose();
+        else animateMenuTo(1, 180);
+      },
+      onPanResponderTerminate: () => animateMenuTo(1, 180),
+    })
+  ).current;
 
   useEffect(() => {
     if (open) setMounted(true);
-    Animated.timing(progress, {
-      toValue: open ? 1 : 0,
-      duration: open ? 260 : 200,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished && !open) setMounted(false);
+    animateMenuTo(open ? 1 : 0, open ? 260 : 200, () => {
+      if (!open) setMounted(false);
     });
-  }, [open, progress]);
+  }, [open]);
 
   if (!mounted) return null;
 
@@ -2228,6 +2258,7 @@ function SlideMenu({
         <Animated.View style={[StyleSheet.absoluteFill, styles.menuBackdrop, { opacity: progress }]} />
       </TouchableWithoutFeedback>
       <Animated.View
+        {...closePanResponder.panHandlers}
         style={[
           styles.menuPanel,
           {
@@ -2295,8 +2326,19 @@ function MoreLauncher({
   accent: string;
   onPress: () => void;
 }) {
+  const openPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        gesture.dx > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dx > 24 || gesture.vx > 0.55) onPress();
+      },
+    })
+  ).current;
+
   return (
     <TouchableOpacity
+      {...openPanResponder.panHandlers}
       activeOpacity={0.82}
       onPress={onPress}
       style={[
