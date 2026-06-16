@@ -31,7 +31,17 @@ import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { Waveform, type IconProps } from 'phosphor-react-native';
+import {
+  Waveform,
+  CloudRain,
+  Waves,
+  TreeEvergreen,
+  Campfire,
+  WaveSquare,
+  WaveSine,
+  WaveTriangle,
+  type IconProps,
+} from 'phosphor-react-native';
 
 // expo-notifications was removed from Expo Go in SDK 53. We can still call its
 // APIs in a development / standalone build, but in Expo Go we soft no-op so
@@ -182,18 +192,18 @@ type Soundscape = {
   id: SoundscapeKey;
   name: string;
   blurb: string;
-  glyph: string;
+  Icon: React.ComponentType<IconProps>;
   color: string;
 };
 
 const SOUNDSCAPES: Soundscape[] = [
-  { id: 'rain',   name: 'Soft Rain',      blurb: 'A steady veil with tiny drops near the edge of attention.', color: '#5BD0FF', glyph: '//' },
-  { id: 'ocean',  name: 'Ocean Tide',     blurb: 'Long swells for downshifting into sleep or recovery.',      color: '#5B6CFF', glyph: '~~' },
-  { id: 'forest', name: 'Forest Air',     blurb: 'Leaf wash with a few distant, breathy chirps.',             color: '#9affc8', glyph: 'Y' },
-  { id: 'fire',   name: 'Hearth',         blurb: 'Warm crackle under the tones, quiet and close.',            color: '#FFB05B', glyph: '^' },
-  { id: 'white',  name: 'White Noise',    blurb: 'Even masking for busy rooms and brittle silence.',          color: '#ffffffcc', glyph: '##' },
-  { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer masking with less edge than white noise.',           color: '#FFD0E1', glyph: '::' },
-  { id: 'brown',  name: 'Brown Noise',    blurb: 'Low, dense, and grounding for a heavy nervous system.',     color: '#8A6B4A', glyph: '__' },
+  { id: 'rain',   name: 'Soft Rain',      blurb: 'A steady veil with tiny drops near the edge of attention.', color: '#5BD0FF',   Icon: CloudRain },
+  { id: 'ocean',  name: 'Ocean Tide',     blurb: 'Long swells for downshifting into sleep or recovery.',      color: '#5B6CFF',   Icon: Waves },
+  { id: 'forest', name: 'Forest Air',     blurb: 'Leaf wash with a few distant, breathy chirps.',             color: '#9affc8',   Icon: TreeEvergreen },
+  { id: 'fire',   name: 'Hearth',         blurb: 'Warm crackle under the tones, quiet and close.',            color: '#FFB05B',   Icon: Campfire },
+  { id: 'white',  name: 'White Noise',    blurb: 'Even masking for busy rooms and brittle silence.',          color: '#ffffffcc', Icon: WaveSquare },
+  { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer masking with less edge than white noise.',           color: '#FFD0E1',   Icon: WaveSine },
+  { id: 'brown',  name: 'Brown Noise',    blurb: 'Low, dense, and grounding for a heavy nervous system.',     color: '#8A6B4A',   Icon: WaveTriangle },
 ];
 
 export type Chakra = {
@@ -2047,6 +2057,7 @@ function SoundscapesView({
       <View style={styles.soundscapeGrid}>
         {soundscapes.map(s => {
           const active = activeSoundscapeId === s.id && isSoundscapePlaying;
+          const SoundIcon = s.Icon;
           return (
             <TouchableOpacity
               key={s.id}
@@ -2061,7 +2072,9 @@ function SoundscapesView({
               ]}
               accessibilityLabel={`${active ? 'Stop' : 'Play'} ${s.name}`}
             >
-              <Text style={[styles.soundscapeTileGlyph, { color: s.color }]}>{s.glyph}</Text>
+              <View style={styles.soundscapeTileGlyph}>
+                <SoundIcon size={28} color={s.color} weight="duotone" />
+              </View>
               <Text style={styles.soundscapeTileName}>{s.name}</Text>
               <Text style={styles.soundscapeTileBlurb}>{s.blurb}</Text>
               <Text style={[styles.soundscapeTileAction, { color: active ? s.color : '#ffffff77' }]}>
@@ -2935,10 +2948,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   soundscapeTileGlyph: {
-    fontSize: 22,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : undefined,
+    height: 30,
+    justifyContent: 'center',
   },
   soundscapeTileName: { color: '#fff', fontSize: 15, fontWeight: '800', marginTop: 8 },
   soundscapeTileBlurb: { color: '#ffffff77', fontSize: 11, lineHeight: 15, marginTop: 5 },

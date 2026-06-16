@@ -112,7 +112,7 @@ type SoundscapeOption = {
   id: string;
   name: string;
   blurb: string;
-  glyph: string;
+  Icon: React.ComponentType<IconProps>;
   color: string;
 };
 
@@ -2133,7 +2133,7 @@ function SoundscapesPage({
             ]}
           >
             <View style={[styles.soundscapeGlyphBox, { backgroundColor: s.color + '22', borderColor: s.color }]}>
-              <Text style={[styles.soundscapeGlyph, { color: s.color }]}>{s.glyph}</Text>
+              <s.Icon size={22} color={s.color} weight="duotone" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.soundscapeName}>{s.name}</Text>
