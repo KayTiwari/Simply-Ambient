@@ -25,8 +25,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import {
   createAudioPlayer,
   setAudioModeAsync,
+  type AudioSource,
   type AudioPlayer,
 } from 'expo-audio';
+import { Asset } from 'expo-asset';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -208,19 +210,10 @@ const SOUNDSCAPES: Soundscape[] = [
   { id: 'brown',  name: 'Brown Noise',    blurb: 'Low, dense, and grounding for a heavy nervous system.',     color: '#8A6B4A',   Icon: WaveTriangle },
 ];
 
-const REMOTE_SOUNDSCAPES: Partial<Record<SoundscapeKey, { url: string; extension: 'mp3' }>> = {
-  rain: {
-    url: 'https://upload.wikimedia.org/wikipedia/commons/d/dc/Bourne_woods_rain_2020-05-10_0800.mp3',
-    extension: 'mp3',
-  },
-  fire: {
-    url: 'https://upload.wikimedia.org/wikipedia/commons/transcoded/b/b1/Campfire_sound_ambience.ogg/Campfire_sound_ambience.ogg.mp3',
-    extension: 'mp3',
-  },
-  white: {
-    url: 'https://bigsoundbank.com/UPLOAD/mp3/1037.mp3',
-    extension: 'mp3',
-  },
+const BUNDLED_SOUNDSCAPES: Partial<Record<SoundscapeKey, number>> = {
+  rain: require('./assets/soundscapes/soft-rain.mp3'),
+  fire: require('./assets/soundscapes/hearth.mp3'),
+  white: require('./assets/soundscapes/white-noise.mp3'),
 };
 
 const SOUNDSCAPE_GAIN: Record<SoundscapeKey, number> = {
@@ -793,16 +786,20 @@ class WebSoundscapeEngine {
   private fireCrackle = 0;
   private firePop = 0;
   private media: any = null;
+  private mediaSource: string | null = null;
 
   async play(kind: SoundscapeKey, volume: number) {
     this.kind = kind;
-    const remote = REMOTE_SOUNDSCAPES[kind];
+    const bundled = BUNDLED_SOUNDSCAPES[kind];
     const AudioCtor = (globalThis as any).Audio;
-    if (remote && typeof AudioCtor === 'function') {
+    if (bundled && typeof AudioCtor === 'function') {
+      const asset = Asset.fromModule(bundled);
+      const src = asset.localUri ?? asset.uri;
       this.stopSynthetic();
-      if (!this.media || this.media.src !== remote.url) {
+      if (!this.media || this.mediaSource !== src) {
         this.stopMedia();
-        this.media = new AudioCtor(remote.url);
+        this.media = new AudioCtor(src);
+        this.mediaSource = src;
         this.media.loop = true;
         this.media.preload = 'auto';
       }
@@ -865,6 +862,7 @@ class WebSoundscapeEngine {
   private stopMedia() {
     const media = this.media;
     this.media = null;
+    this.mediaSource = null;
     if (!media) return;
     try { media.pause(); } catch {}
     try { media.currentTime = 0; } catch {}
@@ -1750,43 +1748,19 @@ function AppContent() {
     setBgUri(null);
   }
 
-  async function ensureSoundscapeUri(id: SoundscapeKey) {
+  async function ensureSoundscapeSource(id: SoundscapeKey): Promise<AudioSource> {
+    const bundled = BUNDLED_SOUNDSCAPES[id];
+    if (bundled) return { assetId: bundled };
+
     const cached = soundscapeCacheRef.current[id];
-    if (cached) return cached;
-    const remote = REMOTE_SOUNDSCAPES[id];
-    if (remote) {
-      const uri = `${SOUNDSCAPE_FILE_PREFIX}${id}.${remote.extension}`;
-      try {
-        const info = await FileSystem.getInfoAsync(uri);
-        if (!info.exists) await FileSystem.downloadAsync(remote.url, uri);
-        soundscapeCacheRef.current[id] = uri;
-        return uri;
-      } catch (e) {
-        console.warn('remote soundscape download failed, using generated fallback', e);
-      }
-    }
+    if (cached) return { uri: cached };
+
     const base64 = buildSoundscapeWav(id);
     const uri = `${SOUNDSCAPE_FILE_PREFIX}${id}.wav`;
     await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
     soundscapeCacheRef.current[id] = uri;
-    return uri;
+    return { uri };
   }
-
-  useEffect(() => {
-    if (Platform.OS === 'web') return;
-    let cancelled = false;
-    (async () => {
-      for (const id of Object.keys(REMOTE_SOUNDSCAPES) as SoundscapeKey[]) {
-        if (cancelled) break;
-        try {
-          await ensureSoundscapeUri(id);
-        } catch {}
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   async function playSoundscape(id: SoundscapeKey) {
     try {
@@ -1797,8 +1771,7 @@ function AppContent() {
         setIsSoundscapePlaying(true);
         return;
       }
-      const uri = await ensureSoundscapeUri(id);
-      const source = { uri };
+      const source = await ensureSoundscapeSource(id);
       if (!soundscapePlayerRef.current || activeSoundscapeId !== id) {
         try { soundscapePlayerRef.current?.release(); } catch {}
         try { soundscapePlayerRef.current?.remove?.(); } catch {}
