@@ -209,6 +209,10 @@ const SOUNDSCAPES: Soundscape[] = [
 ];
 
 const REMOTE_SOUNDSCAPES: Partial<Record<SoundscapeKey, { url: string; extension: 'mp3' }>> = {
+  rain: {
+    url: 'https://upload.wikimedia.org/wikipedia/commons/d/dc/Bourne_woods_rain_2020-05-10_0800.mp3',
+    extension: 'mp3',
+  },
   fire: {
     url: 'https://upload.wikimedia.org/wikipedia/commons/transcoded/b/b1/Campfire_sound_ambience.ogg/Campfire_sound_ambience.ogg.mp3',
     extension: 'mp3',
@@ -1767,6 +1771,22 @@ function AppContent() {
     soundscapeCacheRef.current[id] = uri;
     return uri;
   }
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    let cancelled = false;
+    (async () => {
+      for (const id of Object.keys(REMOTE_SOUNDSCAPES) as SoundscapeKey[]) {
+        if (cancelled) break;
+        try {
+          await ensureSoundscapeUri(id);
+        } catch {}
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function playSoundscape(id: SoundscapeKey) {
     try {
