@@ -209,10 +209,6 @@ const SOUNDSCAPES: Soundscape[] = [
 ];
 
 const REMOTE_SOUNDSCAPES: Partial<Record<SoundscapeKey, { url: string; extension: 'mp3' }>> = {
-  rain: {
-    url: 'https://upload.wikimedia.org/wikipedia/commons/d/dc/Bourne_woods_rain_2020-05-10_0800.mp3',
-    extension: 'mp3',
-  },
   fire: {
     url: 'https://upload.wikimedia.org/wikipedia/commons/transcoded/b/b1/Campfire_sound_ambience.ogg/Campfire_sound_ambience.ogg.mp3',
     extension: 'mp3',
@@ -222,6 +218,20 @@ const REMOTE_SOUNDSCAPES: Partial<Record<SoundscapeKey, { url: string; extension
     extension: 'mp3',
   },
 };
+
+const SOUNDSCAPE_GAIN: Record<SoundscapeKey, number> = {
+  rain: 0.72,
+  ocean: 0.72,
+  forest: 0.72,
+  fire: 0.72,
+  white: 0.24,
+  pink: 0.62,
+  brown: 0.62,
+};
+
+function effectiveSoundscapeVolume(kind: SoundscapeKey, volume: number) {
+  return Math.max(0, Math.min(1, volume)) * SOUNDSCAPE_GAIN[kind];
+}
 
 export type Chakra = {
   id: string;
@@ -792,7 +802,7 @@ class WebSoundscapeEngine {
         this.media.loop = true;
         this.media.preload = 'auto';
       }
-      this.media.volume = Math.max(0, Math.min(1, volume)) * 0.7;
+      this.media.volume = effectiveSoundscapeVolume(kind, volume);
       await this.media.play();
       return;
     }
@@ -831,7 +841,7 @@ class WebSoundscapeEngine {
 
   setVolume(volume: number) {
     if (this.media) {
-      this.media.volume = Math.max(0, Math.min(1, volume)) * 0.7;
+      this.media.volume = effectiveSoundscapeVolume(this.kind, volume);
       return;
     }
     const ctx = this.ctx;
@@ -840,7 +850,7 @@ class WebSoundscapeEngine {
     const t = ctx.currentTime;
     try { gain.gain.cancelScheduledValues(t); } catch {}
     try { gain.gain.setValueAtTime(gain.gain.value, t); } catch {}
-    try { gain.gain.linearRampToValueAtTime(Math.max(0, Math.min(1, volume)) * 0.7, t + 0.05); } catch {}
+    try { gain.gain.linearRampToValueAtTime(effectiveSoundscapeVolume(this.kind, volume), t + 0.05); } catch {}
   }
 
   stop() {
@@ -1774,10 +1784,10 @@ function AppContent() {
         try { soundscapePlayerRef.current?.remove?.(); } catch {}
         const p = createAudioPlayer(source);
         p.loop = true;
-        p.volume = soundscapeVolume;
+        p.volume = effectiveSoundscapeVolume(id, soundscapeVolume);
         soundscapePlayerRef.current = p;
       } else {
-        soundscapePlayerRef.current.volume = soundscapeVolume;
+        soundscapePlayerRef.current.volume = effectiveSoundscapeVolume(id, soundscapeVolume);
       }
       soundscapePlayerRef.current.play();
       setActiveSoundscapeId(id);
@@ -1808,7 +1818,9 @@ function AppContent() {
   function changeSoundscapeVolume(v: number) {
     setSoundscapeVolume(v);
     if (Platform.OS === 'web') webSoundscapeRef.current?.setVolume(v);
-    if (soundscapePlayerRef.current) soundscapePlayerRef.current.volume = v;
+    if (soundscapePlayerRef.current && activeSoundscapeId) {
+      soundscapePlayerRef.current.volume = effectiveSoundscapeVolume(activeSoundscapeId, v);
+    }
   }
 
   function stopEverything() {
