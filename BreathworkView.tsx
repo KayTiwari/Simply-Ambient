@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Svg, { Polygon } from 'react-native-svg';
+import Svg, { Circle, Ellipse, G, Line } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import {
@@ -700,48 +700,83 @@ function BreathCircle({ breath, color, phaseLabel, phaseCount, cycle, active }: 
 }
 
 // ===========================================================================
-//   BreathMandala. Animated polygonal mandala
+//   BreathMandala. Animated lotus / cymatic mandala
 // ===========================================================================
 
 const MANDALA_SIZE = 280;
-const INNER_R = 60;
-const OUTER_R = 110;
 
-function polygonPoints(sides: number, radius: number, cx: number, cy: number, rotate = -Math.PI / 2) {
-  const pts: string[] = [];
-  for (let i = 0; i < sides; i++) {
-    const a = rotate + (2 * Math.PI / sides) * i;
-    pts.push(`${(cx + radius * Math.cos(a)).toFixed(2)},${(cy + radius * Math.sin(a)).toFixed(2)}`);
-  }
-  return pts.join(' ');
-}
-
-function StaticPolygon({
-  sides, size, fill, fillOpacity, stroke, strokeOpacity, strokeWidth, startAngle,
+function LotusMandalaSvg({
+  color,
+  size,
+  variant,
 }: {
-  sides: number;
+  color: string;
   size: number;
-  fill?: string;
-  fillOpacity?: number;
-  stroke?: string;
-  strokeOpacity?: number;
-  strokeWidth?: number;
-  startAngle?: number;
+  variant: 'outer' | 'middle' | 'inner';
 }) {
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size / 2 - (strokeWidth ?? 0) / 2;
-  const points = polygonPoints(sides, r, cx, cy, startAngle ?? -Math.PI / 2);
+  const center = size / 2;
+  const count = variant === 'outer' ? 24 : variant === 'middle' ? 16 : 8;
+  const petalRx = variant === 'outer' ? 8 : variant === 'middle' ? 10 : 13;
+  const petalRy = variant === 'outer' ? 42 : variant === 'middle' ? 34 : 28;
+  const petalCy = variant === 'outer' ? 54 : variant === 'middle' ? 68 : 82;
+  const ringR = variant === 'outer' ? 106 : variant === 'middle' ? 82 : 56;
+  const strokeOpacity = variant === 'outer' ? 0.62 : variant === 'middle' ? 0.72 : 0.86;
+  const fillOpacity = variant === 'outer' ? 0.035 : variant === 'middle' ? 0.055 : 0.075;
+
   return (
-    <Svg width={size} height={size}>
-      <Polygon
-        points={points}
-        fill={fill ?? 'none'}
-        fillOpacity={fillOpacity ?? 1}
-        stroke={stroke ?? 'none'}
-        strokeOpacity={strokeOpacity ?? 1}
-        strokeWidth={strokeWidth ?? 0}
-      />
+    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <Circle cx={center} cy={center} r={ringR} fill="none" stroke={color} strokeOpacity={0.16} strokeWidth={1} />
+      <Circle cx={center} cy={center} r={ringR * 0.72} fill="none" stroke={color} strokeOpacity={0.12} strokeWidth={1} />
+      {Array.from({ length: count }).map((_, i) => {
+        const angle = (360 / count) * i;
+        return (
+          <G key={`petal-${i}`} origin={`${center}, ${center}`} rotation={angle}>
+            <Ellipse
+              cx={center}
+              cy={petalCy}
+              rx={petalRx}
+              ry={petalRy}
+              fill={color}
+              fillOpacity={fillOpacity}
+              stroke={color}
+              strokeOpacity={strokeOpacity}
+              strokeWidth={1.05}
+            />
+          </G>
+        );
+      })}
+      {Array.from({ length: count }).map((_, i) => {
+        const angle = (2 * Math.PI * i) / count - Math.PI / 2;
+        const r = ringR + (variant === 'outer' ? 10 : 7);
+        return (
+          <Circle
+            key={`bead-${i}`}
+            cx={center + Math.cos(angle) * r}
+            cy={center + Math.sin(angle) * r}
+            r={variant === 'inner' ? 1.8 : 1.35}
+            fill={color}
+            fillOpacity={variant === 'outer' ? 0.5 : 0.7}
+          />
+        );
+      })}
+      {variant === 'middle' ? (
+        Array.from({ length: 8 }).map((_, i) => {
+          const angle = (360 / 8) * i;
+          return (
+            <G key={`ray-${i}`} origin={`${center}, ${center}`} rotation={angle}>
+              <Line
+                x1={center}
+                y1={center - 22}
+                x2={center}
+                y2={center - 96}
+                stroke={color}
+                strokeOpacity={0.18}
+                strokeWidth={1}
+              />
+            </G>
+          );
+        })
+      ) : null}
     </Svg>
   );
 }
@@ -757,22 +792,16 @@ type MandalaProps = {
   active: boolean;
 };
 
-// Layers: outer triangle → octagon, stacked concentrically. Each layer rotates
-// independently; all scale together with breath.
-const POLY_LAYERS: Array<{
-  sides: number;
+// Layered lotus rings rotate independently; all breathe together.
+const MANDALA_LAYERS: Array<{
+  variant: 'outer' | 'middle' | 'inner';
   sizeRatio: number;
-  fillOpacity: number;
-  strokeOpacity: number;
   rotateSource: 'orbit' | 'orbitReverse' | 'center';
-  startAngleDeg: number;
+  opacity: number;
 }> = [
-  { sides: 3, sizeRatio: 1.00, fillOpacity: 0.05, strokeOpacity: 0.55, rotateSource: 'orbit',         startAngleDeg: 0 },
-  { sides: 4, sizeRatio: 0.86, fillOpacity: 0.07, strokeOpacity: 0.65, rotateSource: 'orbitReverse',  startAngleDeg: 30 },
-  { sides: 5, sizeRatio: 0.72, fillOpacity: 0.09, strokeOpacity: 0.75, rotateSource: 'center',        startAngleDeg: 18 },
-  { sides: 6, sizeRatio: 0.58, fillOpacity: 0.11, strokeOpacity: 0.85, rotateSource: 'orbit',         startAngleDeg: 0 },
-  { sides: 7, sizeRatio: 0.44, fillOpacity: 0.14, strokeOpacity: 0.90, rotateSource: 'orbitReverse',  startAngleDeg: 25 },
-  { sides: 8, sizeRatio: 0.30, fillOpacity: 0.18, strokeOpacity: 0.95, rotateSource: 'center',        startAngleDeg: 22 },
+  { variant: 'outer', sizeRatio: 1.0, rotateSource: 'orbit', opacity: 0.86 },
+  { variant: 'middle', sizeRatio: 0.82, rotateSource: 'orbitReverse', opacity: 0.95 },
+  { variant: 'inner', sizeRatio: 0.58, rotateSource: 'center', opacity: 1 },
 ];
 
 function BreathMandala({
@@ -788,7 +817,20 @@ function BreathMandala({
 
   return (
     <View style={styles.mandalaWrap}>
-      {POLY_LAYERS.map((layer, i) => {
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.absCenter,
+          styles.mandalaGlow,
+          {
+            borderColor: color,
+            shadowColor: color,
+            transform: [{ scale: stackScale }],
+          },
+        ]}
+      />
+
+      {MANDALA_LAYERS.map((layer, i) => {
         const size = layer.sizeRatio * MANDALA_SIZE;
         const rotation =
           layer.rotateSource === 'orbit' ? orbitFwd :
@@ -805,21 +847,31 @@ function BreathMandala({
                 height: size,
                 transform: [{ scale: stackScale }, { rotate: rotation }],
               },
+              { opacity: layer.opacity },
             ]}
           >
-            <StaticPolygon
-              sides={layer.sides}
+            <LotusMandalaSvg
+              variant={layer.variant}
               size={size}
-              fill={color}
-              fillOpacity={layer.fillOpacity}
-              stroke={color}
-              strokeOpacity={layer.strokeOpacity}
-              strokeWidth={1.5}
-              startAngle={(layer.startAngleDeg * Math.PI) / 180 - Math.PI / 2}
+              color={color}
             />
           </Animated.View>
         );
       })}
+
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.absCenter,
+          styles.mandalaCore,
+          {
+            borderColor: color,
+            backgroundColor: color + '18',
+            shadowColor: color,
+            transform: [{ scale: stackScale }],
+          },
+        ]}
+      />
 
       {/* Phase label overlay. Centered atop the stack */}
       <View pointerEvents="none" style={styles.absCenter}>
@@ -1002,6 +1054,29 @@ const styles = StyleSheet.create({
   absCenter: {
     position: 'absolute',
     alignItems: 'center', justifyContent: 'center',
+  },
+  mandalaGlow: {
+    width: 252,
+    height: 252,
+    borderRadius: 126,
+    borderWidth: 1,
+    opacity: 0.34,
+    backgroundColor: 'rgba(255,255,255,0.025)',
+    shadowOpacity: 0.55,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 6,
+  },
+  mandalaCore: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 1,
+    opacity: 0.92,
+    shadowOpacity: 0.45,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 7,
   },
   labelInner: { alignItems: 'center', justifyContent: 'center' },
   phaseText: {
