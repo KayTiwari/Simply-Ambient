@@ -212,6 +212,7 @@ const SOUNDSCAPES: Soundscape[] = [
 
 const BUNDLED_SOUNDSCAPES: Partial<Record<SoundscapeKey, number>> = {
   rain: require('./assets/soundscapes/soft-rain.mp3'),
+  ocean: require('./assets/soundscapes/ocean-waves.mp3'),
   fire: require('./assets/soundscapes/hearth.mp3'),
   white: require('./assets/soundscapes/white-noise.mp3'),
 };
@@ -1750,7 +1751,7 @@ function AppContent() {
 
   async function ensureSoundscapeSource(id: SoundscapeKey): Promise<AudioSource> {
     const bundled = BUNDLED_SOUNDSCAPES[id];
-    if (bundled) return { assetId: bundled };
+    if (bundled) return bundled;
 
     const cached = soundscapeCacheRef.current[id];
     if (cached) return { uri: cached };
