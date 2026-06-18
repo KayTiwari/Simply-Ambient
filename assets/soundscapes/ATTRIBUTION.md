@@ -2,8 +2,9 @@
 
 These audio files are bundled so the app's core soundscape functionality works offline.
 
-- `soft-rain.mp3` - "Rain Under an Umbrella" by Pierre SIBANARCO / BigSoundBank, CC0 public domain.
-  Source: https://bigsoundbank.com/rain-under-an-umbrella-s2679.html
+- `soft-rain.mp3` - "Light Gentle Rain" from "Nature Sounds (Birds, Rain, Water)", CC0 public domain.
+  Source: https://archive.org/details/naturesounds-soundtheraphy/Light+Gentle+Rain.mp3
+  License: https://creativecommons.org/publicdomain/zero/1.0/
 
 - `hearth.mp3` - "Campfire sound ambience.ogg" by Glaneur de sons, licensed under CC BY 3.0.
   Source: https://commons.wikimedia.org/wiki/File:Campfire_sound_ambience.ogg

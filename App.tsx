@@ -201,7 +201,7 @@ type Soundscape = {
 };
 
 const SOUNDSCAPES: Soundscape[] = [
-  { id: 'rain',   name: 'Soft Rain',      blurb: 'Regular rain under cover, close and quiet instead of a downpour.', color: '#5BD0FF',   Icon: CloudRain },
+  { id: 'rain',   name: 'Soft Rain',      blurb: 'A long, gentle rain bed without the umbrella-plastic loop.', color: '#5BD0FF',   Icon: CloudRain },
   { id: 'ocean',  name: 'Ocean Tide',     blurb: 'Long swells for downshifting into sleep or recovery.',      color: '#5B6CFF',   Icon: Waves },
   { id: 'forest', name: 'Forest Air',     blurb: 'Leaf wash with a few distant, breathy chirps.',             color: '#9affc8',   Icon: TreeEvergreen },
   { id: 'fire',   name: 'Hearth',         blurb: 'A real campfire bed with natural ember crackle.',            color: '#FFB05B',   Icon: Campfire },
@@ -218,7 +218,7 @@ const BUNDLED_SOUNDSCAPES: Partial<Record<SoundscapeKey, number>> = {
 };
 
 const SOUNDSCAPE_GAIN: Record<SoundscapeKey, number> = {
-  rain: 0.52,
+  rain: 0.48,
   ocean: 0.72,
   forest: 0.72,
   fire: 0.72,
@@ -2221,6 +2221,10 @@ function MiniPlayer({
   onStopAll: () => void;
 }) {
   const [now, setNow] = useState(Date.now());
+  const [rendered, setRendered] = useState(visible);
+  const barOpacity = useRef(new Animated.Value(visible ? 1 : 0)).current;
+  const barOffset = useRef(new Animated.Value(visible ? 0 : 12)).current;
+  const ringTurn = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!visible || !sleepEndsAt) return;
@@ -2228,55 +2232,117 @@ function MiniPlayer({
     return () => clearInterval(interval);
   }, [visible, sleepEndsAt]);
 
-  if (!visible) return null;
+  useEffect(() => {
+    if (visible) setRendered(true);
+    Animated.parallel([
+      Animated.timing(barOpacity, {
+        toValue: visible ? 1 : 0,
+        duration: visible ? 260 : 220,
+        easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(barOffset, {
+        toValue: visible ? 0 : 12,
+        duration: visible ? 260 : 220,
+        easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished && !visible) setRendered(false);
+    });
+  }, [barOffset, barOpacity, visible]);
+
+  useEffect(() => {
+    if (!soundscapePlaying) {
+      ringTurn.stopAnimation();
+      ringTurn.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.timing(ringTurn, {
+        toValue: 1,
+        duration: 1800,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [ringTurn, soundscapePlaying]);
+
+  if (!rendered) return null;
   const timerText = sleepEndsAt ? formatRemaining(sleepEndsAt - now) : null;
+  const ringRotation = ringTurn.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.9}
-      onPress={onOpen}
-      style={[styles.miniPlayer, { borderColor: accent + '66' }]}
-      accessibilityLabel="Open current sound session"
+    <Animated.View
+      style={{
+        opacity: barOpacity,
+        transform: [{ translateY: barOffset }],
+      }}
     >
       <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={onTogglePlay}
-        style={[styles.miniPlayBtn, { backgroundColor: isTonePlaying ? '#fff' : accent }]}
-        accessibilityLabel={isTonePlaying ? 'Pause tones' : 'Play tones'}
+        activeOpacity={0.9}
+        onPress={onOpen}
+        style={[styles.miniPlayer, { borderColor: accent + '66' }]}
+        accessibilityLabel="Open current sound session"
       >
-        {isToneLoading ? (
-          <ActivityIndicator color="#0B0B1F" size="small" />
-        ) : (
-          <Text style={styles.miniPlayText}>{isTonePlaying ? 'Ⅱ' : '▶'}</Text>
-        )}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={onTogglePlay}
+          style={[styles.miniPlayBtn, { backgroundColor: isTonePlaying ? '#fff' : accent }]}
+          accessibilityLabel={isTonePlaying ? 'Pause tones' : 'Play tones'}
+        >
+          {isToneLoading ? (
+            <ActivityIndicator color="#0B0B1F" size="small" />
+          ) : (
+            <Text style={styles.miniPlayText}>{isTonePlaying ? 'Ⅱ' : '▶'}</Text>
+          )}
+        </TouchableOpacity>
+        <View style={styles.miniBody}>
+          <Text style={styles.miniTitle} numberOfLines={1}>{title} · {beat.toFixed(0)} Hz</Text>
+          <Text style={styles.miniMeta} numberOfLines={1}>
+            {soundscapeName ? soundscapeName : 'Pure binaural tone'}
+            {timerText ? ` · fades in ${timerText}` : ''}
+          </Text>
+        </View>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={onSoundscapePress}
+          style={[
+            styles.miniSoundscapeBtn,
+            soundscapePlaying && { backgroundColor: accent + '33', borderColor: accent },
+          ]}
+          accessibilityLabel={hasSoundscape ? (soundscapePlaying ? 'Stop soundscape' : 'Play soundscape') : 'Choose a soundscape'}
+        >
+          {soundscapePlaying && (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.miniSoundscapeRing,
+                {
+                  borderTopColor: accent,
+                  borderRightColor: accent,
+                  transform: [{ rotate: ringRotation }],
+                },
+              ]}
+            />
+          )}
+          <Waveform size={18} weight="duotone" color={soundscapePlaying ? accent : '#ffffffcc'} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={onStopAll}
+          style={styles.miniStopBtn}
+          accessibilityLabel="Stop all audio"
+        >
+          <Text style={styles.miniStopText}>×</Text>
+        </TouchableOpacity>
       </TouchableOpacity>
-      <View style={styles.miniBody}>
-        <Text style={styles.miniTitle} numberOfLines={1}>{title} · {beat.toFixed(0)} Hz</Text>
-        <Text style={styles.miniMeta} numberOfLines={1}>
-          {soundscapeName ? soundscapeName : 'Pure binaural tone'}
-          {timerText ? ` · fades in ${timerText}` : ''}
-        </Text>
-      </View>
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={onSoundscapePress}
-        style={[
-          styles.miniSoundscapeBtn,
-          soundscapePlaying && { backgroundColor: accent + '33', borderColor: accent },
-        ]}
-        accessibilityLabel={hasSoundscape ? (soundscapePlaying ? 'Stop soundscape' : 'Play soundscape') : 'Choose a soundscape'}
-      >
-        <Waveform size={18} weight="duotone" color={soundscapePlaying ? accent : '#ffffffcc'} />
-      </TouchableOpacity>
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={onStopAll}
-        style={styles.miniStopBtn}
-        accessibilityLabel="Stop all audio"
-      >
-        <Text style={styles.miniStopText}>×</Text>
-      </TouchableOpacity>
-    </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -3403,6 +3469,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.14)',
+  },
+  miniSoundscapeRing: {
+    position: 'absolute',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1.5,
+    borderLeftColor: 'transparent',
+    borderBottomColor: 'transparent',
+    opacity: 0.9,
   },
 
   tabBarSafe: {
