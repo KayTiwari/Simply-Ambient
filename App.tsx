@@ -201,7 +201,7 @@ type Soundscape = {
 };
 
 const SOUNDSCAPES: Soundscape[] = [
-  { id: 'rain',   name: 'Soft Rain',      blurb: 'A steady veil with tiny drops near the edge of attention.', color: '#5BD0FF',   Icon: CloudRain },
+  { id: 'rain',   name: 'Soft Rain',      blurb: 'Regular rain under cover, close and quiet instead of a downpour.', color: '#5BD0FF',   Icon: CloudRain },
   { id: 'ocean',  name: 'Ocean Tide',     blurb: 'Long swells for downshifting into sleep or recovery.',      color: '#5B6CFF',   Icon: Waves },
   { id: 'forest', name: 'Forest Air',     blurb: 'Leaf wash with a few distant, breathy chirps.',             color: '#9affc8',   Icon: TreeEvergreen },
   { id: 'fire',   name: 'Hearth',         blurb: 'A real campfire bed with natural ember crackle.',            color: '#FFB05B',   Icon: Campfire },
@@ -218,7 +218,7 @@ const BUNDLED_SOUNDSCAPES: Partial<Record<SoundscapeKey, number>> = {
 };
 
 const SOUNDSCAPE_GAIN: Record<SoundscapeKey, number> = {
-  rain: 0.72,
+  rain: 0.52,
   ocean: 0.72,
   forest: 0.72,
   fire: 0.72,
@@ -803,6 +803,7 @@ class WebSoundscapeEngine {
         this.mediaSource = src;
         this.media.loop = true;
         this.media.preload = 'auto';
+        this.media.load?.();
       }
       this.media.volume = effectiveSoundscapeVolume(kind, volume);
       await this.media.play();
