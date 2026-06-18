@@ -40,6 +40,7 @@ import {
   Waves,
   TreeEvergreen,
   Campfire,
+  Drop,
   WaveSquare,
   WaveSine,
   WaveTriangle,
@@ -190,7 +191,7 @@ type TuningPreset = {
   origin: 'solfeggio' | 'natural' | 'cosmic' | 'archaeo' | 'scientific';
 };
 
-type SoundscapeKey = 'rain' | 'ocean' | 'forest' | 'fire' | 'white' | 'pink' | 'brown';
+type SoundscapeKey = 'rain' | 'ocean' | 'forest' | 'stream' | 'fire' | 'white' | 'pink' | 'brown';
 
 type Soundscape = {
   id: SoundscapeKey;
@@ -203,7 +204,8 @@ type Soundscape = {
 const SOUNDSCAPES: Soundscape[] = [
   { id: 'rain',   name: 'Soft Rain',      blurb: 'A long, gentle rain bed without the umbrella-plastic loop.', color: '#5BD0FF',   Icon: CloudRain },
   { id: 'ocean',  name: 'Ocean Tide',     blurb: 'Long swells for downshifting into sleep or recovery.',      color: '#5B6CFF',   Icon: Waves },
-  { id: 'forest', name: 'Forest Air',     blurb: 'Leaf wash with a few distant, breathy chirps.',             color: '#9affc8',   Icon: TreeEvergreen },
+  { id: 'forest', name: 'Forest Air',     blurb: 'A real birdsong canopy for light, living background texture.', color: '#9affc8', Icon: TreeEvergreen },
+  { id: 'stream', name: 'Trickling Stream', blurb: 'Small moving water with birds tucked into the distance.',  color: '#71E8D4',   Icon: Drop },
   { id: 'fire',   name: 'Hearth',         blurb: 'A real campfire bed with natural ember crackle.',            color: '#FFB05B',   Icon: Campfire },
   { id: 'white',  name: 'White Noise',    blurb: 'Even masking for busy rooms and brittle silence.',          color: '#ffffffcc', Icon: WaveSquare },
   { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer masking with less edge than white noise.',           color: '#FFD0E1',   Icon: WaveSine },
@@ -213,6 +215,8 @@ const SOUNDSCAPES: Soundscape[] = [
 const BUNDLED_SOUNDSCAPES: Partial<Record<SoundscapeKey, number>> = {
   rain: require('./assets/soundscapes/soft-rain.mp3'),
   ocean: require('./assets/soundscapes/ocean-waves.mp3'),
+  forest: require('./assets/soundscapes/forest-birdsong.mp3'),
+  stream: require('./assets/soundscapes/trickling-stream.mp3'),
   fire: require('./assets/soundscapes/hearth.mp3'),
   white: require('./assets/soundscapes/white-noise.mp3'),
 };
@@ -220,7 +224,8 @@ const BUNDLED_SOUNDSCAPES: Partial<Record<SoundscapeKey, number>> = {
 const SOUNDSCAPE_GAIN: Record<SoundscapeKey, number> = {
   rain: 0.48,
   ocean: 0.72,
-  forest: 0.72,
+  forest: 0.58,
+  stream: 0.62,
   fire: 0.72,
   white: 0.24,
   pink: 0.62,
@@ -666,6 +671,11 @@ function buildSoundscapeWav(kind: SoundscapeKey): string {
         const birds = i % 17111 < 140 ? chirp * 0.035 : 0;
         return [(leaves + birds) * panLeft, (leaves * 0.9 + birds * 0.6) * panRight];
       }
+      case 'stream': {
+        const ripple = pink * 0.11 + Math.sin(twoPi * 1.4 * t) * 0.035 + Math.sin(twoPi * 2.8 * t) * 0.018;
+        const birds = i % 19789 < 120 ? chirp * 0.025 : 0;
+        return [(ripple + birds) * panLeft, (ripple * 0.86 + birds * 0.55) * panRight];
+      }
       case 'fire': {
         const sparkLeft = fireCrackle * 0.22 + firePop * 0.18;
         const sparkRight = fireCrackle * 0.15 + firePop * 0.24;
@@ -916,6 +926,10 @@ class WebSoundscapeEngine {
       case 'forest': {
         const leaves = this.pink * 0.10 + Math.sin(twoPi * 0.09 * t) * 0.04;
         return [leaves + birds, leaves * 0.9 + birds * 0.6];
+      }
+      case 'stream': {
+        const ripple = this.pink * 0.11 + Math.sin(twoPi * 1.4 * t) * 0.035 + Math.sin(twoPi * 2.8 * t) * 0.018;
+        return [ripple + birds * 0.7, ripple * 0.86 + birds * 0.45];
       }
       case 'fire':
         return [flame + this.fireCrackle * 0.22 + this.firePop * 0.18, flame * 0.88 + this.fireCrackle * 0.15 + this.firePop * 0.24];

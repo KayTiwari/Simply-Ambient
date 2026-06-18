@@ -13,5 +13,13 @@ These audio files are bundled so the app's core soundscape functionality works o
 - `ocean-waves.mp3` - "Small Waves Facing the Ocean" by Joseph Sardin / BigSoundBank, CC0 public domain.
   Source: https://bigsoundbank.com/small-waves-facing-the-ocean-s1046.html
 
+- `forest-birdsong.mp3` - "Relaxing Nature Sounds - Birdsong Sound" from "Nature Sounds (Birds, Rain, Water)", CC0 public domain.
+  Source: https://archive.org/details/naturesounds-soundtheraphy/Relaxing+Nature+Sounds+-+Birdsong+Sound.mp3
+  License: https://creativecommons.org/publicdomain/zero/1.0/
+
+- `trickling-stream.mp3` - "Relaxing Nature Sounds - Trickling Stream Sounds & Birds" from "Nature Sounds (Birds, Rain, Water)", CC0 public domain.
+  Source: https://archive.org/details/naturesounds-soundtheraphy/Relaxing+Nature+Sounds+-+Trickling+Stream+Sounds+%26+Birds.mp3
+  License: https://creativecommons.org/publicdomain/zero/1.0/
+
 - `white-noise.mp3` - "White Noise" by Joseph Sardin / BigSoundBank, CC0 public domain.
   Source: https://bigsoundbank.com/white-noise-s1037.html
