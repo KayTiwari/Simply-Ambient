@@ -2275,18 +2275,22 @@ function MiniPlayer({
 
   useEffect(() => {
     if (visible) setRendered(true);
+    // JS-driven (not native): on web a native-driver opacity promotes the bar to
+    // its own layer, and the white play button can render at full opacity for a
+    // frame mid-fade (a white flash). Driving opacity in JS sets it on the parent
+    // element so it cascades cleanly to every child.
     Animated.parallel([
       Animated.timing(barOpacity, {
         toValue: visible ? 1 : 0,
         duration: visible ? 280 : 340,
         easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(barOffset, {
         toValue: visible ? 0 : 12,
         duration: visible ? 280 : 340,
         easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start(({ finished }) => {
       if (finished && !visible) setRendered(false);
