@@ -44,6 +44,8 @@ import {
   WaveSquare,
   WaveSine,
   WaveTriangle,
+  Play,
+  Pause,
   type IconProps,
 } from 'phosphor-react-native';
 
@@ -1167,7 +1169,9 @@ function AppContent() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('frequencies');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [soundscapesInNav, setSoundscapesInNav] = useState(false);
+  // Soundscapes is pinned to the navbar by default; only unpinned if the user
+  // explicitly turned it off (persisted as '0').
+  const [soundscapesInNav, setSoundscapesInNav] = useState(true);
   const tabFade = useRef(new Animated.Value(1)).current;
   const lastTab = useRef<Tab>(tab);
 
@@ -1193,7 +1197,7 @@ function AppContent() {
       setOnboardingChecked(true);
     }).catch(() => setOnboardingChecked(true));
     AsyncStorage.getItem(STORAGE_KEY_NAV_SOUNDSCAPES)
-      .then(v => setSoundscapesInNav(v === '1'))
+      .then(v => setSoundscapesInNav(v !== '0'))
       .catch(() => {});
   }, []);
 
@@ -2120,9 +2124,16 @@ function SoundscapesView({
   onToggleSoundscape: (id: SoundscapeKey) => void;
   onChangeSoundscapeVolume: (v: number) => void;
 }) {
-  const activeName = activeSoundscapeId
-    ? soundscapes.find(s => s.id === activeSoundscapeId)?.name ?? 'Ambient layer'
-    : 'No layer selected';
+  const activeLayer = activeSoundscapeId
+    ? soundscapes.find(s => s.id === activeSoundscapeId) ?? null
+    : null;
+  const activeName = activeLayer?.name ?? 'No layer selected';
+  const activeAccent = activeLayer?.color ?? '#d9b35c';
+  const nowMeta = !activeLayer
+    ? 'Tap a layer below to begin.'
+    : isSoundscapePlaying
+      ? 'Playing under your current session.'
+      : 'Paused. Tap play to resume, or pick another layer.';
 
   return (
     <ScrollView
@@ -2141,11 +2152,27 @@ function SoundscapesView({
 
       <View style={styles.soundscapeNowCard}>
         <Text style={styles.beatLabel}>AMBIENT LAYER</Text>
-        <Text style={styles.soundscapeNowTitle}>{activeName}</Text>
-        <Text style={styles.soundscapeNowMeta}>
-          {isSoundscapePlaying ? 'Playing under your current session' : 'Tap a layer below to start'}
-        </Text>
-        {activeSoundscapeId ? (
+        <View style={styles.soundscapeNowRow}>
+          <View style={styles.soundscapeNowText}>
+            <Text style={styles.soundscapeNowTitle}>{activeName}</Text>
+            <Text style={styles.soundscapeNowMeta}>{nowMeta}</Text>
+          </View>
+          {activeLayer ? (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => onToggleSoundscape(activeLayer.id)}
+              style={[styles.soundscapePlayBtn, { borderColor: activeAccent + '99', backgroundColor: activeAccent + '22' }]}
+              accessibilityLabel={isSoundscapePlaying ? `Pause ${activeLayer.name}` : `Resume ${activeLayer.name}`}
+            >
+              {isSoundscapePlaying ? (
+                <Pause size={24} color={activeAccent} weight="fill" />
+              ) : (
+                <Play size={24} color={activeAccent} weight="fill" />
+              )}
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        {activeLayer ? (
           <View style={styles.soundscapeVolumeRow}>
             <Text style={styles.bgVolLabel}>VOLUME · {Math.round(soundscapeVolume * 100)}%</Text>
             <Slider
@@ -3199,6 +3226,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   soundscapeNowMeta: { color: '#ffffff88', fontSize: 12, marginTop: 4 },
+  soundscapeNowRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  soundscapeNowText: { flex: 1, minWidth: 0 },
+  soundscapePlayBtn: { width: 52, height: 52, borderRadius: 999, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   soundscapeVolumeRow: { marginTop: 16 },
   soundscapeGrid: { gap: 10 },
   soundscapeTile: {
