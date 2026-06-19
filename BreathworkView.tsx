@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  Vibration,
   View,
 } from 'react-native';
 import Svg, { Circle, Ellipse, G, Line } from 'react-native-svg';
@@ -306,6 +308,28 @@ export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandCo
   );
 }
 
+// Celebratory buzz when a full mala (108) is completed. Android gets a real
+// vibration rhythm (buzz · buzz · long buzz); iOS/others get a timed haptic
+// sequence ending on a success "ding" (pattern timings are unreliable on iOS).
+function malaCompleteBuzz(level: HapticLevel) {
+  if (level === 'off') return;
+  const high = level === 'high';
+  if (Platform.OS === 'android') {
+    // [wait, buzz, wait, buzz, wait, long buzz]
+    Vibration.vibrate(high ? [0, 240, 120, 240, 120, 500] : [0, 130, 100, 130, 100, 320]);
+    return;
+  }
+  const big = high ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Medium;
+  const small = high ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light;
+  Haptics.impactAsync(small).catch(() => {});
+  setTimeout(() => Haptics.impactAsync(small).catch(() => {}), 150);
+  setTimeout(() => Haptics.impactAsync(big).catch(() => {}), 320);
+  setTimeout(
+    () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}),
+    540,
+  );
+}
+
 function MalaCounter() {
   const [count, setCount] = useState(0);
   const [haptic, setHaptic] = useState<HapticLevel>('low');
@@ -337,8 +361,8 @@ function MalaCounter() {
     }
     setCount(c => {
       const next = Math.min(target, c + 1);
-      if (next === target && haptic !== 'off') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      if (next === target && c < target) {
+        malaCompleteBuzz(haptic);
       }
       return next;
     });
