@@ -2265,7 +2265,7 @@ function MiniPlayer({
   const [rendered, setRendered] = useState(visible);
   const barOpacity = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const barOffset = useRef(new Animated.Value(visible ? 0 : 12)).current;
-  const ringTurn = useRef(new Animated.Value(0)).current;
+  const ringPulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!visible || !sleepEndsAt) return;
@@ -2278,14 +2278,14 @@ function MiniPlayer({
     Animated.parallel([
       Animated.timing(barOpacity, {
         toValue: visible ? 1 : 0,
-        duration: visible ? 260 : 220,
-        easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+        duration: visible ? 280 : 340,
+        easing: Easing.inOut(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(barOffset, {
         toValue: visible ? 0 : 12,
-        duration: visible ? 260 : 220,
-        easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+        duration: visible ? 280 : 340,
+        easing: Easing.inOut(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start(({ finished }) => {
@@ -2295,28 +2295,34 @@ function MiniPlayer({
 
   useEffect(() => {
     if (!soundscapePlaying) {
-      ringTurn.stopAnimation();
-      ringTurn.setValue(0);
+      ringPulse.stopAnimation();
+      ringPulse.setValue(0);
       return;
     }
     const loop = Animated.loop(
-      Animated.timing(ringTurn, {
-        toValue: 1,
-        duration: 1800,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
+      Animated.sequence([
+        Animated.timing(ringPulse, {
+          toValue: 1,
+          duration: 1400,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(ringPulse, {
+          toValue: 0,
+          duration: 1400,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
     );
     loop.start();
     return () => loop.stop();
-  }, [ringTurn, soundscapePlaying]);
+  }, [ringPulse, soundscapePlaying]);
 
   if (!rendered) return null;
   const timerText = sleepEndsAt ? formatRemaining(sleepEndsAt - now) : null;
-  const ringRotation = ringTurn.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+  const ringScale = ringPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] });
+  const ringGlowOpacity = ringPulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.95] });
 
   return (
     <Animated.View
@@ -2365,9 +2371,10 @@ function MiniPlayer({
               style={[
                 styles.miniSoundscapeRing,
                 {
-                  borderTopColor: accent,
-                  borderRightColor: accent,
-                  transform: [{ rotate: ringRotation }],
+                  borderColor: accent,
+                  shadowColor: accent,
+                  opacity: ringGlowOpacity,
+                  transform: [{ scale: ringScale }],
                 },
               ]}
             />
@@ -3516,13 +3523,13 @@ const styles = StyleSheet.create({
   },
   miniSoundscapeRing: {
     position: 'absolute',
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1.5,
-    borderLeftColor: 'transparent',
-    borderBottomColor: 'transparent',
-    opacity: 0.9,
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
   },
 
   tabBarSafe: {

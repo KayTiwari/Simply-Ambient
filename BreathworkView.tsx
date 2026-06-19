@@ -477,6 +477,9 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
   const orbit = useRef(new Animated.Value(0)).current;
   // Rotation of the central polygon (counter-rotates).
   const centerSpin = useRef(new Animated.Value(0)).current;
+  // Crossfade between the two visualizers (0 = circle, 1 = mandala). Both stay
+  // mounted so the native-driven breath animation never detaches mid-phase.
+  const visualFade = useRef(new Animated.Value(0)).current;
 
   const totalCycleMs = useMemo(
     () => technique.phases.reduce((s, p) => s + p.seconds * 1000, 0),
@@ -505,6 +508,17 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
     c.start();
     return () => { o.stop(); c.stop(); };
   }, [playing, orbit, centerSpin, orbitDuration, centerDuration]);
+
+  // Crossfade when the user switches visualizer. Both layers remain mounted, so
+  // breath/orbit keep running and the swap is seamless instead of freezing.
+  useEffect(() => {
+    Animated.timing(visualFade, {
+      toValue: visual === 'mandala' ? 1 : 0,
+      duration: 360,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [visual, visualFade]);
 
   // Phase loop: drives `breath` and the timer text.
   useEffect(() => {
@@ -579,6 +593,8 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
   }, [playing, technique, breath]);
 
   const phase = technique.phases[phaseIdx];
+  const circleOpacity = visualFade.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const mandalaOpacity = visualFade;
 
   return (
     <View style={styles.sessionWrap}>
@@ -618,27 +634,36 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
         </TouchableOpacity>
       </View>
 
-      {visual === 'circle' ? (
-        <BreathCircle
-          breath={breath}
-          color={technique.color}
-          phaseLabel={playing ? phase.name : 'Ready'}
-          phaseCount={playing ? secondsLeft : 0}
-          cycle={playing ? cycle : 0}
-          active={playing}
-        />
-      ) : (
-        <BreathMandala
-          breath={breath}
-          orbit={orbit}
-          centerSpin={centerSpin}
-          color={technique.color}
-          phaseLabel={playing ? phase.name : 'Ready'}
-          phaseCount={playing ? secondsLeft : 0}
-          cycle={playing ? cycle : 0}
-          active={playing}
-        />
-      )}
+      <View style={styles.visualStack}>
+        <Animated.View
+          style={[styles.visualLayer, { opacity: circleOpacity }]}
+          pointerEvents={visual === 'circle' ? 'auto' : 'none'}
+        >
+          <BreathCircle
+            breath={breath}
+            color={technique.color}
+            phaseLabel={playing ? phase.name : 'Ready'}
+            phaseCount={playing ? secondsLeft : 0}
+            cycle={playing ? cycle : 0}
+            active={playing}
+          />
+        </Animated.View>
+        <Animated.View
+          style={[styles.visualLayer, { opacity: mandalaOpacity }]}
+          pointerEvents={visual === 'mandala' ? 'auto' : 'none'}
+        >
+          <BreathMandala
+            breath={breath}
+            orbit={orbit}
+            centerSpin={centerSpin}
+            color={technique.color}
+            phaseLabel={playing ? phase.name : 'Ready'}
+            phaseCount={playing ? secondsLeft : 0}
+            cycle={playing ? cycle : 0}
+            active={playing}
+          />
+        </Animated.View>
+      </View>
 
       <TouchableOpacity
         activeOpacity={0.85}
@@ -1030,10 +1055,18 @@ const styles = StyleSheet.create({
   },
   toggleText: { color: '#ffffff99', fontSize: 12, letterSpacing: 1.5, fontWeight: '600' },
 
+  visualStack: {
+    width: 280, height: 280,
+    marginVertical: 24,
+    alignSelf: 'center',
+  },
+  visualLayer: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center', justifyContent: 'center',
+  },
   circleWrap: {
     width: 280, height: 280,
     alignItems: 'center', justifyContent: 'center',
-    marginVertical: 24,
   },
   outerHalo: {
     position: 'absolute',
@@ -1049,7 +1082,6 @@ const styles = StyleSheet.create({
   mandalaWrap: {
     width: MANDALA_SIZE, height: MANDALA_SIZE,
     alignItems: 'center', justifyContent: 'center',
-    marginVertical: 24,
   },
   absCenter: {
     position: 'absolute',
