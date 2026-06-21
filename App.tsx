@@ -36,6 +36,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import {
   Waveform,
+  MusicNotes,
   CloudRain,
   Waves,
   TreeEvergreen,
@@ -1958,6 +1959,9 @@ function AppContent() {
             if (activeSoundscapeId) toggleSoundscape(activeSoundscapeId);
             else setTab('soundscapes');
           }}
+          hasBg={bgUri != null}
+          bgPlaying={isBgPlaying}
+          onBgPress={toggleBg}
           onTogglePlay={togglePlay}
           onOpen={() => setTab('frequencies')}
           onStopAll={stopEverything}
@@ -2242,6 +2246,9 @@ function MiniPlayer({
   soundscapePlaying,
   hasSoundscape,
   onSoundscapePress,
+  hasBg,
+  bgPlaying,
+  onBgPress,
   onTogglePlay,
   onOpen,
   onStopAll,
@@ -2257,6 +2264,9 @@ function MiniPlayer({
   soundscapePlaying: boolean;
   hasSoundscape: boolean;
   onSoundscapePress: () => void;
+  hasBg: boolean;
+  bgPlaying: boolean;
+  onBgPress: () => void;
   onTogglePlay: () => void;
   onOpen: () => void;
   onStopAll: () => void;
@@ -2298,7 +2308,7 @@ function MiniPlayer({
   }, [barOffset, barOpacity, visible]);
 
   useEffect(() => {
-    if (!soundscapePlaying) {
+    if (!soundscapePlaying && !bgPlaying) {
       ringPulse.stopAnimation();
       ringPulse.setValue(0);
       return;
@@ -2321,7 +2331,7 @@ function MiniPlayer({
     );
     loop.start();
     return () => loop.stop();
-  }, [ringPulse, soundscapePlaying]);
+  }, [ringPulse, soundscapePlaying, bgPlaying]);
 
   if (!rendered) return null;
   const timerText = sleepEndsAt ? formatRemaining(sleepEndsAt - now) : null;
@@ -2360,6 +2370,33 @@ function MiniPlayer({
             {timerText ? ` · fades in ${timerText}` : ''}
           </Text>
         </View>
+        {hasBg && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={onBgPress}
+            style={[
+              styles.miniSoundscapeBtn,
+              bgPlaying && { backgroundColor: accent + '33', borderColor: accent },
+            ]}
+            accessibilityLabel={bgPlaying ? 'Pause imported audio' : 'Play imported audio'}
+          >
+            {bgPlaying && (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.miniSoundscapeRing,
+                  {
+                    borderColor: accent,
+                    shadowColor: accent,
+                    opacity: ringGlowOpacity,
+                    transform: [{ scale: ringScale }],
+                  },
+                ]}
+              />
+            )}
+            <MusicNotes size={18} weight="duotone" color={bgPlaying ? accent : '#ffffffcc'} />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={onSoundscapePress}
