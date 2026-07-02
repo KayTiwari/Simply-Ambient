@@ -36,11 +36,14 @@ import {
 } from 'phosphor-react-native';
 
 const STORAGE_HAPTIC = '@simply_ambient_mala_haptic_v1';
+const STORAGE_MALA_COUNT = '@simply_ambient_mala_count_v1';
 type HapticLevel = 'off' | 'low' | 'high';
 
 type TechniqueIcon = React.ComponentType<IconProps>;
 
-type Phase = { name: 'Inhale' | 'Hold' | 'Exhale'; seconds: number };
+// `target` optionally overrides the breath value a phase animates toward
+// (0 = fully exhaled, 1 = fully inhaled). Defaults: Inhale 1, Exhale 0.
+type Phase = { name: 'Inhale' | 'Hold' | 'Exhale'; seconds: number; target?: number };
 
 type Technique = {
   id: string;
@@ -191,8 +194,8 @@ const TECHNIQUES: Technique[] = [
     blurb: '2 short in · long out',
     description: 'Two short inhales through the nose, then one long exhale through the mouth. The fastest known way to down-regulate stress in real time.',
     phases: [
-      { name: 'Inhale', seconds: 1 },
-      { name: 'Inhale', seconds: 1 },
+      { name: 'Inhale', seconds: 1, target: 0.6 },
+      { name: 'Inhale', seconds: 1, target: 1.0 },
       { name: 'Exhale', seconds: 6 },
     ],
     color: '#5BD0FF', Icon: Sparkle, petalSides: 3, petalCount: 6, centerSides: 6,
@@ -311,28 +314,32 @@ export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandCo
 // Celebratory buzz when a full mala (108) is completed. Android gets a real
 // vibration rhythm (buzz · buzz · long buzz); iOS/others get a timed haptic
 // sequence ending on a success "ding" (pattern timings are unreliable on iOS).
-function malaCompleteBuzz(level: HapticLevel) {
-  if (level === 'off') return;
+// Returns the scheduled timeout ids so the caller can cancel them on unmount.
+function malaCompleteBuzz(level: HapticLevel): ReturnType<typeof setTimeout>[] {
+  if (level === 'off') return [];
   const high = level === 'high';
   if (Platform.OS === 'android') {
     // [wait, buzz, wait, buzz, wait, long buzz]
     Vibration.vibrate(high ? [0, 240, 120, 240, 120, 500] : [0, 130, 100, 130, 100, 320]);
-    return;
+    return [];
   }
   const big = high ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Medium;
   const small = high ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light;
   Haptics.impactAsync(small).catch(() => {});
-  setTimeout(() => Haptics.impactAsync(small).catch(() => {}), 150);
-  setTimeout(() => Haptics.impactAsync(big).catch(() => {}), 320);
-  setTimeout(
-    () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}),
-    540,
-  );
+  return [
+    setTimeout(() => Haptics.impactAsync(small).catch(() => {}), 150),
+    setTimeout(() => Haptics.impactAsync(big).catch(() => {}), 320),
+    setTimeout(
+      () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}),
+      540,
+    ),
+  ];
 }
 
 function MalaCounter() {
   const [count, setCount] = useState(0);
   const [haptic, setHaptic] = useState<HapticLevel>('low');
+  const buzzTimeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
   const target = 108;
   const ratio = Math.min(1, count / target);
 
@@ -340,7 +347,23 @@ function MalaCounter() {
     AsyncStorage.getItem(STORAGE_HAPTIC).then(v => {
       if (v === 'off' || v === 'low' || v === 'high') setHaptic(v);
     }).catch(() => {});
+    AsyncStorage.getItem(STORAGE_MALA_COUNT).then(v => {
+      const n = v == null ? NaN : parseInt(v, 10);
+      if (Number.isFinite(n) && n >= 0 && n <= target) setCount(n);
+    }).catch(() => {});
   }, []);
+
+  // Cancel any in-flight celebration buzz if the counter unmounts mid-sequence.
+  useEffect(() => {
+    return () => {
+      buzzTimeouts.current.forEach(clearTimeout);
+      Vibration.cancel();
+    };
+  }, []);
+
+  function persistCount(n: number) {
+    AsyncStorage.setItem(STORAGE_MALA_COUNT, String(n)).catch(() => {});
+  }
 
   function setHapticPref(p: HapticLevel) {
     setHaptic(p);
@@ -362,8 +385,9 @@ function MalaCounter() {
     setCount(c => {
       const next = Math.min(target, c + 1);
       if (next === target && c < target) {
-        malaCompleteBuzz(haptic);
+        buzzTimeouts.current = malaCompleteBuzz(haptic);
       }
+      persistCount(next);
       return next;
     });
   }
@@ -380,7 +404,7 @@ function MalaCounter() {
       <View style={styles.malaActions}>
         <TouchableOpacity
           activeOpacity={0.85}
-          onPress={() => setCount(0)}
+          onPress={() => { setCount(0); persistCount(0); }}
           style={styles.malaResetBtn}
         >
           <Text style={styles.malaResetText}>Reset</Text>
@@ -566,7 +590,7 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
       // During Hold the breath value freezes. No motion in/out.
       if (phase.name === 'Inhale') {
         currentAnim = Animated.timing(breath, {
-          toValue: 1,
+          toValue: phase.target ?? 1,
           duration: phase.seconds * 1000,
           easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
@@ -574,7 +598,7 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
         currentAnim.start();
       } else if (phase.name === 'Exhale') {
         currentAnim = Animated.timing(breath, {
-          toValue: 0,
+          toValue: phase.target ?? 0,
           duration: phase.seconds * 1000,
           easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
@@ -586,7 +610,9 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
       intervalId = setInterval(() => {
         if (cancelled) return;
         remaining -= 1;
-        setSecondsLeft(Math.max(0, remaining));
+        // Clamp to 1: the final interval tick races the phase timeout, so
+        // letting it show 0 makes short (1s) phases flash 0 or never tick.
+        setSecondsLeft(Math.max(1, remaining));
       }, 1000);
 
       timeoutId = setTimeout(() => {

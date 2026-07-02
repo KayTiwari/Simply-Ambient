@@ -257,7 +257,12 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
                 <View style={[styles.datePickerWrap, { flex: 1.4 }]}>
                   <Picker
                     selectedValue={birthMonth}
-                    onValueChange={(v) => setBirthMonth(Number(v))}
+                    onValueChange={(v) => {
+                      const m = Number(v);
+                      setBirthMonth(m);
+                      // Keep the picked day valid for the new month (e.g. 31st -> 30).
+                      setBirthDay(d => Math.min(d, daysInMonth(m, birthYear)));
+                    }}
                     dropdownIconColor="#ffffff99"
                     style={styles.datePicker}
                   >
@@ -283,7 +288,12 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
                 <View style={[styles.datePickerWrap, { flex: 1 }]}>
                   <Picker
                     selectedValue={birthYear}
-                    onValueChange={(v) => setBirthYear(Number(v))}
+                    onValueChange={(v) => {
+                      const y = Number(v);
+                      setBirthYear(y);
+                      // Keep the picked day valid for the new year (Feb 29 -> 28).
+                      setBirthDay(d => Math.min(d, daysInMonth(birthMonth, y)));
+                    }}
                     dropdownIconColor="#ffffff99"
                     style={styles.datePicker}
                   >
