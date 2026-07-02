@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -14,8 +14,18 @@ import { ArrowsClockwise } from 'phosphor-react-native';
 import type { Zodiac } from './App';
 
 const HOROSCOPE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+// Local calendar date (not UTC), so "today" matches what the user sees.
+function localDayStamp(): string {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
 function horoscopeCacheKey(signId: string, period: string) {
-  return `@simply_ambient_horo_${signId}_${period}_v1`;
+  // Daily entries are keyed by local date so a new local day is a cache miss;
+  // monthly relies on the TTL alone.
+  const day = period === 'daily' ? `_${localDayStamp()}` : '';
+  return `@simply_ambient_horo_${signId}_${period}${day}_v1`;
 }
 const TAROT_CACHE_KEY = '@simply_ambient_tarot_v1';
 const TAROT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -91,38 +101,53 @@ export default function HoroscopesView({
 
   const [tarot, setTarot] = useState<TarotCard | null>(null);
   const [tarotLoading, setTarotLoading] = useState(false);
+  const [tarotError, setTarotError] = useState(false);
 
   const [spreadSize, setSpreadSize] = useState<SpreadSize | null>(null);
   const [spread, setSpread] = useState<TarotCard[] | null>(null);
   const [spreadLoading, setSpreadLoading] = useState(false);
+  const [spreadError, setSpreadError] = useState(false);
+
+  // Guards the tarot fetch callbacks against setState after unmount.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   function drawSpread(n: SpreadSize) {
     setSpreadSize(n);
     setSpread(null);
+    setSpreadError(false);
     setSpreadLoading(true);
     fetch(tarotUrl(n))
       .then(r => (r.ok ? r.json() : null))
       .then(json => {
+        if (!mountedRef.current) return;
         const cards = json?.cards;
         if (Array.isArray(cards) && cards.length) setSpread(cards.slice(0, n));
+        else setSpreadError(true);
       })
-      .catch(() => {})
-      .finally(() => setSpreadLoading(false));
+      .catch(() => { if (mountedRef.current) setSpreadError(true); })
+      .finally(() => { if (mountedRef.current) setSpreadLoading(false); });
   }
 
   function drawTarot(force = false) {
+    setTarotError(false);
     setTarotLoading(true);
     fetch(tarotUrl(1))
       .then(r => (r.ok ? r.json() : null))
       .then(json => {
         const c = json?.cards?.[0];
         if (c) {
-          setTarot(c);
           AsyncStorage.setItem(TAROT_CACHE_KEY, JSON.stringify({ ts: Date.now(), card: c })).catch(() => {});
+          if (mountedRef.current) setTarot(c);
+        } else if (mountedRef.current) {
+          setTarotError(true);
         }
       })
-      .catch(() => {})
-      .finally(() => setTarotLoading(false));
+      .catch(() => { if (mountedRef.current) setTarotError(true); })
+      .finally(() => { if (mountedRef.current) setTarotLoading(false); });
   }
 
   // On first open: show the cached card immediately, refresh once a day.
@@ -155,32 +180,36 @@ export default function HoroscopesView({
       return;
     }
 
+    // Clear the previous sign/period text so it never shows under the new label,
+    // and spin until the cache read settles so the fallback quote never flashes.
+    setHoroscope(null);
+    setLoading(true);
+
     const cacheKey = horoscopeCacheKey(mySign.id, period);
-
-    // Show cached value instantly, then refetch in the background if stale.
-    AsyncStorage.getItem(cacheKey).then(raw => {
-      if (cancelled || !raw) return;
-      try {
-        const cached = JSON.parse(raw) as { ts: number; text: string };
-        if (cached?.text) setHoroscope(stripLeadingDate(cached.text));
-      } catch {}
-    }).catch(() => {});
-
     const url = horoscopeUrl(period, mySign.name);
 
     (async () => {
+      // Show cached value instantly; only refetch when it is stale or missing.
       const raw = await AsyncStorage.getItem(cacheKey).catch(() => null);
+      if (cancelled) return;
       let needsFetch = true;
       if (raw) {
         try {
           const cached = JSON.parse(raw) as { ts: number; text: string };
-          if (cached?.text && Date.now() - cached.ts < HOROSCOPE_TTL_MS) {
-            needsFetch = false;
+          if (cached?.text) {
+            setHoroscope(stripLeadingDate(cached.text));
+            if (Date.now() - cached.ts < HOROSCOPE_TTL_MS) {
+              needsFetch = false;
+            }
           }
         } catch {}
       }
 
-      if (needsFetch) setLoading(true);
+      if (!needsFetch) {
+        setLoading(false);
+        return;
+      }
+
       try {
         const r = await fetch(url);
         if (!r.ok) throw new Error('bad response');
@@ -198,7 +227,8 @@ export default function HoroscopesView({
           setHoroscope(null);
         }
       } catch {
-        // If we already had a cached value, just keep it.
+        // Keep any cached value; with no cache, clear so stale text never shows.
+        if (!cancelled && !raw) setHoroscope(null);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -273,7 +303,7 @@ export default function HoroscopesView({
             })}
           </View>
 
-          {loading ? (
+          {loading && !horoscope ? (
             <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
               <ActivityIndicator color={mySign.color} />
             </View>
@@ -356,6 +386,8 @@ export default function HoroscopesView({
                 <Text style={styles.tarotDesc} numberOfLines={4}>{tarot.desc}</Text>
               ) : null}
             </>
+          ) : tarotError ? (
+            <Text style={styles.tarotMeaning}>Could not reach the cards. Try again.</Text>
           ) : (
             <Text style={styles.tarotMeaning}>Pull a card and pause for a moment.</Text>
           )}
@@ -398,6 +430,8 @@ export default function HoroscopesView({
                 </View>
               ))}
             </View>
+          ) : spreadError ? (
+            <Text style={styles.tarotMeaning}>Could not reach the cards. Try again.</Text>
           ) : (
             <Text style={styles.tarotMeaning}>Choose a spread to lay the cards.</Text>
           )}
