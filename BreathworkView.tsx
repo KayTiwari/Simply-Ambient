@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import Svg, { Circle, Ellipse, G, Line } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import {
@@ -405,6 +406,8 @@ function MalaCounter() {
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={() => { setCount(0); persistCount(0); }}
+          accessibilityRole="button"
+          accessibilityLabel="Reset mala count to zero"
           style={styles.malaResetBtn}
         >
           <Text style={styles.malaResetText}>Reset</Text>
@@ -412,6 +415,8 @@ function MalaCounter() {
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={tap}
+          accessibilityRole="button"
+          accessibilityLabel={count >= target ? 'Mala complete' : `Count one bead, ${count} of ${target}`}
           style={styles.malaCountBtn}
         >
           <Text style={styles.malaCountBtnText}>{count >= target ? '✓ Complete' : 'TAP'}</Text>
@@ -427,6 +432,9 @@ function MalaCounter() {
                 key={p}
                 activeOpacity={0.85}
                 onPress={() => setHapticPref(p)}
+                accessibilityRole="button"
+                accessibilityLabel={`Vibration ${p}`}
+                accessibilityState={{ selected: active }}
                 style={[
                   styles.malaHapticPill,
                   active && { borderColor: '#d9b35c', backgroundColor: '#d9b35c22' },
@@ -446,12 +454,14 @@ function MalaCounter() {
 }
 
 function TechniqueList({ onPick }: { onPick: (t: Technique) => void }) {
+  const insets = useSafeAreaInsets();
   const calming = TECHNIQUES.filter(t => t.category === 'calming');
   const activating = TECHNIQUES.filter(t => t.category === 'activating');
 
   return (
     <ScrollView
-      contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20 }}
+      // Clear the ~80px tab bar rendered by App.tsx plus the safe-area inset.
+      contentContainerStyle={{ paddingBottom: insets.bottom + 90, paddingHorizontal: 20 }}
       showsVerticalScrollIndicator={false}
     >
       <MalaCounter />
@@ -481,6 +491,8 @@ function TechniqueCard({ technique, onPress }: { technique: Technique; onPress: 
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${technique.name}, ${technique.blurb}. Open breathing session.`}
       style={[styles.card, { borderColor: technique.color + '55' }]}
     >
       <View style={styles.cardRow}>
@@ -512,12 +524,32 @@ function TechniqueCard({ technique, onPress }: { technique: Technique; onPress: 
 
 type Visual = 'circle' | 'mandala';
 
+// Session length choices. null = endless (the original behavior).
+const CYCLE_CHOICES: Array<number | null> = [null, 5, 10, 20];
+
+// Soft tick on each phase change so eyes-closed practice can follow along.
+// Native only; web has no haptics.
+function phaseTick() {
+  if (Platform.OS === 'web') return;
+  Haptics.selectionAsync().catch(() => {});
+}
+
 function BreathSession({ technique, onBack }: { technique: Technique; onBack: () => void }) {
+  const insets = useSafeAreaInsets();
   const [playing, setPlaying] = useState(false);
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(technique.phases[0].seconds);
   const [cycle, setCycle] = useState(0);
   const [visual, setVisual] = useState<Visual>('circle');
+  const [targetCycles, setTargetCycles] = useState<number | null>(null);
+  const [complete, setComplete] = useState(false);
+
+  // Read by the phase loop through a ref so changing the length mid-session
+  // takes effect at the next cycle boundary without restarting the loop.
+  const targetCyclesRef = useRef<number | null>(null);
+  useEffect(() => {
+    targetCyclesRef.current = targetCycles;
+  }, [targetCycles]);
 
   // 0 = fully exhaled (petals retracted) ↔ 1 = fully inhaled (petals expanded).
   const breath = useRef(new Animated.Value(0)).current;
@@ -576,14 +608,35 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
     let intervalId: ReturnType<typeof setInterval> | null = null;
     let currentAnim: Animated.CompositeAnimation | null = null;
     let cyc = 0;
+    let started = false;
+
+    const finishSession = () => {
+      setPlaying(false);
+      setComplete(true);
+      if (Platform.OS !== 'web') {
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        } catch {}
+      }
+    };
 
     const runPhase = (idx: number) => {
       if (cancelled) return;
       const phase = technique.phases[idx];
+      if (idx === 0) {
+        cyc += 1;
+        const target = targetCyclesRef.current;
+        if (target != null && cyc > target) {
+          finishSession();
+          return;
+        }
+      }
+      // Skip the tick on the very first phase; it fires on changes only.
+      if (started) phaseTick();
+      started = true;
       setPhaseIdx(idx);
       setSecondsLeft(phase.seconds);
       if (idx === 0) {
-        cyc += 1;
         setCycle(cyc);
       }
 
@@ -632,6 +685,13 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
     };
   }, [playing, technique, breath]);
 
+  // "Complete" shows briefly, then the session settles back to Ready.
+  useEffect(() => {
+    if (!complete) return;
+    const t = setTimeout(() => setComplete(false), 3000);
+    return () => clearTimeout(t);
+  }, [complete]);
+
   // Reset when stopped or technique changes.
   useEffect(() => {
     if (!playing) {
@@ -645,10 +705,21 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
   const phase = technique.phases[phaseIdx];
   const circleOpacity = visualFade.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
   const mandalaOpacity = visualFade;
+  const phaseLabel = complete ? 'Complete' : playing ? phase.name : 'Ready';
 
   return (
-    <View style={styles.sessionWrap}>
-      <TouchableOpacity onPress={onBack} style={styles.backBtn}>
+    <ScrollView
+      // Clear the ~80px tab bar rendered by App.tsx plus the safe-area inset,
+      // so the mudra card at the bottom is never hidden behind the tab icons.
+      contentContainerStyle={[styles.sessionWrap, { paddingBottom: insets.bottom + 90 }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <TouchableOpacity
+        onPress={onBack}
+        accessibilityRole="button"
+        accessibilityLabel="Back to technique list"
+        style={styles.backBtn}
+      >
         <Text style={styles.backText}>‹  Techniques</Text>
       </TouchableOpacity>
 
@@ -659,6 +730,9 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
         <TouchableOpacity
           onPress={() => setVisual('circle')}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Circle visual"
+          accessibilityState={{ selected: visual === 'circle' }}
           style={[
             styles.toggleBtn,
             visual === 'circle' && {
@@ -672,6 +746,9 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
         <TouchableOpacity
           onPress={() => setVisual('mandala')}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Mandala visual"
+          accessibilityState={{ selected: visual === 'mandala' }}
           style={[
             styles.toggleBtn,
             visual === 'mandala' && {
@@ -684,6 +761,32 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
         </TouchableOpacity>
       </View>
 
+      <View style={styles.lengthRow}>
+        {CYCLE_CHOICES.map(c => {
+          const active = c === targetCycles;
+          const label = c == null ? 'Endless' : `${c} cycles`;
+          return (
+            <TouchableOpacity
+              key={c ?? 'endless'}
+              activeOpacity={0.85}
+              onPress={() => { setTargetCycles(c); setComplete(false); }}
+              accessibilityRole="button"
+              accessibilityLabel={c == null ? 'Endless session' : `End after ${c} cycles`}
+              accessibilityState={{ selected: active }}
+              style={[
+                styles.lengthPill,
+                active && {
+                  backgroundColor: technique.color + '22',
+                  borderColor: technique.color,
+                },
+              ]}
+            >
+              <Text style={[styles.lengthText, active && { color: technique.color }]}>{label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
       <View style={styles.visualStack}>
         <Animated.View
           style={[styles.visualLayer, { opacity: circleOpacity }]}
@@ -692,10 +795,10 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
           <BreathCircle
             breath={breath}
             color={technique.color}
-            phaseLabel={playing ? phase.name : 'Ready'}
+            phaseLabel={phaseLabel}
             phaseCount={playing ? secondsLeft : 0}
             cycle={playing ? cycle : 0}
-            active={playing}
+            active={playing || complete}
           />
         </Animated.View>
         <Animated.View
@@ -707,17 +810,19 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
             orbit={orbit}
             centerSpin={centerSpin}
             color={technique.color}
-            phaseLabel={playing ? phase.name : 'Ready'}
+            phaseLabel={phaseLabel}
             phaseCount={playing ? secondsLeft : 0}
             cycle={playing ? cycle : 0}
-            active={playing}
+            active={playing || complete}
           />
         </Animated.View>
       </View>
 
       <TouchableOpacity
         activeOpacity={0.85}
-        onPress={() => setPlaying(p => !p)}
+        onPress={() => { setComplete(false); setPlaying(p => !p); }}
+        accessibilityRole="button"
+        accessibilityLabel={playing ? 'Stop breathing session' : 'Start breathing session'}
         style={[styles.playBtn, { backgroundColor: playing ? '#fff' : technique.color }]}
       >
         <Text style={styles.playBtnText}>{playing ? 'STOP' : 'PLAY'}</Text>
@@ -731,7 +836,7 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
         </Text>
         <Text style={styles.mudraText}>{technique.mudra.instruction}</Text>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -1082,7 +1187,8 @@ const styles = StyleSheet.create({
     marginTop: 24, paddingHorizontal: 20, fontStyle: 'italic',
   },
 
-  sessionWrap: { flex: 1, alignItems: 'center', paddingHorizontal: 20 },
+  // Scroll content, so no flex: 1; the ScrollView itself fills the screen.
+  sessionWrap: { alignItems: 'center', paddingHorizontal: 20 },
   backBtn: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 4 },
   backText: { color: '#ffffffaa', fontSize: 13 },
   sessionName: {
@@ -1104,6 +1210,14 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'transparent',
   },
   toggleText: { color: '#ffffff99', fontSize: 12, letterSpacing: 1.5, fontWeight: '600' },
+
+  lengthRow: { flexDirection: 'row', gap: 6, marginTop: 12 },
+  lengthPill: {
+    paddingHorizontal: 12, paddingVertical: 5,
+    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(0,0,0,0.20)',
+  },
+  lengthText: { color: '#ffffff99', fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
 
   visualStack: {
     width: 280, height: 280,

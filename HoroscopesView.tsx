@@ -55,14 +55,32 @@ function horoscopeUrl(period: string, signName: string): string {
 // response text bakes in that date ("On May 17th, you might feel..."). We
 // strip the leading date phrase so the body is timezone-agnostic and stays
 // consistent with the local TODAY · <date> label in the header.
+// Handles "On May 15th, ...", "On Wednesday, May 15, ..." (full or
+// abbreviated weekday), and an optional trailing year. Anchored to the
+// start of the text on purpose: "On the other hand, ..." and mid-text
+// dates are left alone. The month name is required, so bare "On Wednesday,"
+// (a real forecast opener, no date drift) also survives.
 function stripLeadingDate(text: string): string {
   if (!text) return text;
   const cleaned = text.replace(
-    /^On\s+(?:(?:Mon|Tues?|Wednes?|Thurs?|Fri|Satur?|Sun)(?:day)?,?\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?,?\s+/i,
+    /^On\s+(?:(?:Mon|Tue(?:s)?|Wed(?:nes)?|Thu(?:rs?)?|Fri|Sat(?:ur)?|Sun)(?:day)?\.?,?\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?,?\s+/i,
     '',
   );
   if (cleaned === text) return text;
+  // Re-capitalize so "you might feel..." reads as a sentence again.
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
+// Quiet freshness stamp for the horoscope box ("Updated 2h ago"). Coarse
+// buckets on purpose; nobody needs minute-perfect cache telemetry here.
+function freshnessLabel(ts: number): string {
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if (mins < 5) return 'Updated just now';
+  if (mins < 60) return `Updated ${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Updated ${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `Updated ${days}d ago`;
 }
 
 type Period = 'daily' | 'monthly' | 'yearly';
@@ -97,6 +115,8 @@ export default function HoroscopesView({
 }: Props) {
   const [period, setPeriod] = useState<Period>('daily');
   const [horoscope, setHoroscope] = useState<string | null>(null);
+  // When the shown text was fetched (cache ts or fetch time); null for yearly.
+  const [horoscopeTs, setHoroscopeTs] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [tarot, setTarot] = useState<TarotCard | null>(null);
@@ -173,16 +193,19 @@ export default function HoroscopesView({
   useEffect(() => {
     let cancelled = false;
 
-    // Yearly is a static intention written into the zodiac data. No API call.
+    // Yearly is a static intention written into the zodiac data. No API call,
+    // so no freshness stamp either.
     if (period === 'yearly') {
       setLoading(false);
       setHoroscope(mySign.yearAhead);
+      setHoroscopeTs(null);
       return;
     }
 
     // Clear the previous sign/period text so it never shows under the new label,
     // and spin until the cache read settles so the fallback quote never flashes.
     setHoroscope(null);
+    setHoroscopeTs(null);
     setLoading(true);
 
     const cacheKey = horoscopeCacheKey(mySign.id, period);
@@ -198,6 +221,7 @@ export default function HoroscopesView({
           const cached = JSON.parse(raw) as { ts: number; text: string };
           if (cached?.text) {
             setHoroscope(stripLeadingDate(cached.text));
+            if (typeof cached.ts === 'number') setHoroscopeTs(cached.ts);
             if (Date.now() - cached.ts < HOROSCOPE_TTL_MS) {
               needsFetch = false;
             }
@@ -221,8 +245,10 @@ export default function HoroscopesView({
         if (cancelled) return;
         if (text) {
           const cleaned = stripLeadingDate(text);
+          const now = Date.now();
           setHoroscope(cleaned);
-          AsyncStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), text: cleaned })).catch(() => {});
+          setHoroscopeTs(now);
+          AsyncStorage.setItem(cacheKey, JSON.stringify({ ts: now, text: cleaned })).catch(() => {});
         } else if (!raw) {
           setHoroscope(null);
         }
@@ -287,6 +313,9 @@ export default function HoroscopesView({
                   key={p}
                   activeOpacity={0.85}
                   onPress={() => setPeriod(p)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show ${p} horoscope`}
+                  accessibilityState={{ selected: active }}
                   style={[
                     styles.periodBtn,
                     active && {
@@ -310,6 +339,9 @@ export default function HoroscopesView({
           ) : horoscope ? (
             <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
               <Text style={styles.horoscopeText}>{horoscope}</Text>
+              {period !== 'yearly' && horoscopeTs != null ? (
+                <Text style={styles.horoscopeStamp}>{freshnessLabel(horoscopeTs)}</Text>
+              ) : null}
             </View>
           ) : (
             <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
@@ -344,6 +376,9 @@ export default function HoroscopesView({
                 key={z.id}
                 activeOpacity={0.85}
                 onPress={() => onSelectMyZodiac(z)}
+                accessibilityRole="button"
+                accessibilityLabel={`Set ${z.name} as your sign, ${z.element}`}
+                accessibilityState={{ selected: active }}
                 style={[
                   styles.zodiacChip,
                   {
@@ -501,6 +536,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 2,
   },
   horoscopeText: { color: '#ffffffdd', fontSize: 14, lineHeight: 21 },
+  horoscopeStamp: { color: '#ffffff66', fontSize: 10, fontStyle: 'italic', marginTop: 6 },
   horoscopeFallback: { color: '#ffffffcc', fontSize: 14, fontStyle: 'italic', lineHeight: 20 },
   horoscopeNote: { color: '#ffffff66', fontSize: 10, fontStyle: 'italic', marginTop: 6 },
 

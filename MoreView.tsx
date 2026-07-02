@@ -220,6 +220,17 @@ export default function MoreView({
     AsyncStorage.setItem(STORAGE_MOOD, JSON.stringify(next)).catch(() => {});
   }
 
+  // Retroactive mood logging from the 14-day graph. Keeps the log sorted
+  // newest-first so the History list and day buckets stay consistent.
+  function saveMoodAt(ts: number, value: number) {
+    if (ts > Date.now()) return; // Never log a future date.
+    const next = [{ ts, value }, ...moodLog]
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 365);
+    setMoodLog(next);
+    AsyncStorage.setItem(STORAGE_MOOD, JSON.stringify(next)).catch(() => {});
+  }
+
   function saveGratitude(text: string) {
     const t = text.trim();
     if (!t) return;
@@ -389,6 +400,7 @@ export default function MoreView({
             <MoodPage
               moodLog={moodLog}
               onSaveMood={saveMood}
+              onSaveMoodAt={saveMoodAt}
               onBack={close}
             />
           )}
@@ -752,6 +764,21 @@ function AffirmationsPage({
   isExpoGo: boolean;
   onBack: () => void;
 }) {
+  // Warn when a reminder is chosen but the OS has notifications turned off.
+  // Skipped on web and in Expo Go, where local notifications don't apply.
+  const [notifBlocked, setNotifBlocked] = useState(false);
+  useEffect(() => {
+    if (notifPref === 'off' || Platform.OS === 'web' || isExpoGo) {
+      setNotifBlocked(false);
+      return;
+    }
+    let cancelled = false;
+    Notifications.getPermissionsAsync()
+      .then(res => { if (!cancelled) setNotifBlocked(res.status === 'denied'); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [notifPref, isExpoGo]);
+
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Daily Affirmation" accent="#9affc8" onBack={onBack} />
@@ -794,6 +821,9 @@ function AffirmationsPage({
                 key={p}
                 activeOpacity={0.85}
                 onPress={() => onChangeNotifPref(p)}
+                accessibilityRole="button"
+                accessibilityLabel={`Affirmation notifications: ${label}`}
+                accessibilityState={{ selected: active }}
                 style={[
                   styles.notifPill,
                   active && { borderColor: '#9affc8', backgroundColor: '#9affc822' },
@@ -807,6 +837,11 @@ function AffirmationsPage({
         {notifPref !== 'off' ? (
           <Text style={styles.notifHint}>
             {notifPref === 'daily' ? 'A gentle nudge at 9 a.m.' : 'Nudges at 9 a.m., 1 p.m., 6 p.m.'}
+          </Text>
+        ) : null}
+        {notifBlocked ? (
+          <Text style={styles.notifWarn}>
+            Notifications are blocked in system settings, so these will not fire.
           </Text>
         ) : null}
         {isExpoGo ? (
@@ -824,16 +859,34 @@ function AffirmationsPage({
 // ===========================================================================
 
 function MoodPage({
-  moodLog, onSaveMood, onBack,
+  moodLog, onSaveMood, onSaveMoodAt, onBack,
 }: {
   moodLog: MoodEntry[];
   onSaveMood: (v: number) => void;
+  onSaveMoodAt: (ts: number, v: number) => void;
   onBack: () => void;
 }) {
   const today = new Date();
   const moodToday = moodLog.find(
     m => new Date(m.ts).toDateString() === today.toDateString(),
   );
+
+  // Day selected on the graph for retroactive logging.
+  const [backfillDate, setBackfillDate] = useState<Date | null>(null);
+
+  function selectBackfillDay(date: Date) {
+    // Buckets only cover the past 14 days, but guard anyway.
+    if (date.getTime() > Date.now()) return;
+    setBackfillDate(date);
+  }
+
+  function saveBackfill(value: number) {
+    if (!backfillDate) return;
+    const at = new Date(backfillDate);
+    at.setHours(12, 0, 0, 0); // Noon local, a neutral time for a whole day.
+    onSaveMoodAt(at.getTime(), value);
+    setBackfillDate(null);
+  }
 
   // Per-day average over last 14 days for the graph.
   const dayBuckets = useMemo(() => {
@@ -874,6 +927,9 @@ function MoodPage({
                 key={v}
                 activeOpacity={0.85}
                 onPress={() => onSaveMood(v)}
+                accessibilityRole="button"
+                accessibilityLabel={`Mood ${v}, ${MOOD_LABELS[v - 1]}`}
+                accessibilityState={{ selected: active }}
                 style={[
                   styles.moodBtn,
                   {
@@ -892,8 +948,49 @@ function MoodPage({
         </View>
 
         <Text style={[styles.sectionLabel, { marginTop: 28 }]}>LAST 14 DAYS</Text>
-        <Text style={styles.sectionSub}>Daily average over the last two weeks</Text>
-        <MoodGraph buckets={dayBuckets} />
+        <Text style={styles.sectionSub}>Daily average. Tap a day to log it retroactively.</Text>
+        <MoodGraph buckets={dayBuckets} onSelectDay={selectBackfillDay} />
+
+        {backfillDate ? (
+          <View style={styles.backfillCard}>
+            <View style={styles.backfillHeader}>
+              <Text style={styles.backfillTitle}>
+                Logging for {backfillDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setBackfillDate(null)}
+                accessibilityLabel="Cancel retroactive logging"
+                accessibilityRole="button"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <X size={14} color="#ffffff66" weight="thin" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.moodRow}>
+              {[1, 2, 3, 4, 5].map(v => (
+                <TouchableOpacity
+                  key={v}
+                  activeOpacity={0.85}
+                  onPress={() => saveBackfill(v)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mood ${v}, ${MOOD_LABELS[v - 1]}`}
+                  style={[
+                    styles.moodBtn,
+                    {
+                      borderColor: MOOD_COLORS[v - 1] + '55',
+                      backgroundColor: 'rgba(0,0,0,0.20)',
+                    },
+                  ]}
+                >
+                  <Text style={[styles.moodValue, { color: MOOD_COLORS[v - 1] }]}>{v}</Text>
+                  <Text style={[styles.moodLabel, { color: '#ffffff88' }]}>
+                    {MOOD_LABELS[v - 1]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <Text style={[styles.sectionLabel, { marginTop: 28 }]}>HISTORY</Text>
         {moodLog.length === 0 ? (
@@ -918,7 +1015,12 @@ function MoodPage({
   );
 }
 
-function MoodGraph({ buckets }: { buckets: Array<{ date: Date; avg: number | null }> }) {
+function MoodGraph({
+  buckets, onSelectDay,
+}: {
+  buckets: Array<{ date: Date; avg: number | null }>;
+  onSelectDay?: (date: Date) => void;
+}) {
   const { width: screenW } = useWindowDimensions();
   const W = screenW - 40;
   const H = 160;
@@ -983,7 +1085,24 @@ function MoodGraph({ buckets }: { buckets: Array<{ date: Date; avg: number | nul
           ) : null,
         )}
       </Svg>
-      <View style={styles.graphLabelRow}>
+      {/* Invisible per-day tap strips over the chart. Cheaper and more
+          reliable than Svg hit testing, and each strip is a real touch
+          target for screen readers. */}
+      {onSelectDay ? (
+        <View style={[StyleSheet.absoluteFill, { flexDirection: 'row' }]}>
+          {buckets.map((b, i) => (
+            <TouchableOpacity
+              key={i}
+              style={{ flex: 1 }}
+              activeOpacity={0.6}
+              onPress={() => onSelectDay(b.date)}
+              accessibilityRole="button"
+              accessibilityLabel={`Log mood for ${b.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
+            />
+          ))}
+        </View>
+      ) : null}
+      <View style={styles.graphLabelRow} pointerEvents="none">
         <Text style={styles.graphLabelText}>14d ago</Text>
         <Text style={styles.graphLabelText}>today</Text>
       </View>
@@ -1014,6 +1133,21 @@ function GratitudePage({
       if (v === 'off' || v === '21' || v === '22' || v === '23') setReminder(v);
     }).catch(() => {});
   }, []);
+
+  // Warn when a reminder hour is chosen but the OS has notifications turned
+  // off. Skipped on web, where local notifications don't apply.
+  const [notifBlocked, setNotifBlocked] = useState(false);
+  useEffect(() => {
+    if (reminder === 'off' || Platform.OS === 'web') {
+      setNotifBlocked(false);
+      return;
+    }
+    let cancelled = false;
+    Notifications.getPermissionsAsync()
+      .then(res => { if (!cancelled) setNotifBlocked(res.status === 'denied'); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [reminder]);
 
   function setReminderPref(p: GratReminderHour) {
     setReminder(p);
@@ -1054,7 +1188,7 @@ function GratitudePage({
         <TextInput
           style={styles.gratInput}
           placeholder="A small or large thing…"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={text}
           onChangeText={setText}
           multiline
@@ -1081,6 +1215,9 @@ function GratitudePage({
                 key={o.id}
                 activeOpacity={0.85}
                 onPress={() => setReminderPref(o.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Evening reminder: ${o.label}`}
+                accessibilityState={{ selected: active }}
                 style={[
                   styles.notifPill,
                   active && { borderColor: '#FFB05B', backgroundColor: '#FFB05B22' },
@@ -1091,6 +1228,11 @@ function GratitudePage({
             );
           })}
         </View>
+        {notifBlocked ? (
+          <Text style={styles.notifWarn}>
+            Notifications are blocked in system settings, so these will not fire.
+          </Text>
+        ) : null}
 
         <Text style={[styles.sectionLabel, { marginTop: 24 }]}>JOURNAL</Text>
         {entries.length === 0 ? (
@@ -1161,7 +1303,7 @@ function RantPage({
         <TextInput
           style={[styles.gratInput, { minHeight: 140 }]}
           placeholder="Let it out…"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={text}
           onChangeText={setText}
           multiline
@@ -1242,7 +1384,7 @@ function ManifestationPage({
         <TextInput
           style={styles.gratInput}
           placeholder="I am calling in…"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={text}
           onChangeText={setText}
           multiline
@@ -1283,7 +1425,14 @@ function ManifestRow({
 }) {
   return (
     <View style={[styles.gratItem, { borderColor: '#A45BFF44' }]}>
-      <TouchableOpacity onPress={() => onToggle(item.ts)} activeOpacity={0.8} style={styles.manifestCheck}>
+      <TouchableOpacity
+        onPress={() => onToggle(item.ts)}
+        activeOpacity={0.8}
+        style={styles.manifestCheck}
+        accessibilityRole="checkbox"
+        accessibilityLabel={item.manifested ? 'Mark as not yet manifested' : 'Mark as manifested'}
+        accessibilityState={{ checked: item.manifested }}
+      >
         <View style={[
           styles.manifestCheckBox,
           item.manifested && { backgroundColor: '#A45BFF', borderColor: '#A45BFF' },
@@ -1704,7 +1853,7 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
         <TextInput
           style={styles.bugInput}
           placeholder="Subject"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={subject}
           onChangeText={setSubject}
           maxLength={120}
@@ -1712,7 +1861,7 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
         <TextInput
           style={[styles.bugInput, { minHeight: 140, textAlignVertical: 'top' }]}
           placeholder="Describe what happened, what you expected, and what device you're on…"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={body}
           onChangeText={setBody}
           multiline
@@ -1803,7 +1952,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
         <TextInput
           style={styles.fieldInput}
           placeholder="Your name"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={profile.name ?? ''}
           onChangeText={t => update('name', t)}
           maxLength={60}
@@ -1812,7 +1961,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
         <TextInput
           style={styles.fieldInput}
           placeholder="YYYY-MM-DD"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={profile.birthDate ?? ''}
           onChangeText={t => update('birthDate', t)}
           maxLength={10}
@@ -1821,7 +1970,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
         <TextInput
           style={styles.fieldInput}
           placeholder="HH:MM"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={profile.birthTime ?? ''}
           onChangeText={t => update('birthTime', t)}
           maxLength={5}
@@ -1830,7 +1979,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
         <TextInput
           style={styles.fieldInput}
           placeholder="City, country"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={profile.birthLocation ?? ''}
           onChangeText={t => update('birthLocation', t)}
           maxLength={120}
@@ -2210,7 +2359,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
         <TextInput
           style={styles.fieldInput}
           placeholder="Their name"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={partner.name ?? ''}
           onChangeText={t => updatePartner('name', t)}
           maxLength={60}
@@ -2219,7 +2368,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
         <TextInput
           style={styles.fieldInput}
           placeholder="YYYY-MM-DD"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={partner.birthDate ?? ''}
           onChangeText={t => updatePartner('birthDate', t)}
           maxLength={10}
@@ -2228,7 +2377,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
         <TextInput
           style={styles.fieldInput}
           placeholder="HH:MM"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={partner.birthTime ?? ''}
           onChangeText={t => updatePartner('birthTime', t)}
           maxLength={5}
@@ -2237,7 +2386,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
         <TextInput
           style={styles.fieldInput}
           placeholder="City, country"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={partner.birthLocation ?? ''}
           onChangeText={t => updatePartner('birthLocation', t)}
           maxLength={120}
@@ -2427,7 +2576,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
         <TextInput
           style={styles.fieldInput}
           placeholder="paste your key here"
-          placeholderTextColor="#ffffff55"
+          placeholderTextColor="#ffffff77"
           value={apiKey}
           onChangeText={saveKey}
           autoCapitalize="none"
@@ -2711,6 +2860,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between',
   },
   graphLabelText: { color: '#ffffff66', fontSize: 9, letterSpacing: 1 },
+
+  backfillCard: {
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 14, padding: 12, marginTop: 10,
+    borderWidth: 1, borderColor: '#5BD0FF44',
+  },
+  backfillHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  backfillTitle: { color: '#5BD0FF', fontSize: 11, letterSpacing: 1.5, fontWeight: '700' },
 
   moodHistoryRow: {
     flexDirection: 'row', alignItems: 'center',
