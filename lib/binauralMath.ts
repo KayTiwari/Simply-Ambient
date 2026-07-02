@@ -9,6 +9,9 @@ export const MIN_HZ = 50;
 export const MAX_HZ = 500;
 
 export function clampHz(n: number): number {
+  // Non-finite input (NaN / Infinity) would propagate NaN through the audio
+  // engine; fall back to the floor of the safe range.
+  if (!Number.isFinite(n)) return MIN_HZ;
   return Math.max(MIN_HZ, Math.min(MAX_HZ, Math.round(n)));
 }
 
@@ -17,6 +20,9 @@ export function clampHz(n: number): number {
 // musical note, so the symbolism is intact, but the carrier is no longer
 // piercing.
 export function comfortableCarrier(hz: number): number {
+  // Non-finite or non-positive input would loop forever (or pass NaN
+  // straight through); fall back to a neutral mid-range carrier.
+  if (!Number.isFinite(hz) || hz <= 0) return 200;
   let h = hz;
   while (h > 280) h = h / 2;
   while (h < 120) h = h * 2;

@@ -27,6 +27,11 @@ describe('clampHz', () => {
     expect(clampHz(MIN_HZ)).toBe(MIN_HZ);
     expect(clampHz(MAX_HZ)).toBe(MAX_HZ);
   });
+  test('falls back to MIN_HZ on non-finite input', () => {
+    expect(clampHz(NaN)).toBe(MIN_HZ);
+    expect(clampHz(Infinity)).toBe(MIN_HZ);
+    expect(clampHz(-Infinity)).toBe(MIN_HZ);
+  });
 });
 
 describe('comfortableCarrier', () => {
@@ -51,6 +56,11 @@ describe('comfortableCarrier', () => {
   test('passes through values already in range', () => {
     expect(comfortableCarrier(200)).toBe(200);
     expect(comfortableCarrier(150)).toBe(150);
+  });
+  test('falls back to a default carrier on invalid input', () => {
+    expect(comfortableCarrier(0)).toBe(200);
+    expect(comfortableCarrier(-1)).toBe(200);
+    expect(comfortableCarrier(NaN)).toBe(200);
   });
 });
 
