@@ -1,20 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
-  Dimensions,
   Easing,
   Linking,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import Slider from '@react-native-community/slider';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import {
@@ -32,9 +33,11 @@ import {
   type IconProps,
 } from 'phosphor-react-native';
 
-import { recordActivity, getStreak } from './App';
+import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
 
-const { width: SCREEN_W } = Dimensions.get('window');
+// Every AsyncStorage key this app writes starts with one of these, so the
+// wipe below stays correct as new keys are added.
+const STORAGE_PREFIXES = ['@simply_ambient_', '@binaural_'];
 
 const STORAGE_MOOD = '@simply_ambient_mood_log_v1';
 const STORAGE_GRAT = '@simply_ambient_gratitude_v1';
@@ -266,6 +269,27 @@ export default function MoreView({
     AsyncStorage.setItem(STORAGE_GRAT, JSON.stringify(next)).catch(() => {});
   }
 
+  // Full wipe, used by the Safety page. Removes every app key by prefix (so
+  // new keys are covered automatically) AND resets the in-memory arrays: the
+  // save paths above write those arrays back wholesale, so stale state here
+  // would silently resurrect wiped entries on the user's next save.
+  async function wipeAllData() {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const mine = keys.filter(k => STORAGE_PREFIXES.some(p => k.startsWith(p)));
+      if (mine.length) await AsyncStorage.multiRemove([...mine]);
+    } catch {}
+    setMoodLog([]);
+    setGratitude([]);
+    setRants([]);
+    setManifestations([]);
+    setStreak(0);
+    // Notification prefs were part of the wipe, so stop their schedules too.
+    if (Platform.OS !== 'web') {
+      try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch {}
+    }
+  }
+
   // Slide-over navigation
   const [page, setPage] = useState<SubPage>(null);
   const slide = useRef(new Animated.Value(0)).current;
@@ -287,7 +311,10 @@ export default function MoreView({
     }).start(() => setPage(null));
   }
 
-  const subTranslateX = slide.interpolate({ inputRange: [0, 1], outputRange: [SCREEN_W, 0] });
+  // Live dimensions, so browser resizes and rotations keep the slide-over
+  // offset correct (a module-level Dimensions.get snapshot would go stale).
+  const { width: screenW } = useWindowDimensions();
+  const subTranslateX = slide.interpolate({ inputRange: [0, 1], outputRange: [screenW, 0] });
   const hubScale = slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0.97] });
   const hubOpacity = slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0.5] });
 
@@ -303,7 +330,8 @@ export default function MoreView({
           notifPref={notifPref}
           affirmationPreview={affirmation}
           moodToday={moodToday}
-          gratitudeCount={gratitude.length}
+          moodLog={moodLog}
+          gratitude={gratitude}
           streak={streak}
           onOpen={open}
           soundscapesInNav={soundscapesInNav}
@@ -396,7 +424,7 @@ export default function MoreView({
             <SupportPage onBack={close} />
           )}
           {page === 'safety' && (
-            <SafetyPage onBack={close} />
+            <SafetyPage onBack={close} onWipe={wipeAllData} />
           )}
           {page === 'bug' && (
             <BugReportPage onBack={close} />
@@ -421,7 +449,8 @@ type HubProps = {
   notifPref: NotifPref;
   affirmationPreview: string | null;
   moodToday: MoodEntry | undefined;
-  gratitudeCount: number;
+  moodLog: MoodEntry[];
+  gratitude: GratEntry[];
   streak: number;
   onOpen: (p: Exclude<SubPage, null>) => void;
   soundscapesInNav: boolean;
@@ -432,50 +461,36 @@ function Hub({
   notifPref,
   affirmationPreview,
   moodToday,
-  gratitudeCount,
+  moodLog,
+  gratitude,
   streak,
   onOpen,
   soundscapesInNav,
   onToggleSoundscapesInNav,
 }: HubProps) {
-  // Weekly insights. Computed inline from local data
-  const [weekly, setWeekly] = useState<{
-    moodAvg: number | null;
-    moodCount: number;
-    gratCount: number;
-    moodTrend: 'up' | 'down' | 'flat';
-  } | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const dayMs = 24 * 60 * 60 * 1000;
-        const now = Date.now();
-        const moodRaw = await AsyncStorage.getItem(STORAGE_MOOD);
-        const gratRaw = await AsyncStorage.getItem(STORAGE_GRAT);
-        const moodsRaw = safeParse<MoodEntry[]>(moodRaw, []);
-        const gratsRaw = safeParse<GratEntry[]>(gratRaw, []);
-        const moods: MoodEntry[] = Array.isArray(moodsRaw) ? moodsRaw : [];
-        const grats: GratEntry[] = Array.isArray(gratsRaw) ? gratsRaw : [];
-        const week = moods.filter(m => now - m.ts < 7 * dayMs);
-        const prev = moods.filter(m => now - m.ts >= 7 * dayMs && now - m.ts < 14 * dayMs);
-        const avg = (arr: MoodEntry[]) =>
-          arr.length ? arr.reduce((s, e) => s + e.value, 0) / arr.length : null;
-        const a = avg(week);
-        const b = avg(prev);
-        const trend: 'up' | 'down' | 'flat' =
-          a === null || b === null ? 'flat' :
-          a - b >= 0.25 ? 'up' :
-          a - b <= -0.25 ? 'down' : 'flat';
-        setWeekly({
-          moodAvg: a,
-          moodCount: week.length,
-          gratCount: grats.filter(g => now - g.ts < 7 * dayMs).length,
-          moodTrend: trend,
-        });
-      } catch {}
-    })();
-  }, []);
+  // Weekly insights, derived from the parent's live state. The Hub stays
+  // mounted underneath the slide-over sub-pages, so a one-shot storage read
+  // here would go stale as soon as the user logs an entry.
+  const weekly = useMemo(() => {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const week = moodLog.filter(m => now - m.ts < 7 * dayMs);
+    const prev = moodLog.filter(m => now - m.ts >= 7 * dayMs && now - m.ts < 14 * dayMs);
+    const avg = (arr: MoodEntry[]) =>
+      arr.length ? arr.reduce((s, e) => s + e.value, 0) / arr.length : null;
+    const a = avg(week);
+    const b = avg(prev);
+    const trend: 'up' | 'down' | 'flat' =
+      a === null || b === null ? 'flat' :
+      a - b >= 0.25 ? 'up' :
+      a - b <= -0.25 ? 'down' : 'flat';
+    return {
+      moodAvg: a,
+      moodCount: week.length,
+      gratCount: gratitude.filter(g => now - g.ts < 7 * dayMs).length,
+      moodTrend: trend,
+    };
+  }, [moodLog, gratitude]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -599,9 +614,9 @@ function Hub({
           color="#FFB05B"
           label="Gratitude"
           preview={
-            gratitudeCount === 0
+            gratitude.length === 0
               ? 'Rewire attention toward what works'
-              : `${gratitudeCount} ${gratitudeCount === 1 ? 'entry' : 'entries'} · positive psychology`
+              : `${gratitude.length} ${gratitude.length === 1 ? 'entry' : 'entries'} · positive psychology`
           }
           onPress={() => onOpen('gratitude')}
         />
@@ -877,7 +892,7 @@ function MoodPage({
         </View>
 
         <Text style={[styles.sectionLabel, { marginTop: 28 }]}>LAST 14 DAYS</Text>
-        <Text style={styles.sectionSub}>Daily average · tap any day below to log retroactively, sliders coming</Text>
+        <Text style={styles.sectionSub}>Daily average over the last two weeks</Text>
         <MoodGraph buckets={dayBuckets} />
 
         <Text style={[styles.sectionLabel, { marginTop: 28 }]}>HISTORY</Text>
@@ -904,7 +919,8 @@ function MoodPage({
 }
 
 function MoodGraph({ buckets }: { buckets: Array<{ date: Date; avg: number | null }> }) {
-  const W = SCREEN_W - 40;
+  const { width: screenW } = useWindowDimensions();
+  const W = screenW - 40;
   const H = 160;
   const padX = 18;
   const padTop = 14;
@@ -1002,6 +1018,8 @@ function GratitudePage({
   function setReminderPref(p: GratReminderHour) {
     setReminder(p);
     AsyncStorage.setItem(STORAGE_GRAT_REMINDER, p).catch(() => {});
+    // Schedule (or cancel) the actual notification; the pref alone does nothing.
+    scheduleGratitudeReminder(p);
   }
 
   function commit() {
@@ -1471,34 +1489,16 @@ export function SafetyContent() {
 const PRIVACY_POLICY_URL = 'https://kaytiwari.github.io/Simply-Ambient/privacy-policy.html';
 const TERMS_OF_SERVICE_URL = 'https://kaytiwari.github.io/Simply-Ambient/terms-of-service.html';
 
-// Storage keys that user-entered data lives under. The "wipe all data"
-// button below removes every key here. Keep this in sync if new keys are added.
-const ALL_USER_DATA_KEYS = [
-  STORAGE_MOOD,
-  STORAGE_GRAT,
-  STORAGE_RANT,
-  STORAGE_MANIFEST,
-  STORAGE_PROFILE,
-  STORAGE_PARTNER,
-  STORAGE_GEMINI_KEY,
-  STORAGE_AI_SOURCES,
-  STORAGE_GRAT_REMINDER,
-  '@simply_ambient_streak_v1',
-  '@simply_ambient_userpresets_v1',
-  '@simply_ambient_mala_haptic_v1',
-  '@simply_ambient_tarot_v1',
-];
-
-function SafetyPage({ onBack }: { onBack: () => void }) {
+function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Promise<void> }) {
   // Holds the URL to confirm-open, or null. Used by both the Privacy Policy
   // and Terms of Service links so we have one confirm modal, two triggers.
   const [pendingOpenUrl, setPendingOpenUrl] = useState<string | null>(null);
   const [confirmWipe, setConfirmWipe] = useState(false);
 
-  function wipeAllData() {
-    AsyncStorage.multiRemove(ALL_USER_DATA_KEYS).catch(() => {});
+  async function wipeAllData() {
+    await onWipe();
     setConfirmWipe(false);
-    Alert.alert(
+    notify(
       'Data wiped',
       'All journal data, profile, presets, and settings have been deleted from this device. Restart the app to see a fresh state.',
     );
@@ -1626,7 +1626,7 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
 
   async function submit() {
     if (!subject.trim() && !body.trim()) {
-      Alert.alert('Empty report', 'Add a subject or describe the issue first.');
+      notify('Empty report', 'Add a subject or describe the issue first.');
       return;
     }
     setSending(true);
@@ -1634,33 +1634,41 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
     const email = decodeReportEmail();
     const fullSubject = `[Simply Ambient] ${subject || 'Bug report'}`;
 
-    // 1) Try the silent FormSubmit AJAX endpoint first.
+    // 1) Try the silent FormSubmit AJAX endpoint first. Time-boxed: a stalled
+    // mobile connection would otherwise leave SEND disabled indefinitely.
     let sentSilently = false;
     try {
-      const url = `https://formsubmit.co/ajax/${email}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Origin': 'https://simply-ambient.app',
-        },
-        body: JSON.stringify({
-          _subject: fullSubject,
-          _captcha: 'false',
-          _template: 'box',
-          subject,
-          message: body,
-        }),
-      });
-      if (res.ok) {
-        const json = await res.json().catch(() => ({} as any));
-        sentSilently = json?.success === true || json?.success === 'true';
+      const abort = new AbortController();
+      const timeout = setTimeout(() => abort.abort(), 15000);
+      try {
+        const url = `https://formsubmit.co/ajax/${email}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          signal: abort.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Origin': 'https://simply-ambient.app',
+          },
+          body: JSON.stringify({
+            _subject: fullSubject,
+            _captcha: 'false',
+            _template: 'box',
+            subject,
+            message: body,
+          }),
+        });
+        if (res.ok) {
+          const json = await res.json().catch(() => ({} as any));
+          sentSilently = json?.success === true || json?.success === 'true';
+        }
+      } finally {
+        clearTimeout(timeout);
       }
     } catch {}
 
     if (sentSilently) {
-      Alert.alert('Sent', 'Thank you. The developer will see it soon.');
+      notify('Sent', 'Thank you. The developer will see it soon.');
       setSubject('');
       setBody('');
       setSending(false);
@@ -1675,14 +1683,14 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
       `&body=${encodeURIComponent(body || '')}`;
     try {
       await Linking.openURL(mailto);
-      Alert.alert(
+      notify(
         'One more tap',
         'Your mail app is opening with the report pre-filled. Tap Send there to complete.',
       );
       setSubject('');
       setBody('');
     } catch {
-      Alert.alert('Could not send', 'No mail app available on this device.');
+      notify('Could not send', 'No mail app available on this device.');
     }
     setSending(false);
   }
@@ -1930,8 +1938,8 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
           </Text>
           <Text style={styles.compatComingText}>
             A built-in chart with planet positions, houses, and aspects is in the works.
-            For now, the button below opens a free public calculator pre-filled with what you've
-            entered above.
+            For now, the button below opens a free public calculator in your browser. Have
+            your birth details handy; the form starts blank.
           </Text>
           <TouchableOpacity
             onPress={openExternal}
@@ -2287,7 +2295,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
 
   async function runAnalysis(kind: 'journal' | 'tarot') {
     if (!apiKey.trim()) {
-      Alert.alert('Add your Gemini API key', 'Get a free key from aistudio.google.com and paste it above.');
+      notify('Add your Gemini API key', 'Get a free key from aistudio.google.com and paste it above.');
       return;
     }
     setLoading(true);
@@ -2297,7 +2305,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
       if (kind === 'journal') {
         const enabled = (Object.keys(sources) as AISourceKey[]).filter(k => sources[k]);
         if (enabled.length === 0) {
-          Alert.alert('No data sources enabled', 'Toggle at least one source on below to give the AI something to reflect on.');
+          notify('No data sources enabled', 'Toggle at least one source on below to give the AI something to reflect on.');
           setLoading(false);
           return;
         }
@@ -2344,7 +2352,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
           'You are a thoughtful, grounded reflection companion writing entries for a dream-journal-style ' +
           'reflection page. Identify 3-5 honest themes you notice across the data the user has chosen to share. ' +
           'Be specific and gentle. If both manifestations and rants/mood are present, notice tension between ' +
-          'what they say they want and what they actually feel. Avoid clichés, woo, or diagnoses. ' +
+          'what they say they want and what they feel underneath. Avoid clichés, woo, or diagnoses. ' +
           'Write in flowing prose suitable for reading by candlelight. Under 260 words.\n\n' +
           sections.join('\n\n');
       } else {
@@ -2356,7 +2364,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
             ? tarotParsed.card
             : null;
         if (!card) {
-          Alert.alert('No card drawn', 'Open the Horoscopes tab and draw a card first.');
+          notify('No card drawn', 'Open the Horoscopes tab and draw a card first.');
           setLoading(false);
           return;
         }
@@ -2370,14 +2378,24 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
       }
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey.trim()}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-        }),
-      });
-      const json = await res.json();
+      // Time-boxed: a stalled connection would otherwise spin forever with
+      // both analyse buttons disabled.
+      const abort = new AbortController();
+      const timeout = setTimeout(() => abort.abort(), 20000);
+      let json: any;
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          signal: abort.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+          }),
+        });
+        json = await res.json();
+      } finally {
+        clearTimeout(timeout);
+      }
       const text =
         json?.candidates?.[0]?.content?.parts?.[0]?.text ??
         json?.error?.message ??
