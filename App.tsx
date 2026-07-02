@@ -18,6 +18,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -89,10 +90,27 @@ import OnboardingView from './OnboardingView';
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
-// react-native-web ships Alert.alert as an empty stub, so anything inside an
-// alert callback silently never runs on the web build. These helpers keep the
-// native Alert UX and fall back to the browser's own dialogs on web.
+// Themed in-app dialogs. react-native-web ships Alert.alert as an empty stub,
+// and even on native a system alert clashes with the app's look, so notify()
+// and confirmAction() route to the DialogHost mounted in App (a toast and a
+// styled confirm modal). If the host is not mounted yet, they fall back to
+// the platform dialogs so a message is never dropped.
+type ToastRequest = { title: string; message?: string };
+type ConfirmRequest = {
+  title: string;
+  message: string;
+  confirmText: string;
+  destructive: boolean;
+  onConfirm: () => void;
+};
+let toastSink: ((t: ToastRequest) => void) | null = null;
+let confirmSink: ((c: ConfirmRequest) => void) | null = null;
+
 export function notify(title: string, message?: string) {
+  if (toastSink) {
+    toastSink({ title, message });
+    return;
+  }
   if (Platform.OS === 'web') {
     window.alert(message ? `${title}\n\n${message}` : title);
     return;
@@ -107,6 +125,10 @@ export function confirmAction(
   onConfirm: () => void,
   destructive: boolean = true,
 ) {
+  if (confirmSink) {
+    confirmSink({ title, message, confirmText, destructive, onConfirm });
+    return;
+  }
   if (Platform.OS === 'web') {
     if (window.confirm(`${title}\n\n${message}`)) onConfirm();
     return;
@@ -119,6 +141,87 @@ export function confirmAction(
       onPress: onConfirm,
     },
   ]);
+}
+
+function DialogHost() {
+  const insets = useSafeAreaInsets();
+  const [toast, setToast] = useState<ToastRequest | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    toastSink = (t) => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      setToast(t);
+      Animated.timing(toastOpacity, { toValue: 1, duration: 160, useNativeDriver: true }).start();
+      toastTimerRef.current = setTimeout(() => {
+        Animated.timing(toastOpacity, { toValue: 0, duration: 260, useNativeDriver: true })
+          .start(({ finished }) => { if (finished) setToast(null); });
+      }, 2600);
+    };
+    confirmSink = (c) => setConfirm(c);
+    return () => {
+      toastSink = null;
+      confirmSink = null;
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  return (
+    <>
+      {toast ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.toastWrap, { top: insets.top + 52, opacity: toastOpacity }]}
+        >
+          <View style={styles.toastCard}>
+            <Text style={styles.toastTitle}>{toast.title}</Text>
+            {toast.message ? <Text style={styles.toastMessage}>{toast.message}</Text> : null}
+          </View>
+        </Animated.View>
+      ) : null}
+      <Modal
+        visible={confirm != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirm(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, styles.confirmCard]}>
+            <Text style={styles.modalTitle}>{confirm?.title}</Text>
+            <Text style={[styles.modalSub, styles.confirmBody]}>{confirm?.message}</Text>
+            <View style={styles.modalRow}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnGhost]}
+                onPress={() => setConfirm(null)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
+                <Text style={styles.modalBtnGhostText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, confirm?.destructive ? styles.modalBtnDanger : styles.modalBtnPrimary]}
+                onPress={() => {
+                  const c = confirm;
+                  setConfirm(null);
+                  c?.onConfirm();
+                }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={confirm?.confirmText}
+              >
+                <Text style={confirm?.destructive ? styles.modalBtnDangerText : styles.modalBtnPrimaryText}>
+                  {confirm?.confirmText}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
 }
 
 // MIN_HZ / MAX_HZ / clampHz / comfortableCarrier / btoaFallback live in
@@ -185,6 +288,9 @@ export async function getStreak(): Promise<number> {
 }
 const DEFAULT_LEFT = 200;
 const DEFAULT_RIGHT = 210;
+// Upper bound for the direct beat slider. Gamma work tops out around 40 Hz;
+// larger separations are still reachable via the per-ear sliders.
+const MAX_BEAT = 40;
 const TONE_FILE_PATH = `${FileSystem.cacheDirectory}binaural-tone.wav`;
 const SOUNDSCAPE_FILE_PREFIX = `${FileSystem.cacheDirectory}simply-ambient-soundscape-v4-`;
 const SLIDE_THROTTLE_MS = 220;
@@ -1764,6 +1870,32 @@ function AppContent() {
     if (stateRef.current.isTonePlaying) loadAndPlay(stateRef.current.leftHz, c);
   }
 
+  // Beat-first control: the hero card lets users set the beat and carrier
+  // directly (the mental model of binaural), derived as carrier +/- beat/2.
+  function pairFromBeatCarrier(beatV: number, carrierV: number): [number, number] {
+    const half = beatV / 2;
+    return [clampHz(Math.round(carrierV - half)), clampHz(Math.round(carrierV + half))];
+  }
+  function slideBeatCarrier(beatV: number, carrierV: number) {
+    const [l, r] = pairFromBeatCarrier(beatV, carrierV);
+    setLeftHz(l);
+    setRightHz(r);
+    applyDetection(l, r);
+    liveUpdate(l, r);
+  }
+  function commitBeatCarrier(beatV: number, carrierV: number) {
+    const [l, r] = pairFromBeatCarrier(beatV, carrierV);
+    setLeftHz(l);
+    setRightHz(r);
+    applyDetection(l, r);
+    if (slideTimeoutRef.current) {
+      clearTimeout(slideTimeoutRef.current);
+      slideTimeoutRef.current = null;
+    }
+    slidePendingRef.current = null;
+    if (stateRef.current.isTonePlaying) loadAndPlay(l, r);
+  }
+
   function applyBuiltIn(p: BuiltInPreset) {
     const half = p.beatHz / 2;
     const l = clampHz(p.carrier - half);
@@ -1999,14 +2131,15 @@ function AppContent() {
     <View style={styles.root}>
       <WaveBackground band={activeBand} playing={isTonePlaying} />
       <StatusBar style="light" />
-      <View
-        pointerEvents="none"
-        style={[styles.lunarBar, { top: insets.top + 6 }]}
-      >
-        <Text style={styles.lunarGlyph}>{lunar.glyph}</Text>
-        <Text style={styles.lunarText}>{lunar.name}</Text>
-      </View>
-      <SafeAreaView style={styles.safe} edges={['top']}>
+      <SafeAreaView style={[styles.safe, styles.webColumn]} edges={['top']}>
+        {/* Reserved strip for the moon chip (and the More launcher's resting
+            spot), so neither can overlap the wordmark or tab content. */}
+        <View style={styles.topStrip} pointerEvents="none">
+          <View style={styles.lunarBar}>
+            <Text style={styles.lunarGlyph}>{lunar.glyph}</Text>
+            <Text style={styles.lunarText}>{lunar.name}</Text>
+          </View>
+        </View>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
@@ -2034,6 +2167,8 @@ function AppContent() {
                 onCommitRight={commitRight}
                 onSlideLeft={onLeftSlide}
                 onSlideRight={onRightSlide}
+                onSlideBeatCarrier={slideBeatCarrier}
+                onCommitBeatCarrier={commitBeatCarrier}
                 onApplyBuiltIn={applyBuiltIn}
                 onApplyUser={applyUser}
                 onApplyTuning={applyTuning}
@@ -2141,10 +2276,14 @@ function AppContent() {
       </SlideMenu>
 
       {onboardingChecked && showOnboarding ? (
-        <View style={StyleSheet.absoluteFill}>
-          <OnboardingView onDone={dismissOnboarding} />
+        <View style={[StyleSheet.absoluteFill, styles.onboardingLayer]}>
+          <View style={[{ flex: 1, width: '100%' }, styles.webColumn]}>
+            <OnboardingView onDone={dismissOnboarding} />
+          </View>
         </View>
       ) : null}
+
+      <DialogHost />
 
       <Modal visible={showSaveModal} transparent animationType="fade" onRequestClose={() => setShowSaveModal(false)}>
         <TouchableWithoutFeedback onPress={() => { Keyboard.dismiss(); setShowSaveModal(false); }}>
@@ -2699,15 +2838,21 @@ function TabBar({
   accent: string;
   soundscapesInNav: boolean;
 }) {
+  // Labels like "Frequencies" and "Soundscapes" overflow their slots on
+  // narrow screens once five tabs are shown, so drop to a compact type size
+  // before they can collide.
+  const { width } = useWindowDimensions();
+  const tabCount = soundscapesInNav ? 5 : 4;
+  const compact = width / tabCount < 82;
   return (
     <SafeAreaView edges={['bottom']} style={styles.tabBarSafe}>
       <View style={styles.tabBar}>
-        <TabButton label="Frequencies" glyph="∿" active={tab === 'frequencies'} accent={accent} onPress={() => onChange('frequencies')} />
-        <TabButton label="Breath"      glyph="○" active={tab === 'breath'}      accent={accent} onPress={() => onChange('breath')} />
-        <TabButton label="Chakras"     glyph="✦" active={tab === 'chakras'}     accent={accent} onPress={() => onChange('chakras')} />
-        <TabButton label="Horoscopes"  glyph="☽" active={tab === 'horoscopes'}  accent={accent} onPress={() => onChange('horoscopes')} />
+        <TabButton label="Frequencies" glyph="∿" compact={compact} active={tab === 'frequencies'} accent={accent} onPress={() => onChange('frequencies')} />
+        <TabButton label="Breath"      glyph="○" compact={compact} active={tab === 'breath'}      accent={accent} onPress={() => onChange('breath')} />
+        <TabButton label="Chakras"     glyph="✦" compact={compact} active={tab === 'chakras'}     accent={accent} onPress={() => onChange('chakras')} />
+        <TabButton label="Horoscopes"  glyph="☽" compact={compact} active={tab === 'horoscopes'}  accent={accent} onPress={() => onChange('horoscopes')} />
         {soundscapesInNav ? (
-          <TabButton label="Soundscapes" Icon={Waveform} active={tab === 'soundscapes'} accent={accent} onPress={() => onChange('soundscapes')} />
+          <TabButton label="Soundscapes" Icon={Waveform} compact={compact} active={tab === 'soundscapes'} accent={accent} onPress={() => onChange('soundscapes')} />
         ) : null}
       </View>
     </SafeAreaView>
@@ -2722,10 +2867,12 @@ function MoreLauncher({
   onPress: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const launcherY = useRef(new Animated.Value(96)).current;
-  const launcherStartYRef = useRef(96);
-  const minY = insets.top + 10;
-  const maxY = Math.max(minY, SCREEN_H - insets.bottom - 164);
+  // Rests inside the reserved top strip (opposite the moon chip) so it never
+  // covers tab content by default; the user can still drag it down the edge.
+  const launcherY = useRef(new Animated.Value(3)).current;
+  const launcherStartYRef = useRef(3);
+  const minY = 2;
+  const maxY = Math.max(minY, SCREEN_H - insets.top - insets.bottom - 164);
   const dragRange = Math.max(1, maxY - minY);
 
   const openPanResponder = useRef(
@@ -2779,18 +2926,26 @@ function MoreLauncher({
 }
 
 function TabButton({
-  label, glyph, Icon, active, accent, onPress,
+  label, glyph, Icon, compact, active, accent, onPress,
 }: {
   label: string;
   glyph?: string;
   Icon?: React.ComponentType<IconProps>;
+  compact: boolean;
   active: boolean;
   accent: string;
   onPress: () => void;
 }) {
   const color = active ? accent : '#ffffff66';
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={styles.tabBtn}>
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      style={styles.tabBtn}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} tab`}
+      accessibilityState={{ selected: active }}
+    >
       {Icon ? (
         <View style={styles.tabIconWrap}>
           <Icon size={22} weight="duotone" color={color} />
@@ -2798,7 +2953,12 @@ function TabButton({
       ) : (
         <Text style={[styles.tabGlyph, { color }]}>{glyph}</Text>
       )}
-      <Text style={[styles.tabLabel, { color: active ? accent : '#ffffff77' }]}>{label}</Text>
+      <Text
+        numberOfLines={1}
+        style={[styles.tabLabel, compact && styles.tabLabelCompact, { color: active ? accent : '#ffffff77' }]}
+      >
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
@@ -2829,6 +2989,8 @@ type FreqViewProps = {
   onCommitRight: (v: number) => void;
   onSlideLeft: (v: number) => void;
   onSlideRight: (v: number) => void;
+  onSlideBeatCarrier: (beat: number, carrier: number) => void;
+  onCommitBeatCarrier: (beat: number, carrier: number) => void;
   onApplyBuiltIn: (p: BuiltInPreset) => void;
   onApplyUser: (p: UserPreset) => void;
   onApplyTuning: (t: TuningPreset) => void;
@@ -2853,6 +3015,15 @@ function FrequenciesView(props: FreqViewProps) {
   const [customSleepOpen, setCustomSleepOpen] = useState(false);
   const [customSleepInput, setCustomSleepInput] = useState('');
   const isCustomSleep = sleepMinutes > 0 && !(SLEEP_TIMER_OPTIONS as readonly number[]).includes(sleepMinutes);
+
+  // Beat-first controls. The carrier is the midpoint of the two ears; the
+  // per-ear sliders live behind an advanced reveal for users who want them.
+  const [showEarTuning, setShowEarTuning] = useState(false);
+  const carrier = Math.round((leftHz + rightHz) / 2);
+  const beatForControl = Math.min(beat, MAX_BEAT);
+  const carrierMin = MIN_HZ + MAX_BEAT / 2;
+  const carrierMax = MAX_HZ - MAX_BEAT / 2;
+  const carrierForControl = Math.max(carrierMin, Math.min(carrierMax, carrier));
 
   function commitCustomSleep() {
     const m = parseInt(customSleepInput, 10);
@@ -2902,10 +3073,49 @@ function FrequenciesView(props: FreqViewProps) {
                 : band.name}
           </Text>
         </View>
+
+        <View style={styles.beatSliderBlock}>
+          <View style={styles.beatSliderLabelRow}>
+            <Text style={styles.beatSliderLabel}>BEAT</Text>
+            <Text style={styles.beatSliderHint}>0-{MAX_BEAT} Hz · what your brain entrains to</Text>
+          </View>
+          <Slider
+            style={styles.beatSlider}
+            minimumValue={0}
+            maximumValue={MAX_BEAT}
+            step={1}
+            value={beatForControl}
+            minimumTrackTintColor={beatColor}
+            maximumTrackTintColor="rgba(255,255,255,0.12)"
+            thumbTintColor={beatColor}
+            onValueChange={v => props.onSlideBeatCarrier(Math.round(v), carrierForControl)}
+            onSlidingComplete={v => props.onCommitBeatCarrier(Math.round(v), carrierForControl)}
+            accessibilityLabel="Beat frequency"
+          />
+          <View style={styles.beatSliderLabelRow}>
+            <Text style={styles.beatSliderLabel}>CARRIER · {carrier} Hz</Text>
+            <Text style={styles.beatSliderHint}>the pitch you hear</Text>
+          </View>
+          <Slider
+            style={styles.beatSlider}
+            minimumValue={carrierMin}
+            maximumValue={carrierMax}
+            step={1}
+            value={carrierForControl}
+            minimumTrackTintColor="rgba(255,255,255,0.45)"
+            maximumTrackTintColor="rgba(255,255,255,0.12)"
+            thumbTintColor="#ffffffcc"
+            onValueChange={v => props.onSlideBeatCarrier(beatForControl, Math.round(v))}
+            onSlidingComplete={v => props.onCommitBeatCarrier(beatForControl, Math.round(v))}
+            accessibilityLabel="Carrier pitch"
+          />
+        </View>
+
         <TouchableOpacity
           activeOpacity={0.88}
           onPress={props.onTogglePlay}
           style={[styles.primarySessionBtn, { backgroundColor: isTonePlaying ? '#fff' : beatColor }]}
+          accessibilityRole="button"
           accessibilityLabel={isTonePlaying ? 'Stop binaural session' : 'Start binaural session'}
         >
           {isToneLoading ? (
@@ -2919,20 +3129,36 @@ function FrequenciesView(props: FreqViewProps) {
         </TouchableOpacity>
       </View>
 
-      <FrequencyControl
-        ear="L" label="LEFT"
-        hz={leftHz}
-        color="#5BD0FF"
-        onCommit={props.onCommitLeft}
-        onSlide={props.onSlideLeft}
-      />
-      <FrequencyControl
-        ear="R" label="RIGHT"
-        hz={rightHz}
-        color="#FF5B9C"
-        onCommit={props.onCommitRight}
-        onSlide={props.onSlideRight}
-      />
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => setShowEarTuning(s => !s)}
+        style={styles.advancedToggle}
+        accessibilityRole="button"
+        accessibilityLabel={showEarTuning ? 'Hide per-ear tuning' : 'Show per-ear tuning'}
+      >
+        <Text style={styles.advancedToggleText}>
+          {showEarTuning ? '▾' : '▸'}  PER-EAR TUNING
+        </Text>
+        <Text style={styles.advancedToggleMeta}>L {leftHz} · R {rightHz} Hz</Text>
+      </TouchableOpacity>
+      {showEarTuning ? (
+        <>
+          <FrequencyControl
+            ear="L" label="LEFT"
+            hz={leftHz}
+            color="#5BD0FF"
+            onCommit={props.onCommitLeft}
+            onSlide={props.onSlideLeft}
+          />
+          <FrequencyControl
+            ear="R" label="RIGHT"
+            hz={rightHz}
+            color="#FF5B9C"
+            onCommit={props.onCommitRight}
+            onSlide={props.onSlideRight}
+          />
+        </>
+      ) : null}
 
       <Text style={styles.sectionLabel}>PRESETS</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
@@ -2968,10 +3194,21 @@ function FrequenciesView(props: FreqViewProps) {
                 borderColor: active ? userColor : 'rgba(154,255,200,0.4)',
                 borderStyle: 'dashed',
               }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Apply preset ${p.name}`}
             >
               <Text style={[styles.presetName, { color: active ? '#0B0B1F' : '#fff' }]}>{p.name}</Text>
               <Text style={[styles.presetRange, { color: active ? '#0B0B1F99' : '#ffffff88' }]}>L {p.leftHz} · R {p.rightHz}</Text>
-              <Text style={[styles.presetBlurb, { color: active ? '#0B0B1F99' : '#ffffff66' }]}>Hold to delete</Text>
+              <Text style={[styles.presetBlurb, { color: active ? '#0B0B1F99' : '#ffffff66' }]}>beat {Math.abs(p.rightHz - p.leftHz)} Hz</Text>
+              <TouchableOpacity
+                onPress={() => props.onDeleteUser(p)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.presetDeleteBtn}
+                accessibilityRole="button"
+                accessibilityLabel={`Delete preset ${p.name}`}
+              >
+                <Text style={[styles.presetDeleteText, { color: active ? '#0B0B1F88' : '#ffffff77' }]}>✕</Text>
+              </TouchableOpacity>
             </TouchableOpacity>
           );
         })}
@@ -3234,6 +3471,19 @@ function FrequencyControl({ ear, label, hz, color, onCommit, onSlide }: ControlP
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#0B0B1F' },
   safe: { flex: 1 },
+  // On web, keep the app in a centered phone-width column; the gradient
+  // background stays full-bleed behind it.
+  webColumn: Platform.OS === 'web'
+    ? { width: '100%' as const, maxWidth: 600, alignSelf: 'center' as const }
+    : {},
+  onboardingLayer: { backgroundColor: '#0B0B1F' },
+  topStrip: {
+    height: 44,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
   scroll: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 12 : 4,
@@ -3560,6 +3810,37 @@ const styles = StyleSheet.create({
   modalBtnGhostText: { color: '#fff', fontWeight: '600' },
   modalBtnPrimary: { backgroundColor: '#9affc8' },
   modalBtnPrimaryText: { color: '#0B0B1F', fontWeight: '700' },
+  modalBtnDanger: { backgroundColor: '#FF5B5B' },
+  modalBtnDangerText: { color: '#0B0B1F', fontWeight: '700' },
+  confirmCard: { maxWidth: 400 },
+  confirmBody: { marginTop: 8, lineHeight: 18 },
+  toastWrap: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 300,
+    elevation: 300,
+  },
+  toastCard: {
+    maxWidth: 420,
+    backgroundColor: 'rgba(18,18,34,0.96)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+  },
+  toastTitle: { color: '#fff', fontSize: 14, fontWeight: '600', letterSpacing: 0.3 },
+  toastMessage: {
+    color: '#ffffffaa', fontSize: 12, marginTop: 3,
+    textAlign: 'center', lineHeight: 17,
+  },
 
   menuLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -3728,11 +4009,8 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255,255,255,0.08)',
   },
   lunarBar: {
-    position: 'absolute',
-    right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    zIndex: 100,
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderRadius: 999,
     paddingHorizontal: 11,
@@ -3757,7 +4035,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   tabBtn: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 6,
+    flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 6, paddingHorizontal: 2,
   },
   tabGlyph: {
     fontSize: 22,
@@ -3768,4 +4047,28 @@ const styles = StyleSheet.create({
   },
   tabIconWrap: { minHeight: 24, marginBottom: 2, alignItems: 'center', justifyContent: 'center' },
   tabLabel: { fontSize: 11, letterSpacing: 2, fontWeight: '600' },
+  tabLabelCompact: { fontSize: 9, letterSpacing: 0.4 },
+
+  beatSliderBlock: { width: '100%', marginTop: 10, marginBottom: 4 },
+  beatSlider: { width: '100%', height: 30 },
+  beatSliderLabelRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginTop: 4,
+  },
+  beatSliderLabel: { color: '#ffffff90', fontSize: 10, letterSpacing: 2, fontWeight: '600' },
+  beatSliderHint: { color: '#ffffff55', fontSize: 10, fontStyle: 'italic' },
+  advancedToggle: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 10, paddingHorizontal: 16,
+    borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(0,0,0,0.22)', marginBottom: 18,
+  },
+  advancedToggleText: { color: '#ffffff90', fontSize: 11, letterSpacing: 2, fontWeight: '600' },
+  advancedToggleMeta: { color: '#ffffff66', fontSize: 11, letterSpacing: 0.5 },
+  presetDeleteBtn: {
+    position: 'absolute', top: 6, right: 8,
+    width: 20, height: 20, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  presetDeleteText: { fontSize: 12, fontWeight: '700' },
 });
