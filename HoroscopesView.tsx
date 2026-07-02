@@ -85,6 +85,19 @@ function freshnessLabel(ts: number): string {
 
 type Period = 'daily' | 'monthly' | 'yearly';
 
+// Zodiac glyphs like U+2648 default to emoji presentation on Android and in
+// browsers (a purple app-icon square that ignores text color). The text
+// variation selector plus a serif font stack forces the plain symbol so it
+// can be styled like type. The default system-ui stack lacks these glyphs
+// entirely, which is what hands them to the emoji font in the first place.
+function textGlyph(glyph: string): string {
+  return glyph + '\uFE0E';
+}
+const GLYPH_FONT = Platform.select({
+  web: 'Georgia, "Times New Roman", "Noto Sans Symbols", serif',
+  default: 'serif',
+});
+
 type Props = {
   zodiac: Zodiac[];
   mySign: Zodiac;
@@ -114,6 +127,9 @@ export default function HoroscopesView({
   zodiac, mySign, lunar, onSelectMyZodiac,
 }: Props) {
   const [period, setPeriod] = useState<Period>('daily');
+  // The 12-sign picker is collapsed behind a CHANGE button; a permanent
+  // "tap to set your sign" strip reads like onboarding that never ends.
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [horoscope, setHoroscope] = useState<string | null>(null);
   // When the shown text was fetched (cache ts or fetch time); null for yearly.
   const [horoscopeTs, setHoroscopeTs] = useState<number | null>(null);
@@ -295,13 +311,25 @@ export default function HoroscopesView({
         <View style={[styles.todayCard, { borderColor: mySign.color + '55' }]}>
           <Text style={styles.todayLabel}>{periodLabel}</Text>
           <View style={styles.todayRow}>
-            <Text style={[styles.zGlyph, { color: mySign.color, fontSize: 44 }]}>{mySign.glyph}</Text>
+            <View style={[styles.signBadge, { borderColor: mySign.color + '88', backgroundColor: mySign.color + '16' }]}>
+              <Text style={[styles.signBadgeGlyph, { color: mySign.color }]}>{textGlyph(mySign.glyph)}</Text>
+            </View>
             <View style={{ flex: 1, marginLeft: 14 }}>
               <Text style={styles.todaySignName}>{mySign.name}</Text>
               <Text style={[styles.metaText, { color: mySign.color }]}>
                 {mySign.element} · {mySign.qualities}
               </Text>
             </View>
+            <TouchableOpacity
+              onPress={() => setPickerOpen(o => !o)}
+              style={styles.changeSignBtn}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={pickerOpen ? 'Close sign picker' : 'Change your zodiac sign'}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.changeSignText}>{pickerOpen ? 'CLOSE' : 'CHANGE'}</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Period toggle */}
@@ -360,40 +388,44 @@ export default function HoroscopesView({
           </View>
         </View>
 
-        <Text style={styles.sectionLabel}>YOUR ZODIAC SIGN</Text>
-        <Text style={styles.sectionSub}>
-          Tap to set your sign. Saved on this device
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.zodiacRow}
-        >
-          {zodiac.map(z => {
-            const active = mySign.id === z.id;
-            return (
-              <TouchableOpacity
-                key={z.id}
-                activeOpacity={0.85}
-                onPress={() => onSelectMyZodiac(z)}
-                accessibilityRole="button"
-                accessibilityLabel={`Set ${z.name} as your sign, ${z.element}`}
-                accessibilityState={{ selected: active }}
-                style={[
-                  styles.zodiacChip,
-                  {
-                    borderColor: active ? z.color : z.color + '55',
-                    backgroundColor: active ? z.color + '22' : 'rgba(0,0,0,0.30)',
-                  },
-                ]}
-              >
-                <Text style={[styles.zGlyph, { color: z.color }]}>{z.glyph}</Text>
-                <Text style={styles.zName}>{z.name}</Text>
-                <Text style={[styles.zElement, { color: z.color }]}>{z.element}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        {pickerOpen ? (
+          <>
+            <Text style={styles.sectionLabel}>YOUR ZODIAC SIGN</Text>
+            <Text style={styles.sectionSub}>
+              Tap to set your sign. Saved on this device
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.zodiacRow}
+            >
+              {zodiac.map(z => {
+                const active = mySign.id === z.id;
+                return (
+                  <TouchableOpacity
+                    key={z.id}
+                    activeOpacity={0.85}
+                    onPress={() => { onSelectMyZodiac(z); setPickerOpen(false); }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set ${z.name} as your sign, ${z.element}`}
+                    accessibilityState={{ selected: active }}
+                    style={[
+                      styles.zodiacChip,
+                      {
+                        borderColor: active ? z.color : z.color + '55',
+                        backgroundColor: active ? z.color + '22' : 'rgba(0,0,0,0.30)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.zGlyph, { color: z.color }]}>{textGlyph(z.glyph)}</Text>
+                    <Text style={styles.zName}>{z.name}</Text>
+                    <Text style={[styles.zElement, { color: z.color }]}>{z.element}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </>
+        ) : null}
 
         {/* TAROT CARD OF THE DAY */}
         <View style={[styles.tarotCard, { borderColor: '#A45BFF55' }]}>
@@ -509,6 +541,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   todayRow: { flexDirection: 'row', alignItems: 'center' },
+  signBadge: {
+    width: 54, height: 54, borderRadius: 27,
+    borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  signBadgeGlyph: { fontSize: 26, lineHeight: 32, fontFamily: GLYPH_FONT },
+  changeSignBtn: {
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    marginLeft: 8,
+  },
+  changeSignText: { color: '#ffffff88', fontSize: 9, letterSpacing: 1.4, fontWeight: '700' },
   todaySignName: {
     color: '#fff',
     fontFamily: 'CormorantGaramond_500Medium',
@@ -535,9 +580,19 @@ const styles = StyleSheet.create({
     paddingLeft: 12, paddingVertical: 6,
     borderLeftWidth: 2,
   },
-  horoscopeText: { color: '#ffffffdd', fontSize: 14, lineHeight: 21 },
-  horoscopeStamp: { color: '#ffffff66', fontSize: 10, fontStyle: 'italic', marginTop: 6 },
-  horoscopeFallback: { color: '#ffffffcc', fontSize: 14, fontStyle: 'italic', lineHeight: 20 },
+  // The reading itself is set in the app's serif voice; plain sans here made
+  // the centerpiece feel like an API dump.
+  horoscopeText: {
+    color: '#ffffffee',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 18, lineHeight: 27,
+  },
+  horoscopeStamp: { color: '#ffffff66', fontSize: 10, fontStyle: 'italic', marginTop: 8 },
+  horoscopeFallback: {
+    color: '#ffffffdd',
+    fontFamily: 'CormorantGaramond_500Medium_Italic',
+    fontSize: 18, lineHeight: 26,
+  },
   horoscopeNote: { color: '#ffffff66', fontSize: 10, fontStyle: 'italic', marginTop: 6 },
 
   todayMoon: {
@@ -567,7 +622,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     borderWidth: 1,
   },
-  zGlyph: { fontSize: 26, lineHeight: 32 },
+  zGlyph: { fontSize: 26, lineHeight: 32, fontFamily: GLYPH_FONT },
   zName: { color: '#fff', fontSize: 12, fontWeight: '600', marginTop: 2, letterSpacing: 0.5 },
   zElement: { fontSize: 9, letterSpacing: 1, fontWeight: '600', marginTop: 2 },
 
