@@ -23,7 +23,7 @@ Copy/paste-ready text for App Store Connect (iOS) and Google Play Console (Andro
 Simply Ambient pairs custom binaural beats with guided breath work and a thoughtful set of grounded daily practices.
 
 **Frequencies**
-• Independent left & right ear sliders, 50 to 1000 Hz
+• Independent left & right ear sliders, 50 to 500 Hz
 • Live audio that updates as you slide — no overlap
 • Brainwave-band presets: Delta, Theta, Schumann (7.83 Hz), Alpha, Beta, Gamma, Gamma-40
 • Solfeggio + natural tuning frequencies: 111, 136, 174, 256, 285, 396, 417, 432, 444, 528, 639, 741, 852, 963 Hz
@@ -59,7 +59,7 @@ Simply Ambient pairs custom binaural beats with guided breath work and a thought
 • First-launch onboarding flow tailored to your intent
 
 **Privacy**
-Almost everything stays on your device. We don't have a server, accounts, ads, analytics, or trackers. Network requests only happen when you actively use a feature that needs them (horoscopes, affirmations, AI insights, bug reports). See our privacy policy for the full breakdown.
+No accounts, no ads. Your mood and gratitude journal stays on your device unless you opt in to AI Insights. Anonymous crash reports go to Sentry so bugs get fixed. Network requests only happen when you actively use a feature that needs them (horoscopes, tarot, AI insights, bug reports); on the web version, horoscope and tarot requests pass through a small proxy server that stores nothing. See our privacy policy for the full breakdown.
 
 Use stereo headphones for the binaural effect.
 

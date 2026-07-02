@@ -34,6 +34,9 @@
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "WAKE_LOCK"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -53,6 +56,12 @@
         }
       ],
       "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "color": "#0B0B1F"
+        }
+      ],
       [
         "@sentry/react-native/expo",
         {

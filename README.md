@@ -33,7 +33,7 @@ Plus a small **lunar-phase chip** in the top-right corner of every screen.
 
 ### 🎧 Frequencies tab
 
-- **Independent left / right ear sliders** (50–1000 Hz). Tap any displayed Hz to type it via numpad. **±1 buttons** for fine adjustment.
+- **Independent left / right ear sliders** (50–500 Hz, a deliberate hearing-safety cap). Tap any displayed Hz to type it via numpad. **±1 buttons** for fine adjustment.
 - **Live audio updates as you slide** — the beat changes in real time, no overlapping playback.
 - **Brainwave-band presets** with manifestation-aligned blurbs:
   - **Delta** (0.5–4 Hz) — *Surrender · Restoration*
@@ -117,7 +117,7 @@ The More tab is a hub menu — tapping any item slides a dedicated sub-page in f
 - **Profile** sub-page — name, birth date, birth time, birth location, plus a **4-question MBTI mini-quiz** (16-personalities style). Auto-computes your 4-letter type and shows the temperament group (Analyst / Diplomat / Sentinel / Explorer).
 - **Compatibility** sub-page — your profile plus a separate "other person" entry form (name, birth date, time, location). Synastry analysis is scaffolded; full natal-chart matching ships in a follow-up.
 - **AI Insights** sub-page — paste a free Gemini API key (from aistudio.google.com), then get **AI thematic analysis of your mood + gratitude journal** or an **AI tarot interpretation** of the current card. Prompts and journal data only leave the device when you tap a button.
-- **Daily Affirmation** sub-page — large rotating affirmation card (live from `affirmations.dev`) plus opt-in notification settings: Off / 1× per day (9 a.m.) / 3× per day (9 a.m., 1 p.m., 6 p.m.), scheduled locally via `expo-notifications`.
+- **Daily Affirmation** sub-page — large rotating affirmation card (generated on device) plus opt-in notification settings: Off / 1× per day (9 a.m.) / 3× per day (9 a.m., 1 p.m., 6 p.m.), scheduled locally via `expo-notifications`.
 - **Mood** sub-page — 1–5 color-coded buttons + a **14-day SVG line graph** of daily-average mood + a scrollable history list (up to 365 entries persisted).
 - **Gratitude** sub-page — multi-line entry box + dedicated journal grouped by date. Up to 1000 entries persisted locally.
 - **5-4-3-2-1 Grounding** sub-page — full sensory walk-through, one card per sense.
@@ -218,7 +218,7 @@ eas build --platform ios --profile development     # iOS dev client
 eas build --platform all --profile production      # store-ready
 ```
 
-Required for: notifications to actually fire (Expo Go can't do them in SDK 53+), the leaf icon to replace Expo Go's icon, and Apple Health / Google Fit when those land.
+Required for: notifications to fire (Expo Go can't do them in SDK 53+), the leaf icon to replace Expo Go's icon, and Apple Health / Google Fit when those land.
 
 Then either:
 

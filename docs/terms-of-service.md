@@ -39,7 +39,7 @@ You can delete all locally stored data at any time using **More → Safety & Dis
 When you use the App, certain features rely on third-party services:
 - **Google Gemini** (when you tap an AI Insights analyse button) — subject to Google's terms.
 - **Sentry** (crash diagnostics) — subject to Sentry's terms.
-- **freehoroscopeapi.com**, **affirmations.dev**, **formsubmit.co** — public APIs used as described in the Privacy Policy.
+- **freehoroscopeapi.com** and **formsubmit.co**, public APIs used as described in the Privacy Policy. Daily affirmations are generated on your device and use no third-party service.
 
 We are not responsible for the practices, terms, or content of any third-party service.
 

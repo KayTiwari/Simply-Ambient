@@ -44,3 +44,6 @@ yarn-error.*
 .env.local
 .env*.local
 .vercel
+
+# screen recordings
+*.mp4

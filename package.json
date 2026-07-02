@@ -1,6 +1,6 @@
 {
   "name": "binaural",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -31,7 +31,6 @@
     "expo": "~54.0.33",
     "expo-asset": "~12.0.13",
     "expo-audio": "~1.1.1",
-    "expo-av": "~16.0.8",
     "expo-build-properties": "~1.0.10",
     "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.22",
