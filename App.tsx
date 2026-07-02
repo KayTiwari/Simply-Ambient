@@ -9,7 +9,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Modal,
-  PanResponder,
   Platform,
   ScrollView,
   StyleSheet,
@@ -1381,19 +1380,16 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
 //   App
 // ===========================================================================
 
-type Tab = 'frequencies' | 'breath' | 'chakras' | 'horoscopes' | 'soundscapes';
+type Tab = 'frequencies' | 'breath' | 'chakras' | 'horoscopes' | 'more';
 
 const STORAGE_KEY_NOTIF = '@simply_ambient_notif_pref_v1';
-const STORAGE_KEY_NAV_SOUNDSCAPES = '@simply_ambient_nav_soundscapes_v1';
 const SLEEP_TIMER_OPTIONS = [0, 5, 10, 15, 30, 60] as const; // minutes
 
 function AppContent() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('frequencies');
-  const [menuOpen, setMenuOpen] = useState(false);
-  // Soundscapes is pinned to the navbar by default; only unpinned if the user
-  // explicitly turned it off (persisted as '0').
-  const [soundscapesInNav, setSoundscapesInNav] = useState(true);
+  // Deep link into a More sub-page (the mini player opens Soundscapes there).
+  const [morePageRequest, setMorePageRequest] = useState<'soundscapes' | null>(null);
   const tabFade = useRef(new Animated.Value(1)).current;
   const lastTab = useRef<Tab>(tab);
 
@@ -1418,16 +1414,7 @@ function AppContent() {
       if (!v) setShowOnboarding(true);
       setOnboardingChecked(true);
     }).catch(() => setOnboardingChecked(true));
-    AsyncStorage.getItem(STORAGE_KEY_NAV_SOUNDSCAPES)
-      .then(v => setSoundscapesInNav(v !== '0'))
-      .catch(() => {});
   }, []);
-
-  function setSoundscapesPinned(next: boolean) {
-    setSoundscapesInNav(next);
-    AsyncStorage.setItem(STORAGE_KEY_NAV_SOUNDSCAPES, next ? '1' : '0').catch(() => {});
-    if (!next && tab === 'soundscapes') setTab('frequencies');
-  }
 
   function dismissOnboarding() {
     AsyncStorage.setItem(STORAGE_KEY_ONBOARDED, '1').catch(() => {});
@@ -2212,14 +2199,22 @@ function AppContent() {
                 onSelectMyZodiac={selectMyZodiac}
               />
             )}
-            {tab === 'soundscapes' && (
-              <SoundscapesView
+            {tab === 'more' && (
+              <MoreView
+                notifPref={notifPref}
+                onChangeNotifPref={changeNotifPref}
+                affirmation={affirmation}
+                affirmationLoading={affLoading}
+                onRefreshAffirmation={refreshAffirmation}
+                isExpoGo={IS_EXPO_GO}
                 soundscapes={SOUNDSCAPES}
                 activeSoundscapeId={activeSoundscapeId}
                 isSoundscapePlaying={isSoundscapePlaying}
                 soundscapeVolume={soundscapeVolume}
-                onToggleSoundscape={toggleSoundscape}
+                onToggleSoundscape={(id) => toggleSoundscape(id as SoundscapeKey)}
                 onChangeSoundscapeVolume={changeSoundscapeVolume}
+                requestedPage={morePageRequest}
+                onRequestedPageHandled={() => setMorePageRequest(null)}
               />
             )}
           </Animated.View>
@@ -2237,8 +2232,12 @@ function AppContent() {
           soundscapePlaying={isSoundscapePlaying}
           hasSoundscape={activeSoundscapeId != null}
           onSoundscapePress={() => {
-            if (activeSoundscapeId) toggleSoundscape(activeSoundscapeId);
-            else setTab('soundscapes');
+            if (activeSoundscapeId) {
+              toggleSoundscape(activeSoundscapeId);
+            } else {
+              setMorePageRequest('soundscapes');
+              setTab('more');
+            }
           }}
           hasBg={bgUri != null}
           bgPlaying={isBgPlaying}
@@ -2251,29 +2250,8 @@ function AppContent() {
           tab={tab}
           onChange={setTab}
           accent={beatColor}
-          soundscapesInNav={soundscapesInNav}
         />
-        <MoreLauncher accent={beatColor} onPress={() => setMenuOpen(true)} />
       </SafeAreaView>
-
-      <SlideMenu open={menuOpen} onClose={() => setMenuOpen(false)} accent={beatColor}>
-        <MoreView
-          notifPref={notifPref}
-          onChangeNotifPref={changeNotifPref}
-          affirmation={affirmation}
-          affirmationLoading={affLoading}
-          onRefreshAffirmation={refreshAffirmation}
-          isExpoGo={IS_EXPO_GO}
-          soundscapes={SOUNDSCAPES}
-          activeSoundscapeId={activeSoundscapeId}
-          isSoundscapePlaying={isSoundscapePlaying}
-          soundscapeVolume={soundscapeVolume}
-          onToggleSoundscape={(id) => toggleSoundscape(id as SoundscapeKey)}
-          onChangeSoundscapeVolume={changeSoundscapeVolume}
-          soundscapesInNav={soundscapesInNav}
-          onToggleSoundscapesInNav={setSoundscapesPinned}
-        />
-      </SlideMenu>
 
       {onboardingChecked && showOnboarding ? (
         <View style={[StyleSheet.absoluteFill, styles.onboardingLayer]}>
@@ -2397,120 +2375,6 @@ export default Sentry.wrap(function App() {
 // ===========================================================================
 //   TabBar
 // ===========================================================================
-
-function SoundscapesView({
-  soundscapes,
-  activeSoundscapeId,
-  isSoundscapePlaying,
-  soundscapeVolume,
-  onToggleSoundscape,
-  onChangeSoundscapeVolume,
-}: {
-  soundscapes: Soundscape[];
-  activeSoundscapeId: SoundscapeKey | null;
-  isSoundscapePlaying: boolean;
-  soundscapeVolume: number;
-  onToggleSoundscape: (id: SoundscapeKey) => void;
-  onChangeSoundscapeVolume: (v: number) => void;
-}) {
-  const activeLayer = activeSoundscapeId
-    ? soundscapes.find(s => s.id === activeSoundscapeId) ?? null
-    : null;
-  const activeName = activeLayer?.name ?? 'No layer selected';
-  const activeAccent = activeLayer?.color ?? '#d9b35c';
-  const nowMeta = !activeLayer
-    ? 'Tap a layer below to begin.'
-    : isSoundscapePlaying
-      ? 'Playing under your current session.'
-      : 'Paused. Tap play to resume, or pick another layer.';
-
-  return (
-    <ScrollView
-      contentContainerStyle={styles.soundscapeScreen}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <Text style={styles.ambience}>Simply Ambient</Text>
-        <Text style={styles.title}>Soundscapes</Text>
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.subtitle}>texture under the tone</Text>
-          <View style={styles.dividerLine} />
-        </View>
-      </View>
-
-      <View style={styles.soundscapeNowCard}>
-        <Text style={styles.beatLabel}>AMBIENT LAYER</Text>
-        <View style={styles.soundscapeNowRow}>
-          <View style={styles.soundscapeNowText}>
-            <Text style={styles.soundscapeNowTitle}>{activeName}</Text>
-            <Text style={styles.soundscapeNowMeta}>{nowMeta}</Text>
-          </View>
-          {activeLayer ? (
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => onToggleSoundscape(activeLayer.id)}
-              style={[styles.soundscapePlayBtn, { borderColor: activeAccent + '99', backgroundColor: activeAccent + '22' }]}
-              accessibilityLabel={isSoundscapePlaying ? `Pause ${activeLayer.name}` : `Resume ${activeLayer.name}`}
-            >
-              {isSoundscapePlaying ? (
-                <Pause size={24} color={activeAccent} weight="fill" />
-              ) : (
-                <Play size={24} color={activeAccent} weight="fill" />
-              )}
-            </TouchableOpacity>
-          ) : null}
-        </View>
-        {activeLayer ? (
-          <View style={styles.soundscapeVolumeRow}>
-            <Text style={styles.bgVolLabel}>VOLUME · {Math.round(soundscapeVolume * 100)}%</Text>
-            <Slider
-              style={{ width: '100%', height: 34 }}
-              minimumValue={0}
-              maximumValue={1}
-              value={soundscapeVolume}
-              minimumTrackTintColor="#d9b35c"
-              maximumTrackTintColor="rgba(255,255,255,0.12)"
-              thumbTintColor="#d9b35c"
-              onValueChange={onChangeSoundscapeVolume}
-            />
-          </View>
-        ) : null}
-      </View>
-
-      <View style={styles.soundscapeGrid}>
-        {soundscapes.map(s => {
-          const active = activeSoundscapeId === s.id && isSoundscapePlaying;
-          const SoundIcon = s.Icon;
-          return (
-            <TouchableOpacity
-              key={s.id}
-              activeOpacity={0.86}
-              onPress={() => onToggleSoundscape(s.id)}
-              style={[
-                styles.soundscapeTile,
-                {
-                  borderColor: active ? s.color : s.color + '55',
-                  backgroundColor: active ? s.color + '22' : 'rgba(0,0,0,0.26)',
-                },
-              ]}
-              accessibilityLabel={`${active ? 'Stop' : 'Play'} ${s.name}`}
-            >
-              <View style={styles.soundscapeTileGlyph}>
-                <SoundIcon size={28} color={s.color} weight="duotone" />
-              </View>
-              <Text style={styles.soundscapeTileName}>{s.name}</Text>
-              <Text style={styles.soundscapeTileBlurb}>{s.blurb}</Text>
-              <Text style={[styles.soundscapeTileAction, { color: active ? s.color : '#ffffff77' }]}>
-                {active ? 'STOP' : 'PLAY'}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </ScrollView>
-  );
-}
 
 function formatRemaining(ms: number) {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
@@ -2723,127 +2587,20 @@ function MiniPlayer({
   );
 }
 
-// Slide-in overlay menu that replaces the old "More" tab. The drawer keeps the
-// black direction, but gives it a real surface, edge light, and close target
-// so it feels designed instead of like an unstyled overlay.
-function SlideMenu({
-  open,
-  onClose,
-  accent,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  accent: string;
-  children: React.ReactNode;
-}) {
-  const insets = useSafeAreaInsets();
-  const panelWidth = Math.min(420, Math.round(Dimensions.get('window').width * 0.86));
-  const progress = useRef(new Animated.Value(0)).current;
-  const [mounted, setMounted] = useState(open);
-  const closeDragStartRef = useRef(1);
-
-  const animateMenuTo = (toValue: number, duration: number, done?: () => void) => {
-    Animated.timing(progress, {
-      toValue,
-      duration,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (finished) done?.();
-    });
-  };
-
-  const closePanResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gesture) =>
-        Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy) && gesture.dx < 0,
-      onPanResponderGrant: () => {
-        progress.stopAnimation((value) => {
-          closeDragStartRef.current = typeof value === 'number' ? value : 1;
-        });
-      },
-      onPanResponderMove: (_, gesture) => {
-        progress.setValue(clamp01(closeDragStartRef.current + gesture.dx / panelWidth));
-      },
-      onPanResponderRelease: (_, gesture) => {
-        const shouldClose = gesture.dx < -panelWidth * 0.24 || gesture.vx < -0.65;
-        if (shouldClose) onClose();
-        else animateMenuTo(1, 180);
-      },
-      onPanResponderTerminate: () => animateMenuTo(1, 180),
-    })
-  ).current;
-
-  useEffect(() => {
-    if (open) setMounted(true);
-    animateMenuTo(open ? 1 : 0, open ? 260 : 200, () => {
-      if (!open) setMounted(false);
-    });
-  }, [open]);
-
-  if (!mounted) return null;
-
-  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [-panelWidth, 0] });
-
-  return (
-    <View style={styles.menuLayer} pointerEvents={open ? 'auto' : 'none'}>
-      <TouchableWithoutFeedback onPress={onClose} accessibilityLabel="Close menu">
-        <Animated.View style={[StyleSheet.absoluteFill, styles.menuBackdrop, { opacity: progress }]} />
-      </TouchableWithoutFeedback>
-      <Animated.View
-        {...closePanResponder.panHandlers}
-        style={[
-          styles.menuPanel,
-          {
-            width: panelWidth,
-            transform: [{ translateX }],
-            borderColor: accent + '33',
-          },
-        ]}
-      >
-        <LinearGradient
-          colors={['rgba(255,255,255,0.10)', 'rgba(255,255,255,0.02)', 'rgba(255,255,255,0)']}
-          locations={[0, 0.38, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-        <View style={[styles.menuAccentRail, { backgroundColor: accent }]} pointerEvents="none" />
-        <TouchableOpacity
-          onPress={onClose}
-          style={[styles.menuClose, { top: insets.top + 14 }]}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel="Close menu"
-        >
-          <Text style={styles.menuCloseText}>✕</Text>
-        </TouchableOpacity>
-        <View style={[styles.menuContent, { paddingTop: insets.top + 8, paddingBottom: insets.bottom }]}>
-          {children}
-        </View>
-      </Animated.View>
-    </View>
-  );
-}
-
 function TabBar({
   tab,
   onChange,
   accent,
-  soundscapesInNav,
 }: {
   tab: Tab;
   onChange: (t: Tab) => void;
   accent: string;
-  soundscapesInNav: boolean;
 }) {
-  // Labels like "Frequencies" and "Soundscapes" overflow their slots on
-  // narrow screens once five tabs are shown, so drop to a compact type size
-  // before they can collide.
+  // Labels like "Frequencies" and "Horoscopes" overflow their slots on
+  // narrow screens with five tabs, so drop to a compact type size before
+  // they can collide.
   const { width } = useWindowDimensions();
-  const tabCount = soundscapesInNav ? 5 : 4;
-  const compact = width / tabCount < 82;
+  const compact = width / 5 < 82;
   return (
     <SafeAreaView edges={['bottom']} style={styles.tabBarSafe}>
       <View style={styles.tabBar}>
@@ -2851,77 +2608,9 @@ function TabBar({
         <TabButton label="Breath"      glyph="○" compact={compact} active={tab === 'breath'}      accent={accent} onPress={() => onChange('breath')} />
         <TabButton label="Chakras"     glyph="✦" compact={compact} active={tab === 'chakras'}     accent={accent} onPress={() => onChange('chakras')} />
         <TabButton label="Horoscopes"  glyph="☽" compact={compact} active={tab === 'horoscopes'}  accent={accent} onPress={() => onChange('horoscopes')} />
-        {soundscapesInNav ? (
-          <TabButton label="Soundscapes" Icon={Waveform} compact={compact} active={tab === 'soundscapes'} accent={accent} onPress={() => onChange('soundscapes')} />
-        ) : null}
+        <TabButton label="More"        glyph="⋯" compact={compact} active={tab === 'more'}        accent={accent} onPress={() => onChange('more')} />
       </View>
     </SafeAreaView>
-  );
-}
-
-function MoreLauncher({
-  accent,
-  onPress,
-}: {
-  accent: string;
-  onPress: () => void;
-}) {
-  const insets = useSafeAreaInsets();
-  // Rests inside the reserved top strip (opposite the moon chip) so it never
-  // covers tab content by default; the user can still drag it down the edge.
-  const launcherY = useRef(new Animated.Value(3)).current;
-  const launcherStartYRef = useRef(3);
-  const minY = 2;
-  const maxY = Math.max(minY, SCREEN_H - insets.top - insets.bottom - 164);
-  const dragRange = Math.max(1, maxY - minY);
-
-  const openPanResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gesture) =>
-        Math.max(Math.abs(gesture.dx), Math.abs(gesture.dy)) > 8,
-      onPanResponderGrant: () => {
-        launcherY.stopAnimation((value) => {
-          launcherStartYRef.current = typeof value === 'number' ? value : launcherStartYRef.current;
-        });
-      },
-      onPanResponderMove: (_, gesture) => {
-        if (Math.abs(gesture.dy) > Math.abs(gesture.dx)) {
-          launcherY.setValue(clamp01((launcherStartYRef.current + gesture.dy - minY) / dragRange) * dragRange + minY);
-        }
-      },
-      onPanResponderRelease: (_, gesture) => {
-        if ((gesture.dx > 24 && Math.abs(gesture.dx) > Math.abs(gesture.dy)) || gesture.vx > 0.55) onPress();
-      },
-    })
-  ).current;
-
-  return (
-    <Animated.View
-      {...openPanResponder.panHandlers}
-      style={[
-        styles.moreLauncherSlot,
-        { transform: [{ translateY: launcherY }] },
-      ]}
-    >
-      <TouchableOpacity
-        activeOpacity={0.82}
-        onPress={onPress}
-        style={[
-          styles.moreLauncher,
-          { borderColor: accent + '55' },
-        ]}
-      accessibilityLabel="Open more tools"
-      accessibilityRole="button"
-    >
-      <View style={[styles.moreLauncherRail, { backgroundColor: accent }]} />
-      <View style={styles.moreLauncherMarks}>
-        <View style={[styles.moreLauncherMark, { backgroundColor: accent }]} />
-        <View style={[styles.moreLauncherMark, { backgroundColor: accent, opacity: 0.68 }]} />
-        <View style={[styles.moreLauncherMark, { backgroundColor: accent, opacity: 0.42 }]} />
-      </View>
-      <Text style={styles.moreLauncherText}>More</Text>
-      </TouchableOpacity>
-    </Animated.View>
   );
 }
 
@@ -3652,47 +3341,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.25)',
   },
   sleepPillText: { color: '#ffffff99', fontSize: 11, fontWeight: '600', letterSpacing: 1 },
-  soundscapeScreen: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 12 : 4,
-    paddingBottom: 120,
-  },
-  soundscapeNowCard: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderWidth: 1,
-    borderColor: 'rgba(91,208,255,0.35)',
-    borderRadius: 22,
-    padding: 18,
-    marginBottom: 16,
-  },
-  soundscapeNowTitle: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '700',
-    marginTop: 8,
-    letterSpacing: 0.3,
-  },
-  soundscapeNowMeta: { color: '#ffffff88', fontSize: 12, marginTop: 4 },
-  soundscapeNowRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  soundscapeNowText: { flex: 1, minWidth: 0 },
-  soundscapePlayBtn: { width: 52, height: 52, borderRadius: 999, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  soundscapeVolumeRow: { marginTop: 16 },
-  soundscapeGrid: { gap: 10 },
-  soundscapeTile: {
-    width: '100%',
-    minHeight: 126,
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 16,
-    justifyContent: 'space-between',
-  },
-  soundscapeTileGlyph: {
-    height: 32,
-    justifyContent: 'center',
-  },
-  soundscapeTileName: { color: '#fff', fontSize: 17, fontWeight: '800', marginTop: 10 },
-  soundscapeTileBlurb: { color: '#ffffff77', fontSize: 12, lineHeight: 17, marginTop: 6 },
-  soundscapeTileAction: { fontSize: 10, fontWeight: '900', letterSpacing: 1.6, marginTop: 14 },
 
   customSleepBackdrop: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
@@ -3842,109 +3490,6 @@ const styles = StyleSheet.create({
     textAlign: 'center', lineHeight: 17,
   },
 
-  menuLayer: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 60,
-    elevation: 60,
-  },
-  menuBackdrop: {
-    backgroundColor: 'rgba(0,0,0,0.74)',
-  },
-  menuPanel: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    bottom: 0,
-    overflow: 'hidden',
-    backgroundColor: '#05050C',
-    borderRightWidth: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.7,
-    shadowRadius: 28,
-    shadowOffset: { width: 12, height: 0 },
-    elevation: 28,
-  },
-  menuAccentRail: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 2,
-    opacity: 0.82,
-  },
-  menuClose: {
-    position: 'absolute',
-    right: 14,
-    zIndex: 2,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  menuCloseText: {
-    color: '#ffffffcc',
-    fontSize: 16,
-    lineHeight: 18,
-    fontWeight: '700',
-  },
-  menuContent: {
-    flex: 1,
-    backgroundColor: 'rgba(5,5,12,0.78)',
-  },
-  moreLauncherSlot: {
-    position: 'absolute',
-    top: 0,
-    left: 14,
-    zIndex: 35,
-    elevation: 10,
-  },
-  moreLauncher: {
-    minWidth: 82,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    backgroundColor: 'rgba(5,5,12,0.72)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.32,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 10,
-  },
-  moreLauncherRail: {
-    position: 'absolute',
-    left: 6,
-    top: 8,
-    bottom: 8,
-    width: 2,
-    borderRadius: 2,
-    opacity: 0.82,
-  },
-  moreLauncherMarks: {
-    gap: 4,
-    marginLeft: 4,
-    marginRight: 8,
-    alignItems: 'center',
-  },
-  moreLauncherMark: {
-    width: 12,
-    height: 2,
-    borderRadius: 2,
-  },
-  moreLauncherText: {
-    color: '#ffffff88',
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-  },
 
   miniPlayer: {
     flexDirection: 'row',

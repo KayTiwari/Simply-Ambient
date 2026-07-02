@@ -107,8 +107,10 @@ type Props = {
   soundscapeVolume: number;
   onToggleSoundscape: (id: string) => void;
   onChangeSoundscapeVolume: (v: number) => void;
-  soundscapesInNav: boolean;
-  onToggleSoundscapesInNav: (next: boolean) => void;
+  // Deep link from elsewhere in the app (e.g. the mini player opening the
+  // Soundscapes page). Set to a sub-page id, consumed via the handler.
+  requestedPage?: Exclude<SubPage, null> | null;
+  onRequestedPageHandled?: () => void;
 };
 
 type SoundscapeOption = {
@@ -185,8 +187,8 @@ export default function MoreView({
   soundscapeVolume,
   onToggleSoundscape,
   onChangeSoundscapeVolume,
-  soundscapesInNav,
-  onToggleSoundscapesInNav,
+  requestedPage,
+  onRequestedPageHandled,
 }: Props) {
   const [moodLog, setMoodLog] = useState<MoodEntry[]>([]);
   const [gratitude, setGratitude] = useState<GratEntry[]>([]);
@@ -322,6 +324,14 @@ export default function MoreView({
     }).start(() => setPage(null));
   }
 
+  // Honor deep links into a specific sub-page (mini player -> Soundscapes).
+  useEffect(() => {
+    if (requestedPage) {
+      open(requestedPage);
+      onRequestedPageHandled?.();
+    }
+  }, [requestedPage]);
+
   // Live dimensions, so browser resizes and rotations keep the slide-over
   // offset correct (a module-level Dimensions.get snapshot would go stale).
   const { width: screenW } = useWindowDimensions();
@@ -345,8 +355,6 @@ export default function MoreView({
           gratitude={gratitude}
           streak={streak}
           onOpen={open}
-          soundscapesInNav={soundscapesInNav}
-          onToggleSoundscapesInNav={onToggleSoundscapesInNav}
         />
       </Animated.View>
 
@@ -381,8 +389,6 @@ export default function MoreView({
               soundscapeVolume={soundscapeVolume}
               onToggleSoundscape={onToggleSoundscape}
               onChangeSoundscapeVolume={onChangeSoundscapeVolume}
-              soundscapesInNav={soundscapesInNav}
-              onToggleSoundscapesInNav={onToggleSoundscapesInNav}
             />
           )}
           {page === 'affirmations' && (
@@ -465,8 +471,6 @@ type HubProps = {
   gratitude: GratEntry[];
   streak: number;
   onOpen: (p: Exclude<SubPage, null>) => void;
-  soundscapesInNav: boolean;
-  onToggleSoundscapesInNav: (next: boolean) => void;
 };
 
 function Hub({
@@ -477,8 +481,6 @@ function Hub({
   gratitude,
   streak,
   onOpen,
-  soundscapesInNav,
-  onToggleSoundscapesInNav,
 }: HubProps) {
   // Weekly insights, derived from the parent's live state. The Hub stays
   // mounted underneath the slide-over sub-pages, so a one-shot storage read
@@ -555,59 +557,9 @@ function Hub({
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
-        <HubItem
-          glyph="◯"
-          color="#A45BFF"
-          label="Profile"
-          preview="Birth details · MBTI · personality"
-          onPress={() => onOpen('profile')}
-        />
-        <HubItem
-          glyph="☌"
-          color="#5B6CFF"
-          label="Natal Chart"
-          preview="Western planetary positions"
-          onPress={() => onOpen('natal')}
-        />
-        <HubItem
-          glyph="⚭"
-          color="#FF8FB1"
-          label="Compatibility"
-          preview="Match your sign with another"
-          onPress={() => onOpen('compatibility')}
-        />
-        <HubItem
-          glyph="⌬"
-          color="#5BD0FF"
-          label="AI Insights"
-          preview="Reflections on your journal & tarot"
-          onPress={() => onOpen('insights')}
-        />
-        <HubItem
-          glyph="⟁"
-          color="#9affc8"
-          label="Routines"
-          preview="Chain presets into sessions"
-          onPress={() => onOpen('routines')}
-        />
-        <HubItem
-          Icon={Waveform}
-          color="#5BD0FF"
-          label="Soundscapes"
-          preview="Rain · ocean · forest · white noise"
-          extra={soundscapesInNav ? 'In nav' : 'Pin'}
-          extraColor={soundscapesInNav ? '#5BD0FF' : '#ffffff99'}
-          onExtraPress={() => onToggleSoundscapesInNav(!soundscapesInNav)}
-          onPress={() => onOpen('soundscapes')}
-        />
-        <HubItem
-          glyph="☉"
-          color="#9affc8"
-          label="Daily Affirmation"
-          preview={affirmationPreview ? `“${affirmationPreview}”` : 'Anchor a single thought for the day'}
-          extra={notifPref === 'off' ? null : notifPref === 'daily' ? '1×/day' : '3×/day'}
-          onPress={() => onOpen('affirmations')}
-        />
+        {/* Grouped by how often each tool is reached for: daily journaling
+            first, one-time setup and app meta last. */}
+        <Text style={styles.hubSection}>JOURNAL</Text>
         <HubItem
           Icon={Smiley}
           color="#5BD0FF"
@@ -647,12 +599,68 @@ function Hub({
           onPress={() => onOpen('manifestation')}
         />
         <HubItem
+          glyph="⌬"
+          color="#5BD0FF"
+          label="AI Insights"
+          preview="Reflections on your journal & tarot"
+          onPress={() => onOpen('insights')}
+        />
+
+        <Text style={styles.hubSection}>PRACTICE</Text>
+        <HubItem
+          glyph="☉"
+          color="#9affc8"
+          label="Daily Affirmation"
+          preview={affirmationPreview ? `“${affirmationPreview}”` : 'Anchor a single thought for the day'}
+          extra={notifPref === 'off' ? null : notifPref === 'daily' ? '1×/day' : '3×/day'}
+          onPress={() => onOpen('affirmations')}
+        />
+        <HubItem
+          glyph="⟁"
+          color="#9affc8"
+          label="Routines"
+          preview="Chain presets into sessions"
+          onPress={() => onOpen('routines')}
+        />
+        <HubItem
+          Icon={Waveform}
+          color="#5BD0FF"
+          label="Soundscapes"
+          preview="Rain · ocean · forest · white noise"
+          onPress={() => onOpen('soundscapes')}
+        />
+        <HubItem
           glyph="⌖"
           color="#5B6CFF"
           label="5-4-3-2-1 Grounding"
           preview="Anxiety reset through the five senses"
           onPress={() => onOpen('grounding')}
         />
+
+        <Text style={styles.hubSection}>COSMOS</Text>
+        <HubItem
+          glyph="◯"
+          color="#A45BFF"
+          label="Profile"
+          preview="Birth details · MBTI · personality"
+          onPress={() => onOpen('profile')}
+        />
+        <HubItem
+          glyph="☌"
+          color="#5B6CFF"
+          label="Natal Chart"
+          preview="Western planetary positions"
+          onPress={() => onOpen('natal')}
+        />
+        <HubItem
+          glyph="⚭"
+          color="#FF8FB1"
+          label="Compatibility"
+          preview="Match your sign with another"
+          onPress={() => onOpen('compatibility')}
+        />
+
+        <Text style={styles.hubSection}>APP</Text>
         <HubItem
           Icon={Coffee}
           color="#d9b35c"
@@ -702,7 +710,7 @@ function HubItem({
     >
       <View style={[styles.hubGlyphCircle, { backgroundColor: color + '22', borderColor: color }]}>
         {Icon ? (
-          <Icon size={22} weight="duotone" color={color} />
+          <Icon size={18} weight="duotone" color={color} />
         ) : (
           <Text style={[styles.hubGlyph, { color }]}>{glyph}</Text>
         )}
@@ -2208,8 +2216,6 @@ function SoundscapesPage({
   soundscapeVolume,
   onToggleSoundscape,
   onChangeSoundscapeVolume,
-  soundscapesInNav,
-  onToggleSoundscapesInNav,
 }: {
   onBack: () => void;
   soundscapes: SoundscapeOption[];
@@ -2218,8 +2224,6 @@ function SoundscapesPage({
   soundscapeVolume: number;
   onToggleSoundscape: (id: string) => void;
   onChangeSoundscapeVolume: (v: number) => void;
-  soundscapesInNav: boolean;
-  onToggleSoundscapesInNav: (next: boolean) => void;
 }) {
   const activeName = activeSoundscapeId
     ? soundscapes.find(s => s.id === activeSoundscapeId)?.name ?? 'Ambient layer'
@@ -2244,18 +2248,6 @@ function SoundscapesPage({
                 {isSoundscapePlaying ? 'Playing now' : 'Paused'}
               </Text>
             </View>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              onPress={() => onToggleSoundscapesInNav(!soundscapesInNav)}
-              style={[
-                styles.navPinBtn,
-                soundscapesInNav && { borderColor: '#5BD0FF', backgroundColor: '#5BD0FF22' },
-              ]}
-            >
-              <Text style={[styles.navPinText, soundscapesInNav && { color: '#5BD0FF' }]}>
-                {soundscapesInNav ? 'IN NAV' : 'ADD TO NAV'}
-              </Text>
-            </TouchableOpacity>
           </View>
           {activeSoundscapeId ? (
             <View style={{ marginTop: 14 }}>
@@ -2728,18 +2720,22 @@ const styles = StyleSheet.create({
   },
 
   // Hub
+  hubSection: {
+    color: '#ffffff77', fontSize: 10, letterSpacing: 3, fontWeight: '700',
+    marginTop: 18, marginBottom: 8, marginLeft: 4,
+  },
   hubItem: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 16, padding: 14, marginBottom: 10,
+    borderRadius: 14, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 8,
     borderWidth: 1,
   },
   hubGlyphCircle: {
-    width: 44, height: 44, borderRadius: 22,
+    width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
-    marginRight: 14, borderWidth: 1,
+    marginRight: 12, borderWidth: 1,
   },
-  hubGlyph: { fontSize: 20, fontWeight: '700' },
+  hubGlyph: { fontSize: 17, fontWeight: '700' },
   hubLabel: { color: '#fff', fontSize: 15, fontWeight: '600', letterSpacing: 0.3 },
   hubPreview: { color: '#ffffff88', fontSize: 12, marginTop: 2, lineHeight: 16 },
   hubExtraBtn: { paddingHorizontal: 4, paddingVertical: 4, marginRight: 4 },
@@ -3032,15 +3028,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 2,
   },
-  navPinBtn: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  navPinText: { color: '#ffffff99', fontSize: 10, fontWeight: '800', letterSpacing: 1.4 },
   soundscapeCard: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.30)',
