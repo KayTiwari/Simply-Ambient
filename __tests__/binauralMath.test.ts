@@ -3,11 +3,34 @@ import {
   MAX_HZ,
   clampHz,
   comfortableCarrier,
+  splitBeatCarrier,
   btoaFallback,
   atobFallback,
   nextStreakCount,
   visibleStreak,
 } from '../lib/binauralMath';
+
+describe('splitBeatCarrier', () => {
+  // Regression: a drifting split (round(carrier +/- beat/2)) fed the
+  // controlled sliders a value the user did not set on odd beats, looping
+  // state updates until the app white-screened. Both derived values must
+  // reproduce the inputs exactly for every reachable slider position.
+  test('round-trips carrier and beat for every slider position', () => {
+    for (let beat = 0; beat <= 40; beat++) {
+      for (let carrier = 70; carrier <= 480; carrier++) {
+        const [l, r] = splitBeatCarrier(beat, carrier);
+        expect(r - l).toBe(beat);
+        expect(Math.round((l + r) / 2)).toBe(carrier);
+      }
+    }
+  });
+  test('clamps to the safe range and tolerates bad input', () => {
+    expect(splitBeatCarrier(40, MIN_HZ)[0]).toBe(MIN_HZ);
+    expect(splitBeatCarrier(40, MAX_HZ)[1]).toBe(MAX_HZ);
+    expect(splitBeatCarrier(NaN, NaN)).toEqual([200, 200]);
+    expect(splitBeatCarrier(-5, 200)).toEqual([200, 200]);
+  });
+});
 
 describe('clampHz', () => {
   test('rounds to integer', () => {

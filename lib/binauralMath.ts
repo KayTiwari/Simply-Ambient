@@ -29,6 +29,20 @@ export function comfortableCarrier(hz: number): number {
   return h;
 }
 
+// Split a beat + carrier into the (left, right) ear pair. The split must
+// round-trip exactly: carrier = Math.round((l + r) / 2) and beat = r - l must
+// reproduce the inputs. A naive round(carrier +/- beat/2) drifts by 1 Hz on
+// odd beats, which feeds the controlled sliders a value the user did not set
+// mid-drag and loops the update until React crashes (white screen).
+// Splitting as [carrier - ceil(beat/2), carrier + floor(beat/2)] keeps
+// beat = r - l exact, and (l + r) / 2 = carrier - 0.5 for odd beats, which
+// Math.round takes back up to the carrier.
+export function splitBeatCarrier(beat: number, carrier: number): [number, number] {
+  const b = Number.isFinite(beat) ? Math.max(0, Math.round(beat)) : 0;
+  const c = Math.round(Number.isFinite(carrier) ? carrier : 200);
+  return [clampHz(c - Math.ceil(b / 2)), clampHz(c + Math.floor(b / 2))];
+}
+
 // Pure-JS Base64 encoder. Used as a fallback if globalThis.btoa is missing
 // in some RN runtime variants. The audio engine builds a WAV per Hz change,
 // so a missing btoa would silently break playback.

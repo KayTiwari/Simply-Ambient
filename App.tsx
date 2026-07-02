@@ -231,6 +231,7 @@ import {
   MAX_HZ,
   clampHz,
   comfortableCarrier,
+  splitBeatCarrier,
   btoaFallback,
 } from './lib/binauralMath';
 import { NOTIF_AFFIRMATIONS } from './lib/affirmations';
@@ -1858,20 +1859,20 @@ function AppContent() {
   }
 
   // Beat-first control: the hero card lets users set the beat and carrier
-  // directly (the mental model of binaural), derived as carrier +/- beat/2.
-  function pairFromBeatCarrier(beatV: number, carrierV: number): [number, number] {
-    const half = beatV / 2;
-    return [clampHz(Math.round(carrierV - half)), clampHz(Math.round(carrierV + half))];
-  }
+  // directly (the mental model of binaural). splitBeatCarrier round-trips
+  // exactly, so the sliders never get fed a drifted value mid-drag.
   function slideBeatCarrier(beatV: number, carrierV: number) {
-    const [l, r] = pairFromBeatCarrier(beatV, carrierV);
+    const [l, r] = splitBeatCarrier(beatV, carrierV);
+    // Idempotency guard: if this produces the pair we already hold, do not
+    // re-enter setState. Breaks any slider value-prop feedback cycle.
+    if (l === stateRef.current.leftHz && r === stateRef.current.rightHz) return;
     setLeftHz(l);
     setRightHz(r);
     applyDetection(l, r);
     liveUpdate(l, r);
   }
   function commitBeatCarrier(beatV: number, carrierV: number) {
-    const [l, r] = pairFromBeatCarrier(beatV, carrierV);
+    const [l, r] = splitBeatCarrier(beatV, carrierV);
     setLeftHz(l);
     setRightHz(r);
     applyDetection(l, r);
