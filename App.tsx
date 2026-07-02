@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  AppState,
   Dimensions,
   Easing,
   Keyboard,
@@ -73,7 +74,9 @@ Sentry.init({
     if (event.contexts) delete event.contexts.state;
     return event;
   },
-  tracesSampleRate: 0.1,
+  // Crash reports only. The store listing promises no analytics, so keep
+  // performance tracing off.
+  tracesSampleRate: 0,
   enableNativeCrashHandling: true,
 });
 
@@ -85,6 +88,38 @@ import OnboardingView from './OnboardingView';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+// react-native-web ships Alert.alert as an empty stub, so anything inside an
+// alert callback silently never runs on the web build. These helpers keep the
+// native Alert UX and fall back to the browser's own dialogs on web.
+export function notify(title: string, message?: string) {
+  if (Platform.OS === 'web') {
+    window.alert(message ? `${title}\n\n${message}` : title);
+    return;
+  }
+  Alert.alert(title, message);
+}
+
+export function confirmAction(
+  title: string,
+  message: string,
+  confirmText: string,
+  onConfirm: () => void,
+  destructive: boolean = true,
+) {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n\n${message}`)) onConfirm();
+    return;
+  }
+  Alert.alert(title, message, [
+    { text: 'Cancel', style: 'cancel' },
+    {
+      text: confirmText,
+      style: destructive ? 'destructive' : 'default',
+      onPress: onConfirm,
+    },
+  ]);
+}
 
 // MIN_HZ / MAX_HZ / clampHz / comfortableCarrier / btoaFallback live in
 // lib/binauralMath so they can be unit-tested in plain Node without React
@@ -106,7 +141,11 @@ export const STORAGE_KEY_GEMINI = '@simply_ambient_gemini_key_v1';
 export const STORAGE_KEY_ONBOARDED = '@simply_ambient_onboarded_v1';
 
 function todayKey(d: Date = new Date()): string {
-  return d.toISOString().slice(0, 10);
+  // Local date parts, not toISOString(): users experience local days, and UTC
+  // keys reset streaks for anyone west of UTC practicing in the evening.
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
 }
 
 // Record any kind of practice / engagement so the streak counter updates.
@@ -467,30 +506,81 @@ if (!IS_EXPO_GO && Platform.OS !== 'web') {
   } catch {}
 }
 
+// Identifier prefixes so the affirmation and gratitude schedulers can each
+// cancel their own notifications without wiping the other's.
+const AFFIRM_NOTIF_PREFIX = 'affirm-';
+const GRAT_NOTIF_PREFIX = 'grat-reminder-';
+
+async function cancelScheduledByPrefix(prefix: string) {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  for (const n of scheduled) {
+    if (n.identifier?.startsWith(prefix)) {
+      await Notifications.cancelScheduledNotificationAsync(n.identifier);
+    }
+  }
+}
+
 async function scheduleAffirmationNotifs(pref: NotifPref) {
   if (Platform.OS === 'web') return; // Local scheduled notifs aren't supported in the browser
   if (IS_EXPO_GO) return; // No real scheduling in Expo Go on SDK 53+
   try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    await cancelScheduledByPrefix(AFFIRM_NOTIF_PREFIX);
     if (pref === 'off') return;
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== 'granted') return;
     const times = pref === 'daily'
       ? [{ hour: 9, minute: 0 }]
       : [{ hour: 9, minute: 0 }, { hour: 13, minute: 0 }, { hour: 18, minute: 0 }];
-    for (const t of times) {
-      const aff = randomAffirmation();
-      await Notifications.scheduleNotificationAsync({
-        content: { title: 'Simply Ambient', body: aff },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DAILY,
-          hour: t.hour,
-          minute: t.minute,
-        },
-      });
+    // A repeating DAILY trigger bakes a single message in forever, so instead
+    // schedule a rolling two-week batch of dated one-shots, each with its own
+    // affirmation. The batch is rebuilt on every launch and pref change.
+    const now = new Date();
+    for (let day = 0; day < 14; day++) {
+      for (const t of times) {
+        const fireAt = new Date(
+          now.getFullYear(), now.getMonth(), now.getDate() + day,
+          t.hour, t.minute, 0,
+        );
+        if (fireAt.getTime() <= now.getTime()) continue;
+        await Notifications.scheduleNotificationAsync({
+          identifier: `${AFFIRM_NOTIF_PREFIX}${day}-${t.hour}`,
+          content: { title: 'Simply Ambient', body: randomAffirmation() },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: fireAt,
+          },
+        });
+      }
     }
   } catch (e) {
     console.warn('notification scheduling failed', e);
+  }
+}
+
+// Evening gratitude nudge. Called by MoreView's Gratitude page when the user
+// picks an hour ('21' | '22' | '23') or turns it off.
+export async function scheduleGratitudeReminder(pref: 'off' | '21' | '22' | '23') {
+  if (Platform.OS === 'web') return;
+  if (IS_EXPO_GO) return;
+  try {
+    await cancelScheduledByPrefix(GRAT_NOTIF_PREFIX);
+    if (pref === 'off') return;
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') return;
+    await Notifications.scheduleNotificationAsync({
+      identifier: `${GRAT_NOTIF_PREFIX}${pref}`,
+      content: {
+        title: 'Simply Ambient',
+        body: 'A quiet moment before the day ends. What is one thing you appreciated today?',
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DAILY,
+        hour: parseInt(pref, 10),
+        minute: 0,
+      },
+    });
+  } catch (e) {
+    console.warn('gratitude reminder scheduling failed', e);
   }
 }
 
@@ -612,13 +702,33 @@ function buildStereoWav(
   writeAscii(view, 36, 'data');
   view.setUint32(40, dataSize, true);
 
+  // Stateful generators (filtered noise, random walks) end the buffer at an
+  // arbitrary value while the loop restarts at another, which clicks at the
+  // seam. Synthesize a little past the end and equal-power crossfade that
+  // tail into the head so the loop point is continuous.
+  const fadeSamples = Math.floor(sampleRate * 0.05);
+  const total = numSamples + fadeSamples;
+  const rawL = new Float32Array(total);
+  const rawR = new Float32Array(total);
+  for (let i = 0; i < total; i++) {
+    const [left, right] = sampleFn(i / sampleRate, i);
+    rawL[i] = Math.max(-1, Math.min(1, left));
+    rawR[i] = Math.max(-1, Math.min(1, right));
+  }
+
   let off = 44;
   for (let i = 0; i < numSamples; i++) {
-    const [left, right] = sampleFn(i / sampleRate, i);
-    const l = Math.max(-1, Math.min(1, left));
-    const r = Math.max(-1, Math.min(1, right));
-    view.setInt16(off, Math.round(l * 32767), true); off += 2;
-    view.setInt16(off, Math.round(r * 32767), true); off += 2;
+    let l = rawL[i];
+    let r = rawR[i];
+    if (i < fadeSamples) {
+      const a = ((i + 1) / (fadeSamples + 1)) * (Math.PI / 2);
+      const inW = Math.sin(a);
+      const outW = Math.cos(a);
+      l = rawL[i] * inW + rawL[numSamples + i] * outW;
+      r = rawR[i] * inW + rawR[numSamples + i] * outW;
+    }
+    view.setInt16(off, Math.round(Math.max(-1, Math.min(1, l)) * 32767), true); off += 2;
+    view.setInt16(off, Math.round(Math.max(-1, Math.min(1, r)) * 32767), true); off += 2;
   }
   return bytesToBase64(new Uint8Array(buffer));
 }
@@ -724,7 +834,11 @@ class WebToneEngine {
 
     if (this.left && this.right) {
       // Already running: glide to the new frequencies instead of restarting.
+      // Anchor with setValueAtTime first; a ramp with no prior scheduled
+      // event jumps instantly instead of gliding.
       const t = ctx.currentTime;
+      this.left.frequency.setValueAtTime(this.left.frequency.value, t);
+      this.right.frequency.setValueAtTime(this.right.frequency.value, t);
       this.left.frequency.linearRampToValueAtTime(l, t + 0.03);
       this.right.frequency.linearRampToValueAtTime(r, t + 0.03);
       return;
@@ -754,8 +868,9 @@ class WebToneEngine {
     this.left = left;
     this.right = right;
 
-    // Short fade-in to avoid a click on start.
+    // Short fade-in to avoid a click on start (anchored so the ramp is real).
     const t = ctx.currentTime;
+    master.gain.setValueAtTime(0, t);
     master.gain.linearRampToValueAtTime(WEB_TONE_GAIN, t + 0.04);
   }
 
@@ -1277,10 +1392,14 @@ function AppContent() {
     }
   }
 
-  // Load notification preference + initial affirmation on mount.
+  // Load notification preference + initial affirmation on mount. Re-running
+  // the scheduler tops the rolling one-shot batch back up to two weeks.
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY_NOTIF).then(v => {
-      if (v === 'daily' || v === 'thrice') setNotifPref(v);
+      if (v === 'daily' || v === 'thrice') {
+        setNotifPref(v);
+        scheduleAffirmationNotifs(v);
+      }
     }).catch(() => {});
     refreshAffirmation();
   }, []);
@@ -1314,6 +1433,31 @@ function AppContent() {
   // Cancel sleep timer when component unmounts.
   useEffect(() => () => {
     if (sleepTimeoutRef.current) clearTimeout(sleepTimeoutRef.current);
+  }, []);
+
+  // The sleep timeout above is a JS timer, and Android Doze can defer those
+  // for hours once the screen is off. sleepEndsAt is the source of truth:
+  // whenever the app returns to the foreground, reconcile against the wall
+  // clock and stop playback if the deadline passed while we were dozing.
+  const sleepEndsAtRef = useRef<number | null>(null);
+  useEffect(() => { sleepEndsAtRef.current = sleepEndsAt; }, [sleepEndsAt]);
+  const fadeOutSessionRef = useRef<() => void>(() => {});
+  useEffect(() => { fadeOutSessionRef.current = fadeOutSession; });
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', s => {
+      if (s !== 'active') return;
+      const endsAt = sleepEndsAtRef.current;
+      if (endsAt && Date.now() >= endsAt) {
+        if (sleepTimeoutRef.current) {
+          clearTimeout(sleepTimeoutRef.current);
+          sleepTimeoutRef.current = null;
+        }
+        setSleepMinutes(0);
+        setSleepEndsAt(null);
+        fadeOutSessionRef.current();
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   const tonePlayerRef = useRef<AudioPlayer | null>(null);
@@ -1365,7 +1509,8 @@ function AppContent() {
           // Corrupted preset blob. Drop it silently.
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { presetsHydratedRef.current = true; });
     return () => {
       try { webToneRef.current?.stop(); } catch {}
       try { tonePlayerRef.current?.release(); } catch {}
@@ -1378,7 +1523,13 @@ function AppContent() {
     };
   }, []);
 
+  // Persist presets, but only after hydration has finished. This effect also
+  // fires on the initial [] state, and writing that before the load resolves
+  // would wipe saved presets if the app is killed in the window (or if the
+  // load fails).
+  const presetsHydratedRef = useRef(false);
   useEffect(() => {
+    if (!presetsHydratedRef.current) return;
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(userPresets)).catch(() => {});
   }, [userPresets]);
 
@@ -1394,7 +1545,8 @@ function AppContent() {
         if (!webToneRef.current) webToneRef.current = new WebToneEngine();
         await webToneRef.current.play(clampHz(l), clampHz(r));
         if (myGen !== tonePlayGenRef.current) {
-          try { webToneRef.current.stop(); } catch {}
+          // A newer call owns the shared engine now. Do not stop it here;
+          // that would silence the tones the winning call just started.
           return;
         }
         setIsTonePlaying(true);
@@ -1522,8 +1674,8 @@ function AppContent() {
   function togglePlay() {
     if (isTonePlaying || isToneLoading) { stopTones(); return; }
     // Show the audio-safety modal once per app session before the first
-    // Play. Confirmation actually starts playback. State resets on cold
-    // start (useState in App), so users get the reminder each new session.
+    // Play. Confirmation starts playback. State resets on cold start
+    // (useState in App), so users get the reminder each new session.
     if (!audioSafetyAck) {
       setShowAudioSafetyModal(true);
       return;
@@ -1682,19 +1834,13 @@ function AppContent() {
   }, [activeBand, activePresetId, activeTuning, band.name]);
 
   function deleteUser(p: UserPreset) {
-    Alert.alert('Delete preset?', `"${p.name}" will be removed.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive',
-        onPress: () => {
-          setUserPresets(curr => curr.filter(x => x.id !== p.id));
-          if (activePresetId === p.id) {
-            setActivePresetId(null);
-            setActiveBand('none');
-          }
-        },
-      },
-    ]);
+    confirmAction('Delete preset?', `"${p.name}" will be removed.`, 'Delete', () => {
+      setUserPresets(curr => curr.filter(x => x.id !== p.id));
+      if (activePresetId === p.id) {
+        setActivePresetId(null);
+        setActiveBand('none');
+      }
+    });
   }
 
   function openSaveModal() {
@@ -1732,7 +1878,7 @@ function AppContent() {
       setBgUri(file.uri);
       setBgFileName(file.name);
     } catch (e) {
-      Alert.alert('Could not pick file', String(e));
+      notify('Could not pick file', String(e));
     }
   }
 
@@ -2279,6 +2425,9 @@ function MiniPlayer({
 
   useEffect(() => {
     if (!visible || !sleepEndsAt) return;
+    // Refresh immediately: `now` may be minutes old if the bar has been
+    // mounted a while, which would inflate the countdown until the first tick.
+    setNow(Date.now());
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [visible, sleepEndsAt]);
