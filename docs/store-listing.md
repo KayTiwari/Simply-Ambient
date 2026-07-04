@@ -8,7 +8,7 @@ Copy/paste-ready text for App Store Connect (iOS) and Google Play Console (Andro
 
 ## Subtitle / short description (≤ 80 chars)
 
-> Your spiritual center. Binaural beats, breathwork, chakras, horoscopes.
+> Design your own binaural frequency. Breathwork, chakras, horoscopes.
 
 ## Tagline (alt, ≤ 30 chars)
 
