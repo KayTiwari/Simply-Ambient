@@ -455,9 +455,9 @@ type Soundscape = {
 const SOUNDSCAPES: Soundscape[] = [
   { id: 'rain',   name: 'Soft Rain',      blurb: 'A long, gentle rain bed without the umbrella-plastic loop.', color: '#5BD0FF',   Icon: CloudRain },
   { id: 'ocean',  name: 'Ocean Tide',     blurb: 'Long swells for downshifting into sleep or recovery.',      color: '#5B6CFF',   Icon: Waves },
-  { id: 'forest', name: 'Forest Air',     blurb: 'A real birdsong canopy for light, living background texture.', color: '#9affc8', Icon: TreeEvergreen },
+  { id: 'forest', name: 'Forest Air',     blurb: 'Birdsong canopy for light, living background texture.', color: '#9affc8', Icon: TreeEvergreen },
   { id: 'stream', name: 'Trickling Stream', blurb: 'Small moving water with birds tucked into the distance.',  color: '#71E8D4',   Icon: Drop },
-  { id: 'fire',   name: 'Hearth',         blurb: 'A real campfire bed with natural ember crackle.',            color: '#FFB05B',   Icon: Campfire },
+  { id: 'fire',   name: 'Hearth',         blurb: 'A campfire bed with natural ember crackle.',            color: '#FFB05B',   Icon: Campfire },
   { id: 'white',  name: 'White Noise',    blurb: 'Even masking for busy rooms and brittle silence.',          color: '#ffffffcc', Icon: WaveSquare },
   { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer masking with less edge than white noise.',           color: '#FFD0E1',   Icon: WaveSine },
   { id: 'brown',  name: 'Brown Noise',    blurb: 'Low, dense, and grounding for a heavy nervous system.',     color: '#8A6B4A',   Icon: WaveTriangle },
@@ -731,7 +731,7 @@ async function cancelScheduledByPrefix(prefix: string) {
 
 async function scheduleAffirmationNotifs(pref: NotifPref) {
   if (Platform.OS === 'web') return; // Local scheduled notifs aren't supported in the browser
-  if (IS_EXPO_GO) return; // No real scheduling in Expo Go on SDK 53+
+  if (IS_EXPO_GO) return; // No scheduling in Expo Go on SDK 53+
   try {
     await cancelScheduledByPrefix(AFFIRM_NOTIF_PREFIX);
     if (pref === 'off') return;
@@ -826,7 +826,7 @@ function lunarPhase(date: Date = new Date()): LunarInfo {
   return { glyph, name, illum, phase: age };
 }
 
-// A real rendered moon: the lit region is the classic two-arc construction,
+// A rendered moon: the lit region is the classic two-arc construction,
 // an outer limb arc plus an elliptical terminator whose width follows the
 // phase angle. Reads as an instrument, and is honest about the sky tonight.
 export function MoonDisc({ phase, size = 16 }: { phase: number; size?: number }) {
@@ -1108,7 +1108,7 @@ class WebToneEngine {
     this.left = left;
     this.right = right;
 
-    // Short fade-in to avoid a click on start (anchored so the ramp is real).
+    // Short fade-in to avoid a click on start (anchored so the ramp takes effect).
     const t = ctx.currentTime;
     master.gain.setValueAtTime(0, t);
     master.gain.linearRampToValueAtTime(WEB_TONE_GAIN, t + 0.04);

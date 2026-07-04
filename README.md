@@ -34,7 +34,7 @@ Plus a small **lunar-phase chip** in the top-right corner of every screen.
 ### 🎧 Frequencies tab
 
 - **Independent left / right ear sliders** (50–500 Hz, a deliberate hearing-safety cap). Tap any displayed Hz to type it via numpad. **±1 buttons** for fine adjustment.
-- **Live audio updates as you slide** — the beat changes in real time, no overlapping playback.
+- **Live audio updates as you slide** — the beat changes as you drag, no overlapping playback.
 - **Brainwave-band presets** with manifestation-aligned blurbs:
   - **Delta** (0.5–4 Hz) — *Surrender · Restoration*
   - **Theta** (4–8 Hz) — *Visualize · Receive*
@@ -43,7 +43,7 @@ Plus a small **lunar-phase chip** in the top-right corner of every screen.
   - **Beta** (13–30 Hz) — *Direct · Take action*
   - **Gamma** (30–100 Hz) — *Insight · Knowing*
   - **Gamma-40** (40 Hz @ 250 Hz carrier) — *Memory · Clarity*
-- **Tuning frequencies** — wrapped in a default 6 Hz theta beat so you get both the carrier's resonance and a real binaural beat:
+- **Tuning frequencies** — wrapped in a default 6 Hz theta beat so you get both the carrier's resonance and an audible binaural beat:
   - **111 Hz** — Hypogeum cymatic tone (archaeo-acoustic)
   - **136 Hz** — OM / Cosmic Earth-orbit tone
   - **174 Hz** — Pain · Grounding (Solfeggio)

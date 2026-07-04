@@ -59,7 +59,7 @@ function horoscopeUrl(period: string, signName: string): string {
 // abbreviated weekday), and an optional trailing year. Anchored to the
 // start of the text on purpose: "On the other hand, ..." and mid-text
 // dates are left alone. The month name is required, so bare "On Wednesday,"
-// (a real forecast opener, no date drift) also survives.
+// (a genuine forecast opener, no date drift) also survives.
 function stripLeadingDate(text: string): string {
   if (!text) return text;
   const cleaned = text.replace(

@@ -206,7 +206,7 @@ const TECHNIQUES: Technique[] = [
   {
     id: 'sigh', name: 'Physiological Sigh', category: 'calming',
     blurb: '2 short in · long out',
-    description: 'Two short inhales through the nose, then one long exhale through the mouth. The fastest known way to down-regulate stress in real time.',
+    description: 'Two short inhales through the nose, then one long exhale through the mouth. The fastest known way to down-regulate stress in the moment.',
     phases: [
       { name: 'Inhale', seconds: 1, target: 0.6 },
       { name: 'Inhale', seconds: 1, target: 1.0 },
@@ -325,7 +325,7 @@ export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandCo
   );
 }
 
-// Celebratory buzz when a full mala (108) is completed. Android gets a real
+// Celebratory buzz when a full mala (108) is completed. Android gets its own
 // vibration rhythm (buzz · buzz · long buzz); iOS/others get a timed haptic
 // sequence ending on a success "ding" (pattern timings are unreliable on iOS).
 // Returns the scheduled timeout ids so the caller can cancel them on unmount.
