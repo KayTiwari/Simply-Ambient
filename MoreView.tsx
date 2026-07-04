@@ -20,7 +20,6 @@ import Slider from '@react-native-community/slider';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import {
   CaretLeft,
-  CaretRight,
   ArrowsClockwise,
   X,
   Plus,
@@ -516,39 +515,25 @@ function Hub({
           <Text style={styles.subtitle}>Tools for the practice</Text>
           <View style={styles.dividerLine} />
         </View>
-        {streak > 0 ? (
-          <View style={styles.streakBadge}>
-            <Text style={styles.streakGlyph}>❀</Text>
-            <Text style={styles.streakText}>
-              {streak}-day gratitude streak
-            </Text>
-          </View>
-        ) : null}
       </View>
 
-      {weekly && (weekly.moodCount > 0 || weekly.gratCount > 0) ? (
-        <View style={styles.weeklyCard}>
-          <Text style={styles.weeklyLabel}>THIS WEEK</Text>
-          <View style={styles.weeklyRow}>
-            {weekly.moodAvg !== null ? (
-              <View style={styles.weeklyStat}>
-                <Text style={[styles.weeklyValue, { color: '#5BD0FF' }]}>
-                  {weekly.moodAvg.toFixed(1)}
-                  <Text style={styles.weeklyTrend}>
-                    {weekly.moodTrend === 'up' ? '  ↑' : weekly.moodTrend === 'down' ? '  ↓' : '  ·'}
-                  </Text>
-                </Text>
-                <Text style={styles.weeklyStatLabel}>avg mood</Text>
-              </View>
-            ) : null}
-            <View style={styles.weeklyStat}>
-              <Text style={[styles.weeklyValue, { color: '#5BD0FF' }]}>{weekly.moodCount}</Text>
-              <Text style={styles.weeklyStatLabel}>check-ins</Text>
-            </View>
-            <View style={styles.weeklyStat}>
-              <Text style={[styles.weeklyValue, { color: '#FFB05B' }]}>{weekly.gratCount}</Text>
-              <Text style={styles.weeklyStatLabel}>gratitudes</Text>
-            </View>
+      {/* Compact pulse row: streak plus the week's numbers at a glance. */}
+      {streak > 0 || weekly.moodCount > 0 || weekly.gratCount > 0 ? (
+        <View style={styles.pulseRow}>
+          <View style={styles.pulseChip}>
+            <Text style={[styles.pulseNum, { color: '#9affc8' }]}>{streak}</Text>
+            <Text style={styles.pulseCap}>DAY STREAK</Text>
+          </View>
+          <View style={styles.pulseChip}>
+            <Text style={[styles.pulseNum, { color: '#5BD0FF' }]}>
+              {weekly.moodAvg !== null ? weekly.moodAvg.toFixed(1) : '–'}
+              {weekly.moodTrend === 'up' ? ' ↑' : weekly.moodTrend === 'down' ? ' ↓' : ''}
+            </Text>
+            <Text style={styles.pulseCap}>AVG MOOD · 7D</Text>
+          </View>
+          <View style={styles.pulseChip}>
+            <Text style={[styles.pulseNum, { color: '#FFB05B' }]}>{weekly.gratCount}</Text>
+            <Text style={styles.pulseCap}>GRATITUDES · 7D</Text>
           </View>
         </View>
       ) : null}
@@ -558,178 +543,176 @@ function Hub({
         showsVerticalScrollIndicator={false}
       >
         {/* Grouped by how often each tool is reached for: daily journaling
-            first, one-time setup and app meta last. */}
+            first, one-time setup and app meta last. Tiles carry one accent
+            per section instead of a color per item. */}
         <Text style={styles.hubSection}>JOURNAL</Text>
-        <HubItem
-          Icon={Smiley}
-          color="#5BD0FF"
-          label="Mood Check-in"
-          preview={
-            moodToday
-              ? `Today: ${moodLabel(moodToday.value)} · keep the streak`
-              : 'See patterns in what lifts and drains you'
-          }
-          extra={moodToday ? String(moodToday.value) : null}
-          extraColor={moodToday ? moodColor(moodToday.value) : undefined}
-          onPress={() => onOpen('mood')}
-        />
-        <HubItem
-          glyph="❀"
-          color="#FFB05B"
-          label="Gratitude"
-          preview={
-            gratitude.length === 0
-              ? 'Rewire attention toward what works'
-              : `${gratitude.length} ${gratitude.length === 1 ? 'entry' : 'entries'} · positive psychology`
-          }
-          onPress={() => onOpen('gratitude')}
-        />
-        <HubItem
-          Icon={CloudLightning}
-          color="#FF5B9C"
-          label="Rant"
-          preview="Vent it out. Raw, private, unfiltered"
-          onPress={() => onOpen('rant')}
-        />
-        <HubItem
-          glyph="✷"
-          color="#A45BFF"
-          label="Manifestation"
-          preview="Name what you're calling in"
-          onPress={() => onOpen('manifestation')}
-        />
-        <HubItem
-          glyph="⌬"
-          color="#5BD0FF"
-          label="AI Insights"
-          preview="Reflections on your journal & tarot"
-          onPress={() => onOpen('insights')}
-        />
+        <View style={styles.tileGrid}>
+          <HubTile
+            Icon={Smiley}
+            accent="#5BD0FF"
+            label="Mood Check-in"
+            sub={
+              moodToday
+                ? `Today: ${moodLabel(moodToday.value)} · keep the streak`
+                : 'See patterns in what lifts and drains you'
+            }
+            badge={moodToday ? String(moodToday.value) : null}
+            onPress={() => onOpen('mood')}
+          />
+          <HubTile
+            glyph="❀"
+            accent="#5BD0FF"
+            label="Gratitude"
+            sub={
+              gratitude.length === 0
+                ? 'Rewire attention toward what works'
+                : `${gratitude.length} ${gratitude.length === 1 ? 'entry' : 'entries'} · positive psychology`
+            }
+            onPress={() => onOpen('gratitude')}
+          />
+          <HubTile
+            Icon={CloudLightning}
+            accent="#5BD0FF"
+            label="Rant"
+            sub="Vent it out. Raw, private, unfiltered"
+            onPress={() => onOpen('rant')}
+          />
+          <HubTile
+            glyph="✷"
+            accent="#5BD0FF"
+            label="Manifestation"
+            sub="Name what you're calling in"
+            onPress={() => onOpen('manifestation')}
+          />
+          <HubTile
+            glyph="⌬"
+            accent="#5BD0FF"
+            label="AI Insights"
+            sub="Reflections on your journal & tarot"
+            onPress={() => onOpen('insights')}
+          />
+        </View>
 
         <Text style={styles.hubSection}>PRACTICE</Text>
-        <HubItem
-          glyph="☉"
-          color="#9affc8"
-          label="Daily Affirmation"
-          preview={affirmationPreview ? `“${affirmationPreview}”` : 'Anchor a single thought for the day'}
-          extra={notifPref === 'off' ? null : notifPref === 'daily' ? '1×/day' : '3×/day'}
-          onPress={() => onOpen('affirmations')}
-        />
-        <HubItem
-          glyph="⟁"
-          color="#9affc8"
-          label="Routines"
-          preview="Chain presets into sessions"
-          onPress={() => onOpen('routines')}
-        />
-        <HubItem
-          Icon={Waveform}
-          color="#5BD0FF"
-          label="Soundscapes"
-          preview="Rain · ocean · forest · white noise"
-          onPress={() => onOpen('soundscapes')}
-        />
-        <HubItem
-          glyph="⌖"
-          color="#5B6CFF"
-          label="5-4-3-2-1 Grounding"
-          preview="Anxiety reset through the five senses"
-          onPress={() => onOpen('grounding')}
-        />
+        <View style={styles.tileGrid}>
+          <HubTile
+            glyph="☉"
+            accent="#9affc8"
+            label="Daily Affirmation"
+            sub={affirmationPreview ? `“${affirmationPreview}”` : 'Anchor a single thought for the day'}
+            badge={notifPref === 'off' ? null : notifPref === 'daily' ? '1×/day' : '3×/day'}
+            onPress={() => onOpen('affirmations')}
+          />
+          <HubTile
+            glyph="⟁"
+            accent="#9affc8"
+            label="Routines"
+            sub="Chain presets into sessions"
+            onPress={() => onOpen('routines')}
+          />
+          <HubTile
+            Icon={Waveform}
+            accent="#9affc8"
+            label="Soundscapes"
+            sub="Rain · ocean · forest · white noise"
+            onPress={() => onOpen('soundscapes')}
+          />
+          <HubTile
+            glyph="⌖"
+            accent="#9affc8"
+            label="Grounding"
+            sub="5-4-3-2-1 anxiety reset through the senses"
+            onPress={() => onOpen('grounding')}
+          />
+        </View>
 
         <Text style={styles.hubSection}>COSMOS</Text>
-        <HubItem
-          glyph="◯"
-          color="#A45BFF"
-          label="Profile"
-          preview="Birth details · MBTI · personality"
-          onPress={() => onOpen('profile')}
-        />
-        <HubItem
-          glyph="☌"
-          color="#5B6CFF"
-          label="Natal Chart"
-          preview="Western planetary positions"
-          onPress={() => onOpen('natal')}
-        />
-        <HubItem
-          glyph="⚭"
-          color="#FF8FB1"
-          label="Compatibility"
-          preview="Match your sign with another"
-          onPress={() => onOpen('compatibility')}
-        />
+        <View style={styles.tileGrid}>
+          <HubTile
+            glyph="◯"
+            accent="#A45BFF"
+            label="Profile"
+            sub="Birth details · MBTI · personality"
+            onPress={() => onOpen('profile')}
+          />
+          <HubTile
+            glyph="☌"
+            accent="#A45BFF"
+            label="Natal Chart"
+            sub="Western planetary positions"
+            onPress={() => onOpen('natal')}
+          />
+          <HubTile
+            glyph="⚭"
+            accent="#A45BFF"
+            label="Compatibility"
+            sub="Match your sign with another"
+            onPress={() => onOpen('compatibility')}
+          />
+        </View>
 
         <Text style={styles.hubSection}>APP</Text>
-        <HubItem
-          Icon={Coffee}
-          color="#d9b35c"
-          label="Support the Developer"
-          preview="If the app brings you peace"
-          onPress={() => onOpen('support')}
-        />
-        <HubItem
-          Icon={ShieldCheck}
-          color="#9aa0b4"
-          label="Safety & Disclaimer"
-          preview="Hearing safety, medical notice, terms"
-          onPress={() => onOpen('safety')}
-        />
-        <HubItem
-          Icon={Bug}
-          color="#FF5B9C"
-          label="Report a Bug"
-          preview="Something off? Let me know"
-          onPress={() => onOpen('bug')}
-        />
+        <View style={styles.tileGrid}>
+          <HubTile
+            Icon={Coffee}
+            accent="#d9b35c"
+            label="Support"
+            sub="If the app brings you peace"
+            onPress={() => onOpen('support')}
+          />
+          <HubTile
+            Icon={ShieldCheck}
+            accent="#d9b35c"
+            label="Safety"
+            sub="Hearing safety, medical notice, terms"
+            onPress={() => onOpen('safety')}
+          />
+          <HubTile
+            Icon={Bug}
+            accent="#d9b35c"
+            label="Report a Bug"
+            sub="Something off? Let me know"
+            onPress={() => onOpen('bug')}
+          />
+        </View>
       </ScrollView>
     </View>
   );
 }
 
-function HubItem({
-  glyph, Icon, color, label, preview, extra, extraColor, onPress, onExtraPress,
+function HubTile({
+  glyph, Icon, accent, label, sub, badge, onPress,
 }: {
   // Either a unicode glyph (kept for spiritual symbols: ensō, flower, sparkle)
-  // or a Phosphor icon component (used for utility items: Routines, Bug, etc.)
+  // or a Phosphor icon component (used for utility items: Soundscapes, Bug, etc.)
   glyph?: string;
   Icon?: React.ComponentType<IconProps>;
-  color: string;
+  accent: string;
   label: string;
-  preview: string;
-  extra?: string | null;
-  extraColor?: string;
+  sub: string;
+  badge?: string | null;
   onPress: () => void;
-  onExtraPress?: () => void;
 }) {
   return (
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={onPress}
-      style={[styles.hubItem, { borderColor: color + '55' }]}
+      style={styles.tile}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}. ${sub}`}
     >
-      <View style={[styles.hubGlyphCircle, { backgroundColor: color + '22', borderColor: color }]}>
+      {badge ? (
+        <Text style={[styles.tileBadge, { color: accent }]}>{badge}</Text>
+      ) : null}
+      <View style={styles.tileGlyphWrap}>
         {Icon ? (
-          <Icon size={18} weight="duotone" color={color} />
+          <Icon size={22} weight="duotone" color={accent} />
         ) : (
-          <Text style={[styles.hubGlyph, { color }]}>{glyph}</Text>
+          <Text style={[styles.tileGlyph, { color: accent }]}>{glyph}</Text>
         )}
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.hubLabel}>{label}</Text>
-        <Text style={styles.hubPreview} numberOfLines={1}>{preview}</Text>
-      </View>
-      {extra ? (
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={onExtraPress}
-          disabled={!onExtraPress}
-          style={onExtraPress ? styles.hubExtraBtn : undefined}
-        >
-          <Text style={[styles.hubExtra, { color: extraColor ?? '#ffffff99' }]}>{extra}</Text>
-        </TouchableOpacity>
-      ) : null}
-      <CaretRight size={20} color="#ffffff66" weight="thin" />
+      <Text style={styles.tileLabel} numberOfLines={1}>{label}</Text>
+      <Text style={styles.tileSub} numberOfLines={2}>{sub}</Text>
     </TouchableOpacity>
   );
 }
@@ -2736,34 +2719,42 @@ const styles = StyleSheet.create({
     color: '#ffffff77', fontSize: 10, letterSpacing: 3, fontWeight: '700',
     marginTop: 18, marginBottom: 8, marginLeft: 4,
   },
-  hubItem: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 14, paddingVertical: 9, paddingHorizontal: 12, marginBottom: 8,
-    borderWidth: 1,
+  tileGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between',
   },
-  hubGlyphCircle: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-    marginRight: 12, borderWidth: 1,
+  tile: {
+    width: '48.6%',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 18,
+    paddingVertical: 14, paddingHorizontal: 10,
+    marginBottom: 10,
+    alignItems: 'center',
   },
-  hubGlyph: { fontSize: 17, fontWeight: '700' },
-  hubLabel: { color: '#fff', fontSize: 15, fontWeight: '600', letterSpacing: 0.3 },
-  hubPreview: { color: '#ffffff88', fontSize: 12, marginTop: 2, lineHeight: 16 },
-  hubExtraBtn: { paddingHorizontal: 4, paddingVertical: 4, marginRight: 4 },
-  hubExtra: { fontSize: 12, fontWeight: '700', letterSpacing: 1, marginRight: 10 },
-  hubChevron: { color: '#ffffff66', fontSize: 22 },
+  tileGlyphWrap: { height: 28, justifyContent: 'center' },
+  tileGlyph: { fontSize: 21, fontWeight: '600' },
+  tileLabel: { color: '#fff', fontSize: 13, fontWeight: '600', marginTop: 6, letterSpacing: 0.2 },
+  tileSub: {
+    color: '#ffffff70', fontSize: 10, lineHeight: 14,
+    textAlign: 'center', marginTop: 3, minHeight: 28,
+  },
+  tileBadge: {
+    position: 'absolute', top: 8, right: 10,
+    fontSize: 9, fontWeight: '800', letterSpacing: 0.8,
+  },
+  pulseRow: {
+    flexDirection: 'row', gap: 8,
+    paddingHorizontal: 20, marginBottom: 6,
+  },
+  pulseChip: {
+    flex: 1, alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 14, paddingVertical: 8,
+  },
+  pulseNum: { fontSize: 16, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  pulseCap: { color: '#9aa0b4', fontSize: 8, letterSpacing: 1.4, fontWeight: '700', marginTop: 2 },
 
-  streakBadge: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 176, 91, 0.15)',
-    borderWidth: 1, borderColor: '#FFB05B55',
-    marginTop: 14,
-  },
-  streakGlyph: { color: '#FFB05B', fontSize: 14, marginRight: 6 },
-  streakText: { color: '#FFB05B', fontSize: 12, fontWeight: '700', letterSpacing: 1 },
 
   // Sub-page
   subHeader: {
@@ -3069,18 +3060,6 @@ const styles = StyleSheet.create({
   cardSub: { color: '#ffffff88', fontSize: 12, marginTop: 4, lineHeight: 17 },
 
   // Weekly insights card
-  weeklyCard: {
-    marginHorizontal: 20, marginBottom: 14,
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 16, padding: 14,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
-  },
-  weeklyLabel: { color: '#ffffff80', fontSize: 10, letterSpacing: 2, fontWeight: '600', marginBottom: 8 },
-  weeklyRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  weeklyStat: { alignItems: 'center', flex: 1 },
-  weeklyValue: { fontSize: 22, fontWeight: '700' },
-  weeklyTrend: { fontSize: 14, fontWeight: '500' },
-  weeklyStatLabel: { color: '#ffffff88', fontSize: 11, letterSpacing: 0.5, marginTop: 2 },
 
   // Bug
   bugInput: {
