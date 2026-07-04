@@ -509,13 +509,13 @@ export type Chakra = {
 };
 
 export const CHAKRAS: Chakra[] = [
-  { id: 'cr-root',     band: 'root',     number: 1, name: 'Root',         sanskrit: 'Muladhara',    sanskritMeaning: 'Root Support', bija: 'LAM', bijaPronunciation: 'lām', symbol: 'लं', hz: 396, element: 'Earth',         location: 'Base of spine',     color: '#FF3838', affirmation: 'I am',         planets: 'Earth · Saturn',     gland: 'Adrenals',           governs: 'Safety · Stability · Survival',         blocked: 'Fear · Anxiety · Ungroundedness' },
-  { id: 'cr-sacral',   band: 'sacral',   number: 2, name: 'Sacral',       sanskrit: 'Svadhisthana', sanskritMeaning: 'Sweetness',    bija: 'VAM', bijaPronunciation: 'vām', symbol: 'वं', hz: 417, element: 'Water',         location: 'Lower abdomen',     color: '#FF8A38', affirmation: 'I feel',       planets: 'Moon',               gland: 'Gonads',             governs: 'Creativity · Sensuality · Pleasure',     blocked: 'Emotional repression · Stagnant flow' },
-  { id: 'cr-solar',    band: 'solar',    number: 3, name: 'Solar Plexus', sanskrit: 'Manipura',     sanskritMeaning: 'Lustrous Gem', bija: 'RAM', bijaPronunciation: 'rām', symbol: 'रं', hz: 528, element: 'Fire',          location: 'Upper abdomen',     color: '#FFD000', affirmation: 'I do',         planets: 'Mars · Sun',         gland: 'Pancreas · Adrenals', governs: 'Will · Confidence · Personal power',     blocked: 'Low self-esteem · Control patterns' },
-  { id: 'cr-heart',    band: 'heart',    number: 4, name: 'Heart',        sanskrit: 'Anahata',      sanskritMeaning: 'Unstruck',     bija: 'YAM', bijaPronunciation: 'yām', symbol: 'यं', hz: 639, element: 'Air',           location: 'Center of chest',   color: '#3FE07F', affirmation: 'I love',       planets: 'Venus',              gland: 'Thymus',             governs: 'Love · Compassion · Connection',         blocked: 'Grief · Resentment · Isolation' },
-  { id: 'cr-throat',   band: 'throat',   number: 5, name: 'Throat',       sanskrit: 'Vishuddha',    sanskritMeaning: 'Purification', bija: 'HAM', bijaPronunciation: 'hām', symbol: 'हं', hz: 741, element: 'Ether',         location: 'Throat',            color: '#3FB6FF', affirmation: 'I speak',      planets: 'Mercury',            gland: 'Thyroid',            governs: 'Truth · Expression · Voice',             blocked: 'Suppressed truth · Fear of judgment' },
-  { id: 'cr-thirdEye', band: 'thirdEye', number: 6, name: 'Third Eye',    sanskrit: 'Ajna',         sanskritMeaning: 'Command',      bija: 'OM',  bijaPronunciation: 'oṃ',  symbol: 'ॐ',  hz: 852, element: 'Light',         location: 'Between brows',     color: '#5B6CFF', affirmation: 'I see',        planets: 'Jupiter · Neptune',  gland: 'Pineal',             governs: 'Intuition · Insight · Inner vision',     blocked: 'Disconnect from inner knowing' },
-  { id: 'cr-crown',    band: 'crown',    number: 7, name: 'Crown',        sanskrit: 'Sahasrara',    sanskritMeaning: 'Thousand Fold',bija: 'AUM', bijaPronunciation: 'auṃ', symbol: 'ॐ',  hz: 963, element: 'Consciousness', location: 'Top of head',       color: '#A45BFF', affirmation: 'I understand', planets: 'Uranus',             gland: 'Pituitary',          governs: 'Unity · Spirituality · Divine connection', blocked: 'Spiritual disconnect · Materialism' },
+  { id: 'cr-root',     band: 'root',     number: 1, name: 'Root',         sanskrit: 'Muladhara',    sanskritMeaning: 'Root Support', bija: 'LAM', bijaPronunciation: 'lām', symbol: 'लं', hz: 396, element: 'Earth',         location: 'Base of spine',     color: '#D97B72', affirmation: 'I am',         planets: 'Earth · Saturn',     gland: 'Adrenals',           governs: 'Safety · Stability · Survival',         blocked: 'Fear · Anxiety · Ungroundedness' },
+  { id: 'cr-sacral',   band: 'sacral',   number: 2, name: 'Sacral',       sanskrit: 'Svadhisthana', sanskritMeaning: 'Sweetness',    bija: 'VAM', bijaPronunciation: 'vām', symbol: 'वं', hz: 417, element: 'Water',         location: 'Lower abdomen',     color: '#DE9C6B', affirmation: 'I feel',       planets: 'Moon',               gland: 'Gonads',             governs: 'Creativity · Sensuality · Pleasure',     blocked: 'Emotional repression · Stagnant flow' },
+  { id: 'cr-solar',    band: 'solar',    number: 3, name: 'Solar Plexus', sanskrit: 'Manipura',     sanskritMeaning: 'Lustrous Gem', bija: 'RAM', bijaPronunciation: 'rām', symbol: 'रं', hz: 528, element: 'Fire',          location: 'Upper abdomen',     color: '#D9BE7A', affirmation: 'I do',         planets: 'Mars · Sun',         gland: 'Pancreas · Adrenals', governs: 'Will · Confidence · Personal power',     blocked: 'Low self-esteem · Control patterns' },
+  { id: 'cr-heart',    band: 'heart',    number: 4, name: 'Heart',        sanskrit: 'Anahata',      sanskritMeaning: 'Unstruck',     bija: 'YAM', bijaPronunciation: 'yām', symbol: 'यं', hz: 639, element: 'Air',           location: 'Center of chest',   color: '#8FC7A4', affirmation: 'I love',       planets: 'Venus',              gland: 'Thymus',             governs: 'Love · Compassion · Connection',         blocked: 'Grief · Resentment · Isolation' },
+  { id: 'cr-throat',   band: 'throat',   number: 5, name: 'Throat',       sanskrit: 'Vishuddha',    sanskritMeaning: 'Purification', bija: 'HAM', bijaPronunciation: 'hām', symbol: 'हं', hz: 741, element: 'Ether',         location: 'Throat',            color: '#85B8D9', affirmation: 'I speak',      planets: 'Mercury',            gland: 'Thyroid',            governs: 'Truth · Expression · Voice',             blocked: 'Suppressed truth · Fear of judgment' },
+  { id: 'cr-thirdEye', band: 'thirdEye', number: 6, name: 'Third Eye',    sanskrit: 'Ajna',         sanskritMeaning: 'Command',      bija: 'OM',  bijaPronunciation: 'oṃ',  symbol: 'ॐ',  hz: 852, element: 'Light',         location: 'Between brows',     color: '#8F97DE', affirmation: 'I see',        planets: 'Jupiter · Neptune',  gland: 'Pineal',             governs: 'Intuition · Insight · Inner vision',     blocked: 'Disconnect from inner knowing' },
+  { id: 'cr-crown',    band: 'crown',    number: 7, name: 'Crown',        sanskrit: 'Sahasrara',    sanskritMeaning: 'Thousand Fold',bija: 'AUM', bijaPronunciation: 'auṃ', symbol: 'ॐ',  hz: 963, element: 'Consciousness', location: 'Top of head',       color: '#B39BE0', affirmation: 'I understand', planets: 'Uranus',             gland: 'Pituitary',          governs: 'Unity · Spirituality · Divine connection', blocked: 'Spiritual disconnect · Materialism' },
 ];
 
 export type Dosha = {
@@ -609,7 +609,7 @@ export const DOSHAS: Dosha[] = [
     qualities: 'Light · Cold · Mobile · Dry',
     balanceHz: 432,
     balanceTechnique: 'Nadi Shodhana',
-    color: '#9aa0e0',
+    color: '#A6ABE0',
     description: 'Governs movement, breath, nervous system. Imbalanced: scattered, restless, light sleep. Soothe with grounding warmth and slow, steady breath.',
   },
   {
@@ -620,7 +620,7 @@ export const DOSHAS: Dosha[] = [
     qualities: 'Hot · Sharp · Intense',
     balanceHz: 528,
     balanceTechnique: 'Sitali (Cooling)',
-    color: '#FFB05B',
+    color: '#E0A470',
     description: 'Governs digestion, transformation, intellect. Imbalanced: irritability, inflammation, burnout. Cool with the breath, soften the gaze.',
   },
   {
@@ -631,7 +631,7 @@ export const DOSHAS: Dosha[] = [
     qualities: 'Heavy · Slow · Stable · Cool',
     balanceHz: 741,
     balanceTechnique: 'Bhastrika (Bellows)',
-    color: '#9affc8',
+    color: '#9DC7AC',
     description: 'Governs structure, immunity, lubrication. Imbalanced: lethargy, attachment, stagnation. Energize with heat, motion, and clear expression.',
   },
 ];
@@ -679,17 +679,17 @@ const PALETTES: Record<BandKey, Palette> = {
   gamma:  { base: ['#3a0a1a', '#76124a', '#3a0a1a'], waves: ['#5a0e2a', '#962060', '#FF5B9C'], accent: '#FF5B9C' },
   tuning: { base: ['#2a200a', '#5a4218', '#2a200a'], waves: ['#3a2c14', '#7a5e2a', '#d9b35c'], accent: '#d9b35c' },
   // Chakra palettes. Saturated, rainbow progression
-  root:     { base: ['#1a0a0a', '#3a1a14', '#1a0a0a'], waves: ['#2a1018', '#5a2030', '#FF3838'], accent: '#FF3838' },
-  sacral:   { base: ['#1a1208', '#3a2a14', '#1a1208'], waves: ['#2a1c10', '#5a3a20', '#FF8A38'], accent: '#FF8A38' },
-  solar:    { base: ['#1a1808', '#3a3214', '#1a1808'], waves: ['#2a2410', '#5a4a20', '#FFD000'], accent: '#FFD000' },
-  heart:    { base: ['#0a1a14', '#143a2a', '#0a1a14'], waves: ['#102a20', '#205a3a', '#3FE07F'], accent: '#3FE07F' },
-  throat:   { base: ['#0a1418', '#143040', '#0a1418'], waves: ['#10202a', '#205070', '#3FB6FF'], accent: '#3FB6FF' },
-  thirdEye: { base: ['#0a0a1a', '#141a3a', '#0a0a1a'], waves: ['#101020', '#202a5a', '#5B6CFF'], accent: '#5B6CFF' },
-  crown:    { base: ['#10081a', '#1a103a', '#10081a'], waves: ['#181020', '#3a205a', '#A45BFF'], accent: '#A45BFF' },
+  root:     { base: ['#1a0a0a', '#3a1a14', '#1a0a0a'], waves: ['#2a1018', '#5a2030', '#D97B72'], accent: '#D97B72' },
+  sacral:   { base: ['#1a1208', '#3a2a14', '#1a1208'], waves: ['#2a1c10', '#5a3a20', '#DE9C6B'], accent: '#DE9C6B' },
+  solar:    { base: ['#1a1808', '#3a3214', '#1a1808'], waves: ['#2a2410', '#5a4a20', '#D9BE7A'], accent: '#D9BE7A' },
+  heart:    { base: ['#0a1a14', '#143a2a', '#0a1a14'], waves: ['#102a20', '#205a3a', '#8FC7A4'], accent: '#8FC7A4' },
+  throat:   { base: ['#0a1418', '#143040', '#0a1418'], waves: ['#10202a', '#205070', '#85B8D9'], accent: '#85B8D9' },
+  thirdEye: { base: ['#0a0a1a', '#141a3a', '#0a0a1a'], waves: ['#101020', '#202a5a', '#8F97DE'], accent: '#8F97DE' },
+  crown:    { base: ['#10081a', '#1a103a', '#10081a'], waves: ['#181020', '#3a205a', '#B39BE0'], accent: '#B39BE0' },
   // Dosha palettes (Ayurveda)
-  vata:     { base: ['#0c1024', '#181f48', '#0c1024'], waves: ['#15193a', '#2c3478', '#9aa0e0'], accent: '#9aa0e0' },
-  pitta:    { base: ['#1a1208', '#3a2814', '#1a1208'], waves: ['#2a1c10', '#5a3e20', '#FFB05B'], accent: '#FFB05B' },
-  kapha:    { base: ['#08180e', '#143824', '#08180e'], waves: ['#102a18', '#205a3a', '#9affc8'], accent: '#9affc8' },
+  vata:     { base: ['#0c1024', '#181f48', '#0c1024'], waves: ['#15193a', '#2c3478', '#A6ABE0'], accent: '#A6ABE0' },
+  pitta:    { base: ['#1a1208', '#3a2814', '#1a1208'], waves: ['#2a1c10', '#5a3e20', '#E0A470'], accent: '#E0A470' },
+  kapha:    { base: ['#08180e', '#143824', '#08180e'], waves: ['#102a18', '#205a3a', '#9DC7AC'], accent: '#9DC7AC' },
 };
 
 function bandFor(beat: number): { name: string; color: string; key: BandKey } {
