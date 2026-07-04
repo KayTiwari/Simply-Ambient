@@ -21,6 +21,7 @@ import Svg, { Circle, Line, Path } from 'react-native-svg';
 import {
   CaretLeft,
   CaretRight,
+  GearSix,
   ArrowsClockwise,
   X,
   Plus,
@@ -111,6 +112,9 @@ type Props = {
   // Soundscapes page). Set to a sub-page id, consumed via the handler.
   requestedPage?: Exclude<SubPage, null> | null;
   onRequestedPageHandled?: () => void;
+  // "Single app color" setting: null = animated band transitions.
+  singleColor: string | null;
+  onChangeSingleColor: (c: string | null) => void;
 };
 
 type SoundscapeOption = {
@@ -137,6 +141,7 @@ type SubPage =
   | 'grounding'
   | 'support'
   | 'safety'
+  | 'settings'
   | 'bug';
 
 const STORAGE_PROFILE = '@simply_ambient_profile_v1';
@@ -189,6 +194,8 @@ export default function MoreView({
   onChangeSoundscapeVolume,
   requestedPage,
   onRequestedPageHandled,
+  singleColor,
+  onChangeSingleColor,
 }: Props) {
   const [moodLog, setMoodLog] = useState<MoodEntry[]>([]);
   const [gratitude, setGratitude] = useState<GratEntry[]>([]);
@@ -444,6 +451,13 @@ export default function MoreView({
           {page === 'safety' && (
             <SafetyPage onBack={close} onWipe={wipeAllData} />
           )}
+          {page === 'settings' && (
+            <SettingsPage
+              onBack={close}
+              singleColor={singleColor}
+              onChangeSingleColor={onChangeSingleColor}
+            />
+          )}
           {page === 'bug' && (
             <BugReportPage onBack={close} />
           )}
@@ -654,6 +668,13 @@ function Hub({
 
         <Text style={styles.hubSection}>APP</Text>
         <View style={styles.tileGrid}>
+          <HubTile
+            Icon={GearSix}
+            accent="#d9b35c"
+            label="Settings"
+            sub="Background color and behavior"
+            onPress={() => onOpen('settings')}
+          />
           <HubTile
             Icon={Coffee}
             accent="#d9b35c"
@@ -1718,6 +1739,80 @@ export function SafetyContent() {
 
 const PRIVACY_POLICY_URL = 'https://kaytiwari.github.io/Simply-Ambient/privacy-policy.html';
 const TERMS_OF_SERVICE_URL = 'https://kaytiwari.github.io/Simply-Ambient/terms-of-service.html';
+
+// ===========================================================================
+//   Settings sub-page
+// ===========================================================================
+
+const SINGLE_COLOR_CHOICES = [
+  { hex: '#0B0B1F', name: 'Midnight' },
+  { hex: '#101018', name: 'Ink' },
+  { hex: '#151226', name: 'Violet night' },
+  { hex: '#0A1420', name: 'Deep sea' },
+  { hex: '#0E1A14', name: 'Forest night' },
+  { hex: '#000000', name: 'Black' },
+];
+
+function SettingsPage({
+  onBack, singleColor, onChangeSingleColor,
+}: {
+  onBack: () => void;
+  singleColor: string | null;
+  onChangeSingleColor: (c: string | null) => void;
+}) {
+  const on = singleColor != null;
+  return (
+    <View style={{ flex: 1 }}>
+      <SubHeader title="Settings" accent="#d9b35c" onBack={onBack} />
+      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionLabel}>BACKGROUND</Text>
+        <Text style={styles.sectionSub}>
+          The backdrop normally shifts color with the active frequency band.
+          Pin it to a single color if you prefer stillness.
+        </Text>
+        <View style={styles.settingRow}>
+          <Text style={styles.settingLabel}>Single app color</Text>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => onChangeSingleColor(on ? null : SINGLE_COLOR_CHOICES[0].hex)}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: on }}
+            accessibilityLabel="Single app color"
+            style={[styles.settingToggle, on && { borderColor: '#d9b35c', backgroundColor: '#d9b35c22' }]}
+          >
+            <Text style={[styles.settingToggleText, on && { color: '#d9b35c' }]}>
+              {on ? 'On' : 'Off'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {on ? (
+          <View style={styles.swatchRow}>
+            {SINGLE_COLOR_CHOICES.map(c => {
+              const active = singleColor === c.hex;
+              return (
+                <TouchableOpacity
+                  key={c.hex}
+                  activeOpacity={0.85}
+                  onPress={() => onChangeSingleColor(c.hex)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Background color ${c.name}`}
+                  accessibilityState={{ selected: active }}
+                  style={[
+                    styles.swatch,
+                    { backgroundColor: c.hex },
+                    active && { borderColor: '#d9b35c' },
+                  ]}
+                >
+                  {active ? <Text style={styles.swatchCheck}>✓</Text> : null}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
 
 function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Promise<void> }) {
   // Holds the URL to confirm-open, or null. Used by both the Privacy Policy
@@ -2927,6 +3022,27 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
     marginVertical: 4,
   },
+  settingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14,
+  },
+  settingLabel: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  settingToggle: {
+    paddingHorizontal: 16, paddingVertical: 6,
+    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  settingToggleText: { color: '#ffffff99', fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  swatchRow: { flexDirection: 'row', gap: 10, marginTop: 14, flexWrap: 'wrap' },
+  swatch: {
+    width: 44, height: 44, borderRadius: 14,
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  swatchCheck: { color: '#d9b35c', fontSize: 14, fontWeight: '700' },
+
   calCard: {
     backgroundColor: 'rgba(255,255,255,0.045)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',

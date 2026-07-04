@@ -1432,7 +1432,22 @@ function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
 // Keep layers in one keyed stack so the incoming palette is not remounted when
 // it becomes the only visible layer. Remounting resets the internal drift/fade
 // animations and reads as a snap right after the crossfade completes.
-function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) {
+function WaveBackground({
+  band, playing, overrideColor,
+}: {
+  band: BandKey;
+  playing: boolean;
+  overrideColor?: string | null;
+}) {
+  // "Single app color" setting: pin the backdrop to one flat color and skip
+  // the band palettes and their crossfades entirely.
+  if (overrideColor) {
+    return <View style={[StyleSheet.absoluteFill, { backgroundColor: overrideColor }]} />;
+  }
+  return <WaveBackgroundAnimated band={band} playing={playing} />;
+}
+
+function WaveBackgroundAnimated({ band, playing }: { band: BandKey; playing: boolean }) {
   type LayerSpec = { band: BandKey; key: number; opacity: Animated.Value };
   const counter = useRef(0);
   const [layers, setLayers] = useState<LayerSpec[]>(() => [
@@ -1520,6 +1535,7 @@ function WaveBackground({ band, playing }: { band: BandKey; playing: boolean }) 
 type Tab = 'frequencies' | 'breath' | 'chakras' | 'horoscopes' | 'more';
 
 const STORAGE_KEY_NOTIF = '@simply_ambient_notif_pref_v1';
+const STORAGE_KEY_SINGLE_COLOR = '@simply_ambient_single_color_v1';
 const SLEEP_TIMER_OPTIONS = [0, 5, 10, 15, 30, 60] as const; // minutes
 
 function AppContent() {
@@ -1551,7 +1567,19 @@ function AppContent() {
       if (!v) setShowOnboarding(true);
       setOnboardingChecked(true);
     }).catch(() => setOnboardingChecked(true));
+    AsyncStorage.getItem(STORAGE_KEY_SINGLE_COLOR).then(v => {
+      if (v) setSingleColor(v);
+    }).catch(() => {});
   }, []);
+
+  // "Single app color": when set, the backdrop is pinned to this flat color
+  // instead of the band-driven animated palettes.
+  const [singleColor, setSingleColor] = useState<string | null>(null);
+  function setSingleColorPref(c: string | null) {
+    setSingleColor(c);
+    if (c) AsyncStorage.setItem(STORAGE_KEY_SINGLE_COLOR, c).catch(() => {});
+    else AsyncStorage.removeItem(STORAGE_KEY_SINGLE_COLOR).catch(() => {});
+  }
 
   function dismissOnboarding() {
     AsyncStorage.setItem(STORAGE_KEY_ONBOARDED, '1').catch(() => {});
@@ -2261,7 +2289,7 @@ function AppContent() {
 
   return (
     <View style={styles.root}>
-      <WaveBackground band={activeBand} playing={isTonePlaying} />
+      <WaveBackground band={activeBand} playing={isTonePlaying} overrideColor={singleColor} />
       <StatusBar style="light" />
       <SafeAreaView style={[styles.safe, styles.webColumn]} edges={['top']}>
         {/* Reserved strip for the moon chip (and the More launcher's resting
@@ -2360,6 +2388,8 @@ function AppContent() {
                 onChangeSoundscapeVolume={changeSoundscapeVolume}
                 requestedPage={morePageRequest}
                 onRequestedPageHandled={() => setMorePageRequest(null)}
+                singleColor={singleColor}
+                onChangeSingleColor={setSingleColorPref}
               />
             )}
           </Animated.View>
