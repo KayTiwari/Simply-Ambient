@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Platform,
   ScrollView,
   StyleSheet,
@@ -9,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Svg, { Circle as SvgCircle, Path as SvgPath } from 'react-native-svg';
 import { ArrowsClockwise } from 'phosphor-react-native';
 
 import { MoonDisc, type Zodiac, type LunarInfo } from './App';
@@ -114,14 +117,18 @@ type TarotCard = {
 
 // Spreads layered on top of the daily Card of the Moment. Each draws N cards
 // and labels them by classic position so the pull reads as a spread, not a pile.
-type SpreadSize = 1 | 3 | 5;
-const SPREAD_SIZES: SpreadSize[] = [1, 3, 5];
-const SPREAD_LABEL: Record<SpreadSize, string> = { 1: 'Single', 3: 'Three', 5: 'Five' };
+type SpreadSize = 3 | 5 | 7;
+const SPREAD_SIZES: SpreadSize[] = [3, 5, 7];
 const SPREAD_POSITIONS: Record<SpreadSize, string[]> = {
-  1: ['Your card'],
   3: ['Past', 'Present', 'Future'],
   5: ['You', 'Challenge', 'Past', 'Future', 'Outcome'],
+  7: ['You', 'Challenge', 'Past', 'Present', 'Future', 'Advice', 'Outcome'],
 };
+
+// A drawn card carries its orientation. Reversals land at the classic
+// roughly one-in-three odds, decided at draw time and kept with the card.
+type DrawnCard = { card: TarotCard; reversed: boolean };
+const drawReversed = () => Math.random() < 1 / 3;
 
 export default function HoroscopesView({
   zodiac, mySign, lunar, onSelectMyZodiac,
@@ -136,11 +143,15 @@ export default function HoroscopesView({
   const [loading, setLoading] = useState(false);
 
   const [tarot, setTarot] = useState<TarotCard | null>(null);
+  const [tarotReversed, setTarotReversed] = useState(false);
+  // The card sits face-down until tapped, once per visit. The reveal is the point.
+  const [tarotRevealed, setTarotRevealed] = useState(false);
   const [tarotLoading, setTarotLoading] = useState(false);
   const [tarotError, setTarotError] = useState(false);
 
   const [spreadSize, setSpreadSize] = useState<SpreadSize | null>(null);
-  const [spread, setSpread] = useState<TarotCard[] | null>(null);
+  const [spread, setSpread] = useState<DrawnCard[] | null>(null);
+  const [spreadRevealed, setSpreadRevealed] = useState<boolean[]>([]);
   const [spreadLoading, setSpreadLoading] = useState(false);
   const [spreadError, setSpreadError] = useState(false);
 
@@ -154,6 +165,7 @@ export default function HoroscopesView({
   function drawSpread(n: SpreadSize) {
     setSpreadSize(n);
     setSpread(null);
+    setSpreadRevealed([]);
     setSpreadError(false);
     setSpreadLoading(true);
     fetch(tarotUrl(n))
@@ -161,8 +173,12 @@ export default function HoroscopesView({
       .then(json => {
         if (!mountedRef.current) return;
         const cards = json?.cards;
-        if (Array.isArray(cards) && cards.length) setSpread(cards.slice(0, n));
-        else setSpreadError(true);
+        if (Array.isArray(cards) && cards.length) {
+          setSpread(cards.slice(0, n).map((card: TarotCard) => ({ card, reversed: drawReversed() })));
+          setSpreadRevealed(Array(n).fill(false));
+        } else {
+          setSpreadError(true);
+        }
       })
       .catch(() => { if (mountedRef.current) setSpreadError(true); })
       .finally(() => { if (mountedRef.current) setSpreadLoading(false); });
@@ -171,13 +187,21 @@ export default function HoroscopesView({
   function drawTarot(force = false) {
     setTarotError(false);
     setTarotLoading(true);
+    setTarotRevealed(false);
     fetch(tarotUrl(1))
       .then(r => (r.ok ? r.json() : null))
       .then(json => {
         const c = json?.cards?.[0];
         if (c) {
-          AsyncStorage.setItem(TAROT_CACHE_KEY, JSON.stringify({ ts: Date.now(), card: c })).catch(() => {});
-          if (mountedRef.current) setTarot(c);
+          const reversed = drawReversed();
+          AsyncStorage.setItem(
+            TAROT_CACHE_KEY,
+            JSON.stringify({ ts: Date.now(), card: c, reversed }),
+          ).catch(() => {});
+          if (mountedRef.current) {
+            setTarot(c);
+            setTarotReversed(reversed);
+          }
         } else if (mountedRef.current) {
           setTarotError(true);
         }
@@ -194,9 +218,10 @@ export default function HoroscopesView({
       let stale = true;
       if (raw) {
         try {
-          const cached = JSON.parse(raw) as { ts: number; card: TarotCard };
+          const cached = JSON.parse(raw) as { ts: number; card: TarotCard; reversed?: boolean };
           if (cached?.card) {
             setTarot(cached.card);
+            setTarotReversed(cached.reversed === true);
             stale = Date.now() - cached.ts >= TAROT_TTL_MS;
           }
         } catch {}
@@ -444,15 +469,29 @@ export default function HoroscopesView({
           {tarotLoading ? (
             <ActivityIndicator color="#A45BFF" style={{ marginVertical: 24 }} />
           ) : tarot ? (
-            <>
-              <Text style={styles.tarotName}>{tarot.name}</Text>
-              {tarot.meaning_up ? (
-                <Text style={styles.tarotMeaning}>{tarot.meaning_up}</Text>
-              ) : null}
-              {tarot.desc ? (
-                <Text style={styles.tarotDesc} numberOfLines={4}>{tarot.desc}</Text>
-              ) : null}
-            </>
+            <View style={{ alignItems: 'center' }}>
+              <FlipCard
+                width={156}
+                height={252}
+                revealed={tarotRevealed}
+                onReveal={() => setTarotRevealed(true)}
+                label={tarotRevealed ? `${tarot.name}, ${tarotReversed ? 'reversed' : 'upright'}` : 'Reveal your card'}
+                back={<CardBack width={156} height={252} />}
+                face={<CardFace name={tarot.name} reversed={tarotReversed} />}
+              />
+              {!tarotRevealed ? (
+                <Text style={styles.tarotHint}>A card has been drawn for you. Turn it when you are ready.</Text>
+              ) : (
+                <>
+                  <Text style={styles.tarotMeaningLead}>
+                    {(tarotReversed ? tarot.meaning_rev : tarot.meaning_up) ?? tarot.meaning_up ?? ''}
+                  </Text>
+                  {tarot.desc ? (
+                    <Text style={styles.tarotDesc} numberOfLines={3}>{tarot.desc}</Text>
+                  ) : null}
+                </>
+              )}
+            </View>
           ) : tarotError ? (
             <Text style={styles.tarotMeaning}>Could not reach the cards. Try again.</Text>
           ) : (
@@ -473,11 +512,10 @@ export default function HoroscopesView({
                   style={[styles.spreadBtn, active && { borderColor: '#A45BFF', backgroundColor: '#A45BFF22' }]}
                   accessibilityLabel={`Draw ${n}-card spread`}
                   accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
                 >
-                  <Text style={[styles.spreadBtnText, active && { color: '#C9A2FF' }]}>{SPREAD_LABEL[n]}</Text>
-                  <Text style={[styles.spreadBtnSub, active && { color: '#C9A2FF99' }]}>
-                    {n} {n === 1 ? 'card' : 'cards'}
-                  </Text>
+                  <Text style={[styles.spreadBtnText, active && { color: '#C9A2FF' }]}>{n}</Text>
+                  <Text style={[styles.spreadBtnSub, active && { color: '#C9A2FF99' }]}>cards</Text>
                 </TouchableOpacity>
               );
             })}
@@ -486,17 +524,42 @@ export default function HoroscopesView({
           {spreadLoading ? (
             <ActivityIndicator color="#A45BFF" style={{ marginVertical: 22 }} />
           ) : spread && spreadSize ? (
-            <View style={styles.spreadList}>
-              {spread.map((c, i) => (
-                <View key={i} style={styles.spreadItem}>
-                  <Text style={styles.spreadPos}>{SPREAD_POSITIONS[spreadSize][i] ?? `Card ${i + 1}`}</Text>
-                  <Text style={styles.spreadCardName}>{c.name}</Text>
-                  {c.meaning_up ? (
-                    <Text style={styles.spreadCardMeaning} numberOfLines={3}>{c.meaning_up}</Text>
-                  ) : null}
-                </View>
-              ))}
-            </View>
+            <>
+              <Text style={styles.tarotHint}>The cards are laid face down. Turn each in its own time.</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.spreadRow}
+              >
+                {spread.map((item, i) => {
+                  const revealed = spreadRevealed[i] === true;
+                  const pos = SPREAD_POSITIONS[spreadSize][i] ?? `Card ${i + 1}`;
+                  return (
+                    <View key={i} style={styles.spreadSlot}>
+                      <Text style={styles.spreadPos}>{pos}</Text>
+                      <FlipCard
+                        width={104}
+                        height={168}
+                        revealed={revealed}
+                        onReveal={() =>
+                          setSpreadRevealed(prev => prev.map((v, j) => (j === i ? true : v)))
+                        }
+                        label={revealed ? `${item.card.name}, ${item.reversed ? 'reversed' : 'upright'}` : `Turn the ${pos} card`}
+                        back={<CardBack width={104} height={168} compact />}
+                        face={<CardFace name={item.card.name} reversed={item.reversed} compact />}
+                      />
+                      {revealed ? (
+                        <Text style={styles.spreadCardMeaning} numberOfLines={4}>
+                          {(item.reversed ? item.card.meaning_rev : item.card.meaning_up) ?? item.card.meaning_up ?? ''}
+                        </Text>
+                      ) : (
+                        <View style={styles.spreadMeaningGhost} />
+                      )}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </>
           ) : spreadError ? (
             <Text style={styles.tarotMeaning}>Could not reach the cards. Try again.</Text>
           ) : (
@@ -509,6 +572,111 @@ export default function HoroscopesView({
           Take what resonates, leave the rest.
         </Text>
       </ScrollView>
+    </View>
+  );
+}
+
+// ===========================================================================
+//   Tarot cards
+// ===========================================================================
+
+// A physical card that turns over. Two faces stacked back to back; tapping
+// runs a perspective rotateY flip and the reveal happens mid-turn.
+function FlipCard({
+  width, height, revealed, onReveal, back, face, label,
+}: {
+  width: number;
+  height: number;
+  revealed: boolean;
+  onReveal: () => void;
+  back: React.ReactNode;
+  face: React.ReactNode;
+  label: string;
+}) {
+  const anim = useRef(new Animated.Value(revealed ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: revealed ? 1 : 0,
+      duration: 620,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [revealed, anim]);
+  const backRot = anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+  const faceRot = anim.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '360deg'] });
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onReveal}
+      disabled={revealed}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={{ width, height }}
+    >
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          { transform: [{ perspective: 1000 }, { rotateY: backRot }], backfaceVisibility: 'hidden' },
+        ]}
+      >
+        {back}
+      </Animated.View>
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          { transform: [{ perspective: 1000 }, { rotateY: faceRot }], backfaceVisibility: 'hidden' },
+        ]}
+      >
+        {face}
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+
+// Face-down card: deep violet ground, hairline gold double border, a small
+// night sky (ring, crescent, scattered stars) drawn in Svg.
+function CardBack({ width, height, compact }: { width: number; height: number; compact?: boolean }) {
+  const w = width - 22;
+  const h = height - 22;
+  return (
+    <View style={styles.cardShellBack}>
+      <View style={styles.cardInner}>
+        <Svg width={w} height={h} viewBox="0 0 100 162">
+          <SvgCircle cx={50} cy={81} r={compact ? 26 : 30} stroke="#C9A96B55" strokeWidth={1} fill="none" />
+          <SvgCircle cx={50} cy={81} r={compact ? 18 : 21} stroke="#A45BFF33" strokeWidth={0.8} fill="none" />
+          <SvgPath
+            d="M 58 63 A 19 19 0 1 0 58 99 A 15 15 0 1 1 58 63"
+            fill="#C9A96B"
+            opacity={0.9}
+          />
+          <SvgCircle cx={22} cy={26} r={1.3} fill="#C9A96B" opacity={0.8} />
+          <SvgCircle cx={80} cy={18} r={0.9} fill="#ffffff" opacity={0.6} />
+          <SvgCircle cx={70} cy={38} r={1.1} fill="#C9A96B" opacity={0.55} />
+          <SvgCircle cx={16} cy={70} r={0.8} fill="#ffffff" opacity={0.5} />
+          <SvgCircle cx={86} cy={92} r={1.2} fill="#C9A96B" opacity={0.6} />
+          <SvgCircle cx={24} cy={124} r={1.0} fill="#ffffff" opacity={0.55} />
+          <SvgCircle cx={74} cy={136} r={1.3} fill="#C9A96B" opacity={0.75} />
+          <SvgCircle cx={44} cy={148} r={0.8} fill="#ffffff" opacity={0.5} />
+        </Svg>
+      </View>
+    </View>
+  );
+}
+
+// Face-up card: ornament, serif name, orientation. Reversed keeps the text
+// readable and turns the ornament instead; the chip carries the meaning.
+function CardFace({ name, reversed, compact }: { name: string; reversed: boolean; compact?: boolean }) {
+  return (
+    <View style={styles.cardShellFace}>
+      <View style={[styles.cardInner, { justifyContent: 'space-between', paddingVertical: 12 }]}>
+        <Text style={[styles.cardOrnament, reversed && { transform: [{ rotate: '180deg' }] }]}>✦</Text>
+        <Text style={[styles.cardFaceName, compact && { fontSize: 15, lineHeight: 19 }]}>
+          {name}
+        </Text>
+        <Text style={[styles.cardOrient, { color: reversed ? '#D68097' : '#9DC7AC' }]}>
+          {reversed ? 'REVERSED' : 'UPRIGHT'}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -641,13 +809,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   tarotRefreshText: { color: '#fff', fontSize: 16 },
-  tarotName: {
-    color: '#A45BFF',
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 26, letterSpacing: 1, marginBottom: 6,
-  },
   tarotMeaning: { color: '#ffffffdd', fontSize: 13, lineHeight: 19, marginBottom: 8 },
-  tarotDesc: { color: '#ffffff88', fontSize: 12, lineHeight: 17, fontStyle: 'italic' },
+  tarotMeaningLead: {
+    color: '#ffffffdd', fontSize: 13, lineHeight: 19,
+    textAlign: 'center', marginTop: 14, marginBottom: 8,
+  },
+  tarotDesc: { color: '#ffffff88', fontSize: 12, lineHeight: 17, fontStyle: 'italic', textAlign: 'center' },
+  tarotHint: {
+    color: '#ffffff77', fontSize: 11, fontStyle: 'italic',
+    textAlign: 'center', marginTop: 12,
+  },
   spreadBtnRow: { flexDirection: 'row', gap: 8, marginTop: 12, marginBottom: 2 },
   spreadBtn: {
     flex: 1,
@@ -658,11 +829,51 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
   },
-  spreadBtnText: { color: '#ffffffdd', fontSize: 13, fontWeight: '700', letterSpacing: 0.4 },
+  spreadBtnText: { color: '#ffffffdd', fontSize: 15, fontWeight: '700', letterSpacing: 0.4 },
   spreadBtnSub: { color: '#ffffff66', fontSize: 10, fontWeight: '600', marginTop: 2, letterSpacing: 0.4 },
-  spreadList: { marginTop: 16, gap: 14 },
-  spreadItem: { borderLeftWidth: 2, borderLeftColor: '#A45BFF', paddingLeft: 12 },
-  spreadPos: { color: '#A45BFF', fontSize: 10, fontWeight: '800', letterSpacing: 1.6, textTransform: 'uppercase' },
-  spreadCardName: { color: '#fff', fontSize: 15, fontWeight: '700', marginTop: 3 },
-  spreadCardMeaning: { color: '#ffffff99', fontSize: 12, lineHeight: 17, marginTop: 3 },
+  spreadRow: { gap: 12, paddingVertical: 14, paddingRight: 8 },
+  spreadSlot: { width: 116, alignItems: 'center' },
+  spreadPos: {
+    color: '#C9A2FF', fontSize: 10, fontWeight: '800',
+    letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 8,
+  },
+  spreadCardMeaning: {
+    color: '#ffffff99', fontSize: 11, lineHeight: 15,
+    marginTop: 8, textAlign: 'center', minHeight: 60,
+  },
+  spreadMeaningGhost: { minHeight: 60, marginTop: 8 },
+
+  cardShellBack: {
+    flex: 1,
+    backgroundColor: '#191233',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#C9A96B66',
+    padding: 4,
+  },
+  cardShellFace: {
+    flex: 1,
+    backgroundColor: '#141126',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#A45BFF66',
+    padding: 4,
+  },
+  cardInner: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  cardOrnament: { color: '#C9A96B', fontSize: 14 },
+  cardFaceName: {
+    color: '#fff',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 21, lineHeight: 26,
+    textAlign: 'center', paddingHorizontal: 8,
+  },
+  cardOrient: { fontSize: 9, fontWeight: '800', letterSpacing: 2 },
 });
