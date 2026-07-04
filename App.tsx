@@ -1910,12 +1910,20 @@ function AppContent() {
       setShowAudioSafetyModal(true);
       return;
     }
-    loadAndPlay(leftHz, rightHz);
+    startSession();
   }
 
   function acknowledgeAudioSafetyAndPlay() {
     setAudioSafetyAck(true);
     setShowAudioSafetyModal(false);
+    startSession();
+  }
+
+  function startSession() {
+    // The background palette follows activeBand, which starts as 'none'
+    // (gray) until something sets it. Detect the band from the current pair
+    // at session start so the backdrop transitions out of gray on play.
+    if (activeBand === 'none') applyDetection(leftHz, rightHz);
     loadAndPlay(leftHz, rightHz);
   }
 
