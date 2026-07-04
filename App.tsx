@@ -2909,9 +2909,6 @@ function FrequenciesView(props: FreqViewProps) {
         <View style={styles.enso} />
         <Text style={styles.ambience}>Simply Ambient</Text>
         <Text style={styles.title}>Binaural Frequency Generator</Text>
-        <Text style={styles.valueProp}>
-          Design your own personal binaural frequency, or explore the most practiced ones.
-        </Text>
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />
           <Text style={styles.subtitle}>Manifest your Zen</Text>
@@ -3377,10 +3374,6 @@ const styles = StyleSheet.create({
     letterSpacing: 4, textAlign: 'center', lineHeight: 16,
     textTransform: 'uppercase',
     marginTop: 2,
-  },
-  valueProp: {
-    color: '#ffffffB0', fontSize: 12, lineHeight: 17,
-    textAlign: 'center', paddingHorizontal: 28, marginTop: 8,
   },
   dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
   dividerLine: { width: 28, height: 1, backgroundColor: 'rgba(255,255,255,0.35)' },

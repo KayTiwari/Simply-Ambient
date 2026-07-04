@@ -20,7 +20,7 @@ Copy/paste-ready text for App Store Connect (iOS) and Google Play Console (Andro
 
 ## Long description / full description
 
-Simply Ambient pairs custom binaural beats with guided breath work and a thoughtful set of grounded daily practices.
+Design your own personal binaural frequency, or explore the most practiced ones. Simply Ambient pairs custom binaural beats with guided breath work and a thoughtful set of grounded daily practices.
 
 **Frequencies**
 • Independent left & right ear sliders, 50 to 500 Hz
