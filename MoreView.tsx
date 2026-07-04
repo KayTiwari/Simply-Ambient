@@ -50,7 +50,7 @@ type AISources = Record<AISourceKey, boolean>;
 const DEFAULT_AI_SOURCES: AISources = {
   mood: true,
   gratitude: true,
-  rant: false,        // Sensitive — opt in
+  rant: false,        // Sensitive; opt in
   manifestation: true,
 };
 
@@ -775,14 +775,12 @@ function AffirmationsPage({
     <View style={{ flex: 1 }}>
       <SubHeader title="Daily Affirmation" accent="#9affc8" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
+        <Text style={styles.sectionLabel}>TODAY</Text>
         <Text style={styles.sectionSub}>
-          A single intention, repeated, becomes a frame for the day. The affirmation isn't magic.
-          It's a small mental anchor that biases what you notice, what you say yes to, and how
-          you read your own moods. Read it once, then carry on.
+          One intention, repeated, becomes a frame for the day. Read it once, then carry on.
         </Text>
 
-        <View style={[styles.bigAffirmCard, { borderColor: '#9affc855', marginTop: 14 }]}>
+        <View style={styles.bigAffirmCard}>
           {loading ? (
             <ActivityIndicator color="#9affc8" />
           ) : (
@@ -796,7 +794,7 @@ function AffirmationsPage({
             accessibilityRole="button"
           >
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <ArrowsClockwise size={14} color="#9affc8" weight="regular" />
+              <ArrowsClockwise size={14} color="#0B0B1F" weight="regular" />
               <Text style={[styles.bigRefreshText, { marginLeft: 8 }]}>ANOTHER</Text>
             </View>
           </TouchableOpacity>
@@ -905,14 +903,10 @@ function MoodPage({
     <View style={{ flex: 1 }}>
       <SubHeader title="Mood" accent="#5BD0FF" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
+        <Text style={styles.sectionLabel}>RIGHT NOW</Text>
         <Text style={styles.sectionSub}>
-          A 5-second daily check-in surfaces patterns over weeks. What days lift you, what drains
-          you, and how your practice shapes baseline mood. Mood tracking is one of the most
-          evidence-supported daily wellbeing habits.
+          A 5-second check-in. Patterns in what lifts and drains you surface over weeks.
         </Text>
-
-        <Text style={[styles.sectionLabel, { marginTop: 14 }]}>RIGHT NOW</Text>
         <View style={styles.moodRow}>
           {[1, 2, 3, 4, 5].map(v => {
             const active = moodToday?.value === v;
@@ -927,8 +921,8 @@ function MoodPage({
                 style={[
                   styles.moodBtn,
                   {
-                    borderColor: active ? MOOD_COLORS[v - 1] : MOOD_COLORS[v - 1] + '55',
-                    backgroundColor: active ? MOOD_COLORS[v - 1] + '22' : 'rgba(0,0,0,0.20)',
+                    borderColor: active ? MOOD_COLORS[v - 1] : 'rgba(255,255,255,0.09)',
+                    backgroundColor: active ? MOOD_COLORS[v - 1] + '22' : 'rgba(255,255,255,0.045)',
                   },
                 ]}
               >
@@ -941,11 +935,10 @@ function MoodPage({
           })}
         </View>
 
-        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>LAST 14 DAYS</Text>
-        <Text style={styles.sectionSub}>Daily average over the last two weeks</Text>
+        <Text style={styles.sectionLabel}>LAST 14 DAYS</Text>
         <MoodGraph buckets={dayBuckets} />
 
-        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>LOG A PAST DAY</Text>
+        <Text style={styles.sectionLabel}>LOG A PAST DAY</Text>
         <Text style={styles.sectionSub}>Pick a day, then choose the mood it deserved.</Text>
         <BackfillCalendar
           moodLog={moodLog}
@@ -965,7 +958,7 @@ function MoodPage({
                 accessibilityRole="button"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <X size={14} color="#ffffff66" weight="thin" />
+                <X size={14} color="#ffffff55" weight="thin" />
               </TouchableOpacity>
             </View>
             <View style={styles.moodRow}>
@@ -979,8 +972,8 @@ function MoodPage({
                   style={[
                     styles.moodBtn,
                     {
-                      borderColor: MOOD_COLORS[v - 1] + '55',
-                      backgroundColor: 'rgba(0,0,0,0.20)',
+                      borderColor: 'rgba(255,255,255,0.09)',
+                      backgroundColor: 'rgba(255,255,255,0.045)',
                     },
                   ]}
                 >
@@ -994,7 +987,7 @@ function MoodPage({
           </View>
         ) : null}
 
-        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>HISTORY</Text>
+        <Text style={styles.sectionLabel}>HISTORY</Text>
         {moodLog.length === 0 ? (
           <Text style={styles.emptyText}>No entries yet. Your first check-in starts the chart.</Text>
         ) : (
@@ -1284,15 +1277,10 @@ function GratitudePage({
     <View style={{ flex: 1 }}>
       <SubHeader title="Gratitude" accent="#FFB05B" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
+        <Text style={styles.sectionLabel}>TODAY</Text>
         <Text style={styles.sectionSub}>
-          Naming one thing you appreciate, daily, gradually shifts attention toward what's working.
-          Over weeks it raises baseline mood and reduces rumination. One of the most-studied
-          interventions in positive psychology.
+          One thing you appreciate, named daily, shifts attention toward what's working. Saved only on this device.
         </Text>
-
-        <Text style={[styles.sectionLabel, { marginTop: 14 }]}>TODAY</Text>
-        <Text style={styles.sectionSub}>One small thing or many. Saved only on this device.</Text>
         <TextInput
           style={styles.gratInput}
           placeholder="A small or large thing…"
@@ -1306,7 +1294,7 @@ function GratitudePage({
           <Text style={styles.gratSaveText}>SAVE</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>EVENING REMINDER</Text>
+        <Text style={styles.sectionLabel}>EVENING REMINDER</Text>
         <Text style={styles.sectionSub}>
           Gentle nudge if you haven't journaled by the chosen hour. Activates with a standalone build.
         </Text>
@@ -1342,12 +1330,12 @@ function GratitudePage({
           </Text>
         ) : null}
 
-        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>JOURNAL</Text>
+        <Text style={styles.sectionLabel}>JOURNAL</Text>
         {entries.length === 0 ? (
           <Text style={styles.emptyText}>Your first gratitude will appear here.</Text>
         ) : (
           grouped.map(([dateKey, items]) => (
-            <View key={dateKey} style={{ marginBottom: 18 }}>
+            <View key={dateKey} style={{ marginBottom: 8 }}>
               <Text style={styles.gratDateHeader}>
                 {new Date(dateKey).toLocaleDateString(undefined, {
                   weekday: 'long', month: 'short', day: 'numeric',
@@ -1355,7 +1343,6 @@ function GratitudePage({
               </Text>
               {items.map(g => (
                 <View key={g.ts} style={styles.gratItem}>
-                  <View style={styles.gratItemBar} />
                   <Text style={styles.gratItemText}>{g.text}</Text>
                   <TouchableOpacity
                     onPress={() => onDelete(g.ts)}
@@ -1364,7 +1351,7 @@ function GratitudePage({
                     accessibilityRole="button"
                     hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   >
-                    <X size={14} color="#ffffff66" weight="thin" />
+                    <X size={14} color="#ffffff55" weight="thin" />
                   </TouchableOpacity>
                 </View>
               ))}
@@ -1400,14 +1387,10 @@ function RantPage({
     <View style={{ flex: 1 }}>
       <SubHeader title="Rant" accent="#FF5B9C" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
+        <Text style={styles.sectionLabel}>WHAT'S ON YOUR MIND</Text>
         <Text style={styles.sectionSub}>
-          Naming the noise is the first step to quieting it. Rants are stored only on this device.
-          Sharing them with the AI Insights tool is off by default. You can opt in from the
-          AI Insights page.
+          Name the noise to quiet it. Stored only on this device; shared with AI Insights only if you opt in there.
         </Text>
-
-        <Text style={[styles.sectionLabel, { marginTop: 14 }]}>WHAT'S ON YOUR MIND</Text>
         <TextInput
           style={[styles.gratInput, { minHeight: 140 }]}
           placeholder="Let it out…"
@@ -1421,13 +1404,12 @@ function RantPage({
           <Text style={styles.gratSaveText}>SAVE</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>HISTORY</Text>
+        <Text style={styles.sectionLabel}>HISTORY</Text>
         {entries.length === 0 ? (
           <Text style={styles.emptyText}>Your first rant will live here.</Text>
         ) : (
           entries.map(r => (
-            <View key={r.ts} style={[styles.gratItem, { borderColor: '#FF5B9C44' }]}>
-              <View style={[styles.gratItemBar, { backgroundColor: '#FF5B9C' }]} />
+            <View key={r.ts} style={styles.gratItem}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rantDate}>
                   {new Date(r.ts).toLocaleString(undefined, {
@@ -1443,7 +1425,7 @@ function RantPage({
                 accessibilityRole="button"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
-                <X size={14} color="#ffffff66" weight="thin" />
+                <X size={14} color="#ffffff55" weight="thin" />
               </TouchableOpacity>
             </View>
           ))
@@ -1481,14 +1463,10 @@ function ManifestationPage({
     <View style={{ flex: 1 }}>
       <SubHeader title="Manifestation" accent="#A45BFF" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
+        <Text style={styles.sectionLabel}>NEW INTENTION</Text>
         <Text style={styles.sectionSub}>
           Writing what you're calling in clarifies it. Mark it manifested when it lands.
-          Stored on this device. Sharing it with AI Insights is on by default and can be
-          toggled from the AI Insights page.
         </Text>
-
-        <Text style={[styles.sectionLabel, { marginTop: 14 }]}>NEW INTENTION</Text>
         <TextInput
           style={styles.gratInput}
           placeholder="I am calling in…"
@@ -1502,7 +1480,7 @@ function ManifestationPage({
           <Text style={styles.gratSaveText}>ADD</Text>
         </TouchableOpacity>
 
-        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>CALLING IN</Text>
+        <Text style={styles.sectionLabel}>CALLING IN</Text>
         {pending.length === 0 ? (
           <Text style={styles.emptyText}>Nothing yet. Name what you're inviting.</Text>
         ) : (
@@ -1513,7 +1491,7 @@ function ManifestationPage({
 
         {manifested.length > 0 ? (
           <>
-            <Text style={[styles.sectionLabel, { marginTop: 24 }]}>MANIFESTED</Text>
+            <Text style={styles.sectionLabel}>MANIFESTED</Text>
             {manifested.map(m => (
               <ManifestRow key={m.ts} item={m} onToggle={onToggle} onDelete={onDelete} />
             ))}
@@ -1532,7 +1510,7 @@ function ManifestRow({
   onDelete: (ts: number) => void;
 }) {
   return (
-    <View style={[styles.gratItem, { borderColor: '#A45BFF44' }]}>
+    <View style={styles.gratItem}>
       <TouchableOpacity
         onPress={() => onToggle(item.ts)}
         activeOpacity={0.8}
@@ -1562,7 +1540,7 @@ function ManifestRow({
         accessibilityRole="button"
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       >
-        <X size={14} color="#ffffff66" weight="thin" />
+        <X size={14} color="#ffffff55" weight="thin" />
       </TouchableOpacity>
     </View>
   );
@@ -1584,15 +1562,10 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
     <View style={{ flex: 1 }}>
       <SubHeader title="5-4-3-2-1 Grounding" accent="#5B6CFF" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody}>
-        <Text style={styles.sectionLabel}>WHY THIS MATTERS</Text>
+        <Text style={styles.sectionLabel}>THE PRACTICE</Text>
         <Text style={styles.sectionSub}>
-          When stress spikes, the mind loops on what isn't here. This exercise pulls attention
-          back into the body's actual sensory data. Sight, touch, hearing, smell, taste,
-          short-circuiting the rumination. It's a grounding practice taught widely and
-          works in 60–90 seconds.
-        </Text>
-        <Text style={[styles.groundIntro, { marginTop: 16 }]}>
-          Move slowly. Breathe between each.
+          Five senses pull a looping mind back into the room, in about 60 to 90 seconds.
+          Move slowly and breathe between each.
         </Text>
         {items.map(it => (
           <View key={it.num} style={styles.groundCard}>
@@ -1647,7 +1620,7 @@ function SupportPage({ onBack }: { onBack: () => void }) {
     <View style={{ flex: 1 }}>
       <SubHeader title="Support" accent="#d9b35c" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody}>
-        <View style={[styles.supportHero, { borderColor: '#d9b35c55' }]}>
+        <View style={styles.supportHero}>
           <Text style={styles.supportEmoji}>☕</Text>
           <Text style={styles.supportHeadline}>Support the developer</Text>
           <Text style={styles.supportText}>
@@ -1664,8 +1637,8 @@ function SupportPage({ onBack }: { onBack: () => void }) {
         </View>
 
         {ROADMAP.map(group => (
-          <View key={group.phase} style={{ marginTop: 22 }}>
-            <Text style={[styles.sectionLabel, { color: '#d9b35c' }]}>{group.phase}</Text>
+          <View key={group.phase}>
+            <Text style={styles.sectionLabel}>{group.phase}</Text>
             {group.items.map(item => (
               <View key={item.title} style={styles.roadmapItem}>
                 <View style={styles.roadmapDot} />
@@ -1701,7 +1674,7 @@ export function SafetyContent() {
         immediately and lower the volume.
       </Text>
 
-      <Text style={[styles.sectionLabel, { marginTop: 18 }]}>NOT MEDICAL ADVICE</Text>
+      <Text style={styles.sectionLabel}>NOT MEDICAL ADVICE</Text>
       <Text style={styles.safetyBody}>
         Simply Ambient is a wellness and mindfulness tool. It is not a medical device
         and is not intended to diagnose, treat, cure, or prevent any disease, mental
@@ -1711,7 +1684,7 @@ export function SafetyContent() {
         professional medical, psychological, or psychiatric care.
       </Text>
 
-      <Text style={[styles.sectionLabel, { marginTop: 18 }]}>WHEN NOT TO USE</Text>
+      <Text style={styles.sectionLabel}>WHEN NOT TO USE</Text>
       <Text style={styles.safetyBody}>
         Do not use this app while driving, operating machinery, or in any context where
         focused attention is required. Consult a qualified physician before using
@@ -1722,7 +1695,7 @@ export function SafetyContent() {
         chest pain, panic, or any unusual symptom.
       </Text>
 
-      <Text style={[styles.sectionLabel, { marginTop: 18 }]}>YOUR DATA</Text>
+      <Text style={styles.sectionLabel}>YOUR DATA</Text>
       <Text style={styles.safetyBody}>
         All journal data (mood, gratitude, rants, manifestations, profile) is stored
         only on this device. Nothing is uploaded automatically. Data leaves the device
@@ -1731,7 +1704,7 @@ export function SafetyContent() {
         API key. You control which sources are shared.
       </Text>
 
-      <Text style={[styles.sectionLabel, { marginTop: 18 }]}>NO WARRANTY</Text>
+      <Text style={styles.sectionLabel}>NO WARRANTY</Text>
       <Text style={styles.safetyBody}>
         This app is provided "as is" without warranty of any kind. Use is at your own
         risk. By using Simply Ambient you acknowledge these terms and accept that the
@@ -1767,7 +1740,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
         <SafetyContent />
 
-        <Text style={[styles.sectionLabel, { marginTop: 18 }]}>PRIVACY POLICY</Text>
+        <Text style={styles.sectionLabel}>PRIVACY POLICY</Text>
         <Text style={styles.safetyBody}>
           The full privacy policy is published at{' '}
           <Text style={styles.linkText} onPress={() => setPendingOpenUrl(PRIVACY_POLICY_URL)}>
@@ -1776,7 +1749,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
           . It explains exactly what data the app handles and what it does not.
         </Text>
 
-        <Text style={[styles.sectionLabel, { marginTop: 18 }]}>TERMS OF SERVICE</Text>
+        <Text style={styles.sectionLabel}>TERMS OF SERVICE</Text>
         <Text style={styles.safetyBody}>
           The full Terms of Service are published{' '}
           <Text style={styles.linkText} onPress={() => setPendingOpenUrl(TERMS_OF_SERVICE_URL)}>
@@ -1786,7 +1759,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
           medical-disclaimer, liability, and dispute-resolution terms.
         </Text>
 
-        <Text style={[styles.sectionLabel, { marginTop: 22 }]}>RESET</Text>
+        <Text style={styles.sectionLabel}>RESET</Text>
         <Text style={styles.safetyBody}>
           Permanently delete every entry stored on this device: profile, mood log,
           gratitude, rants, manifestations, presets, settings, AI key. Cannot be undone.
@@ -2093,9 +2066,9 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
           maxLength={120}
         />
 
-        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>MBTI · 16 PERSONALITIES</Text>
+        <Text style={styles.sectionLabel}>MBTI · 16 PERSONALITIES</Text>
         <Text style={styles.sectionSub}>
-          Four quick questions. Not a clinical assessment. Just an indicator.
+          Four quick questions for a rough type indicator.
         </Text>
         {MBTI_QUESTIONS.map((q, i) => (
           <View key={i} style={styles.mbtiCard}>
@@ -2182,14 +2155,13 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
           </Text>
         )}
 
-        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>WHAT'S A NATAL CHART?</Text>
-        <Text style={styles.cardSub}>
-          A natal chart is a snapshot of the sky at the moment you were born. The positions of
-          the Sun, Moon, and planets across the zodiac and the twelve houses. Together they sketch
-          a temperament map: not destiny, but inclinations.
+        <Text style={styles.sectionLabel}>WHAT'S A NATAL CHART?</Text>
+        <Text style={styles.sectionSub}>
+          A snapshot of the sky at the moment you were born. Sun, Moon, and planets across the
+          zodiac and the twelve houses sketch a map of inclinations.
         </Text>
 
-        <View style={[styles.compatComingSoon, { borderColor: '#5B6CFF55' }]}>
+        <View style={styles.compatComingSoon}>
           <Text style={[styles.compatComingTitle, { color: '#5B6CFF' }]}>
             In-app chart. Coming soon
           </Text>
@@ -2265,19 +2237,14 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
       <SubHeader title="Routines" accent="#9affc8" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody}>
         <Text style={styles.sectionLabel}>SAMPLE ROUTINES</Text>
-        <Text style={styles.cardSub}>
-          A routine chains preset frequencies for a longer session. The auto-sequencer
-          (transition between steps automatically) is in development. For now, follow the
-          steps manually using the Frequencies tab.
+        <Text style={styles.sectionSub}>
+          A routine chains preset frequencies into a longer session. Follow the steps from the
+          Frequencies tab while the auto-sequencer is in development.
         </Text>
-        {SAMPLE_ROUTINES.map((r, i) => (
+        {SAMPLE_ROUTINES.map(r => (
           <View
             key={r.id}
-            style={[
-              styles.routineCard,
-              { borderColor: r.color + '55' },
-              i === 0 && { marginTop: 16 },
-            ]}
+            style={styles.routineCard}
           >
             <Text style={[styles.routineName, { color: r.color }]}>{r.name}</Text>
             <Text style={styles.routineDesc}>{r.description}</Text>
@@ -2290,7 +2257,7 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
             ))}
           </View>
         ))}
-        <View style={[styles.compatComingSoon, { borderColor: '#9affc855' }]}>
+        <View style={styles.compatComingSoon}>
           <Text style={[styles.compatComingTitle, { color: '#9affc8' }]}>
             Custom routines & auto-sequencer. Coming soon
           </Text>
@@ -2334,12 +2301,12 @@ function SoundscapesPage({
       <SubHeader title="Soundscapes" accent="#5BD0FF" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody}>
         <Text style={styles.sectionLabel}>NATURAL AMBIENCE</Text>
-        <Text style={styles.cardSub}>
-          Layer subtle generated ambience under your binaural tones. It stays local
-          and follows you through the app in the mini-player.
+        <Text style={styles.sectionSub}>
+          Subtle generated ambience layered under your binaural tones. It stays local
+          and follows you through the app in the mini player.
         </Text>
 
-        <View style={[styles.soundscapeControlCard, { borderColor: '#5BD0FF55' }]}>
+        <View style={styles.soundscapeControlCard}>
           <View style={styles.soundscapeTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.soundscapeActiveLabel}>CURRENT</Text>
@@ -2357,9 +2324,9 @@ function SoundscapesPage({
                 minimumValue={0}
                 maximumValue={1}
                 value={soundscapeVolume}
-                minimumTrackTintColor="#d9b35c"
+                minimumTrackTintColor="#5BD0FF"
                 maximumTrackTintColor="rgba(255,255,255,0.12)"
-                thumbTintColor="#d9b35c"
+                thumbTintColor="#5BD0FF"
                 onValueChange={onChangeSoundscapeVolume}
               />
             </View>
@@ -2375,9 +2342,9 @@ function SoundscapesPage({
             onPress={() => onToggleSoundscape(s.id)}
             style={[
               styles.soundscapeCard,
-              {
-                borderColor: active ? s.color : s.color + '55',
-                backgroundColor: active ? s.color + '18' : 'rgba(0,0,0,0.18)',
+              active && {
+                borderColor: s.color,
+                backgroundColor: s.color + '18',
               },
             ]}
           >
@@ -2445,7 +2412,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
           </Text>
         )}
 
-        <Text style={[styles.sectionLabel, { marginTop: 24 }]}>OTHER PERSON</Text>
+        <Text style={styles.sectionLabel}>OTHER PERSON</Text>
         <Text style={styles.sectionSub}>Their birth details, stored only on this device.</Text>
         <Text style={styles.fieldLabel}>Name</Text>
         <TextInput
@@ -2676,7 +2643,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
           secureTextEntry
         />
 
-        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>SHARE WITH AI</Text>
+        <Text style={styles.sectionLabel}>SHARE WITH AI</Text>
         <Text style={styles.sectionSub}>
           Pick which journal data is sent to Google Gemini for the journal themes analysis.
           Off by default for sensitive sources like rants.
@@ -2698,7 +2665,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
                   styles.aiSourceChip,
                   on
                     ? { borderColor: s.color, backgroundColor: s.color + '22' }
-                    : { borderColor: 'rgba(255,255,255,0.18)' },
+                    : { borderColor: 'rgba(255,255,255,0.15)' },
                 ]}
               >
                 <Text style={[
@@ -2712,7 +2679,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
           })}
         </View>
 
-        <Text style={[styles.sectionLabel, { marginTop: 22 }]}>WHAT TO ANALYSE</Text>
+        <Text style={styles.sectionLabel}>WHAT TO ANALYSE</Text>
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={() => runAnalysis('journal')}
@@ -2732,10 +2699,10 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={() => runAnalysis('tarot')}
-          style={[styles.aiBtn, { backgroundColor: '#A45BFF' }]}
+          style={[styles.aiBtn, styles.aiBtnGhost]}
           disabled={loading}
         >
-          <Text style={styles.aiBtnText}>INTERPRET TODAY'S TAROT</Text>
+          <Text style={[styles.aiBtnText, styles.aiBtnGhostText]}>INTERPRET TODAY'S TAROT</Text>
         </TouchableOpacity>
 
         {(loading || output) ? (
@@ -2864,13 +2831,12 @@ const styles = StyleSheet.create({
   // Sub-page
   subHeader: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 12, paddingTop: 10, paddingBottom: 4,
+    paddingHorizontal: 12, paddingTop: 6, paddingBottom: 2,
   },
   subBackBtn: {
     width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
   },
-  subBackText: { fontSize: 32, fontWeight: '300', marginTop: -4 },
   subTitle: {
     flex: 1,
     color: '#fff',
@@ -2879,17 +2845,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textAlign: 'center',
   },
-  subBody: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 120 },
+  subBody: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 120 },
 
+  // Section rhythm: every section starts with this label; the baked-in
+  // margins keep spacing consistent without inline overrides.
   sectionLabel: {
-    color: '#ffffff80', fontSize: 11, letterSpacing: 2, fontWeight: '600',
-    marginBottom: 4,
+    color: '#ffffff77', fontSize: 10, letterSpacing: 2, fontWeight: '700',
+    marginTop: 24, marginBottom: 8,
   },
   sectionSub: {
-    color: '#ffffff66', fontSize: 11, fontStyle: 'italic',
-    marginBottom: 12, lineHeight: 16,
+    color: '#ffffffB0', fontSize: 12,
+    marginBottom: 10, lineHeight: 18,
   },
-  emptyText: { color: '#ffffff66', fontSize: 13, fontStyle: 'italic', marginTop: 8 },
+  emptyText: { color: '#ffffff77', fontSize: 12, lineHeight: 18, marginTop: 4 },
 
   safetyBody: {
     color: '#ffffffcc',
@@ -2899,8 +2867,8 @@ const styles = StyleSheet.create({
   },
   wipeBtn: {
     marginTop: 12,
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 13,
+    borderRadius: 999,
     borderWidth: 1.5,
     borderColor: '#FF5B5B',
     backgroundColor: 'rgba(255,91,91,0.10)',
@@ -2914,9 +2882,10 @@ const styles = StyleSheet.create({
   },
   // Affirmations
   bigAffirmCard: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 18, padding: 22, marginBottom: 24,
-    borderWidth: 1, alignItems: 'center', minHeight: 160,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderRadius: 18, padding: 22,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    alignItems: 'center', minHeight: 160,
     justifyContent: 'center',
   },
   bigAffirmText: {
@@ -2927,12 +2896,11 @@ const styles = StyleSheet.create({
   },
   bigRefreshBtn: {
     marginTop: 18,
-    paddingHorizontal: 18, paddingVertical: 9,
+    paddingHorizontal: 20, paddingVertical: 10,
     borderRadius: 999,
-    borderWidth: 1, borderColor: '#9affc8',
-    backgroundColor: '#9affc822',
+    backgroundColor: '#9affc8',
   },
-  bigRefreshText: { color: '#9affc8', fontSize: 11, fontWeight: '700', letterSpacing: 2 },
+  bigRefreshText: { color: '#0B0B1F', fontSize: 11, fontWeight: '700', letterSpacing: 2 },
 
   notifPills: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   notifPill: {
@@ -2941,14 +2909,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.04)',
   },
   notifPillText: { color: '#ffffff99', fontSize: 12, fontWeight: '600', letterSpacing: 1 },
-  notifHint: { color: '#ffffff66', fontSize: 11, marginTop: 8, fontStyle: 'italic' },
-  notifWarn: { color: '#FFB05B', fontSize: 11, marginTop: 8, fontStyle: 'italic', lineHeight: 16 },
+  notifHint: { color: '#ffffff77', fontSize: 12, marginTop: 8, lineHeight: 18 },
+  notifWarn: { color: '#FFB05B', fontSize: 12, marginTop: 8, lineHeight: 18 },
 
   // Mood
-  moodRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
+  moodRow: { flexDirection: 'row', gap: 6 },
   moodBtn: {
     flex: 1, alignItems: 'center', paddingVertical: 12,
-    borderRadius: 12, borderWidth: 1,
+    borderRadius: 14, borderWidth: 1,
   },
   moodValue: { fontSize: 20, fontWeight: '700' },
   moodLabel: { fontSize: 10, letterSpacing: 1, fontWeight: '600', marginTop: 2 },
@@ -2997,9 +2965,9 @@ const styles = StyleSheet.create({
   graphLabelText: { color: '#ffffff66', fontSize: 9, letterSpacing: 1 },
 
   backfillCard: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 14, padding: 12, marginTop: 10,
-    borderWidth: 1, borderColor: '#5BD0FF44',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderRadius: 18, padding: 12, marginTop: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
   },
   backfillHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -3009,8 +2977,10 @@ const styles = StyleSheet.create({
 
   moodHistoryRow: {
     flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 14,
+    paddingVertical: 10, paddingHorizontal: 12, marginBottom: 8,
   },
   moodHistoryDot: { width: 8, height: 8, borderRadius: 4, marginRight: 12 },
   moodHistoryDate: { flex: 1, color: '#ffffffaa', fontSize: 12 },
@@ -3019,71 +2989,62 @@ const styles = StyleSheet.create({
   // Gratitude
   gratInput: {
     color: '#fff', fontSize: 15,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
     minHeight: 90, textAlignVertical: 'top',
   },
   gratSaveBtn: {
     alignSelf: 'flex-end', marginTop: 10,
-    paddingHorizontal: 22, paddingVertical: 10,
+    paddingHorizontal: 24, paddingVertical: 13,
     borderRadius: 999, backgroundColor: '#FFB05B',
   },
   gratSaveText: { color: '#0B0B1F', fontWeight: '700', letterSpacing: 2, fontSize: 12 },
   gratDateHeader: {
-    color: '#FFB05B', fontSize: 11, letterSpacing: 1.5, fontWeight: '700',
+    color: '#ffffff88', fontSize: 11, letterSpacing: 1.5, fontWeight: '700',
     marginBottom: 8,
   },
   gratItem: {
     flexDirection: 'row', alignItems: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.20)',
-    borderRadius: 12, padding: 12, marginBottom: 6,
-    borderWidth: 1, borderColor: 'transparent',
-  },
-  gratItemBar: {
-    width: 3, alignSelf: 'stretch',
-    backgroundColor: '#FFB05B', borderRadius: 2,
-    marginRight: 12, minHeight: 18,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 8,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
   },
   gratItemText: { color: '#ffffffdd', fontSize: 14, lineHeight: 20, flex: 1 },
   gratDelBtn: { paddingHorizontal: 6, paddingVertical: 2 },
-  gratDelText: { color: '#ffffff44', fontSize: 14 },
 
-  rantDate: { color: '#FF5B9C', fontSize: 10, letterSpacing: 1.5, fontWeight: '700', marginBottom: 4 },
+  rantDate: { color: '#ffffff77', fontSize: 10, letterSpacing: 1.5, fontWeight: '700', marginBottom: 4 },
 
   manifestCheck: { paddingRight: 12, paddingTop: 1 },
   manifestCheckBox: {
     width: 22, height: 22, borderRadius: 6,
     borderWidth: 1.5, borderColor: '#A45BFF99',
     alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   manifestCheckMark: { color: '#fff', fontSize: 13, fontWeight: '800', lineHeight: 14 },
 
   // Grounding
-  groundIntro: {
-    color: '#ffffffcc', fontSize: 14, lineHeight: 22,
-    fontStyle: 'italic', marginBottom: 16, textAlign: 'center',
-  },
   groundCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.30)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
     borderRadius: 14, padding: 16, marginBottom: 8,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
   },
   groundBigNum: { fontSize: 36, fontWeight: '300', width: 60, textAlign: 'center' },
   groundCardText: { color: '#ffffffcc', fontSize: 16, flex: 1 },
-  groundEm: { fontStyle: 'italic', color: '#fff', fontWeight: '700' },
+  groundEm: { color: '#fff', fontWeight: '700' },
   groundOutro: {
     color: '#ffffff88', fontSize: 12, lineHeight: 18,
-    fontStyle: 'italic', textAlign: 'center', marginTop: 14,
+    textAlign: 'center', marginTop: 14,
   },
 
   // Support
   supportHero: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 18, padding: 22,
-    borderWidth: 1, alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderRadius: 18, padding: 22, marginTop: 8,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    alignItems: 'center',
   },
   supportEmoji: { fontSize: 44, marginBottom: 8 },
   supportHeadline: {
@@ -3102,8 +3063,8 @@ const styles = StyleSheet.create({
   },
   supportBtnText: { color: '#0B0B1F', fontWeight: '800', letterSpacing: 3, fontSize: 13 },
   supportFootnote: {
-    color: '#ffffff66', fontSize: 11, fontStyle: 'italic',
-    textAlign: 'center', marginTop: 16, lineHeight: 16,
+    color: '#ffffff77', fontSize: 12,
+    textAlign: 'center', marginTop: 16, lineHeight: 18,
   },
   roadmapItem: {
     flexDirection: 'row', alignItems: 'flex-start',
@@ -3120,8 +3081,9 @@ const styles = StyleSheet.create({
 
   // Routines
   routineCard: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderRadius: 18, padding: 14, marginBottom: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
   },
   routineName: { fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
   routineDesc: { color: '#ffffffaa', fontSize: 12, marginTop: 4, lineHeight: 17, marginBottom: 10 },
@@ -3139,11 +3101,11 @@ const styles = StyleSheet.create({
 
   // Soundscapes
   soundscapeControlCard: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    marginTop: 14,
+    borderColor: 'rgba(255,255,255,0.09)',
     marginBottom: 12,
   },
   soundscapeTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -3169,20 +3131,14 @@ const styles = StyleSheet.create({
   },
   soundscapeCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.30)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
     borderRadius: 14, padding: 12, marginBottom: 8,
-    borderWidth: 1,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
   },
   soundscapeGlyphBox: {
     width: 40, height: 40, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center',
     marginRight: 12, borderWidth: 1,
-  },
-  soundscapeGlyph: {
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: 1,
-    fontFamily: 'Courier',
   },
   soundscapeName: { color: '#fff', fontSize: 14, fontWeight: '600' },
   soundscapeBlurb: { color: '#ffffff88', fontSize: 12, marginTop: 2 },
@@ -3192,20 +3148,15 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 999,
   },
 
-  cardName: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  cardSub: { color: '#ffffff88', fontSize: 12, marginTop: 4, lineHeight: 17 },
-
-  // Weekly insights card
-
   // Bug
   bugInput: {
     color: '#fff', fontSize: 13,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10,
     marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
   },
   bugSendBtn: {
-    paddingVertical: 14, borderRadius: 12, marginTop: 16,
+    paddingVertical: 13, borderRadius: 999, marginTop: 16,
     backgroundColor: '#FF5B9C', alignItems: 'center',
   },
   bugSendText: { color: '#0B0B1F', fontWeight: '700', letterSpacing: 2, fontSize: 14 },
@@ -3213,22 +3164,22 @@ const styles = StyleSheet.create({
   fieldLabel: { color: '#ffffff80', fontSize: 11, letterSpacing: 1, fontWeight: '600', marginTop: 12, marginBottom: 6 },
   fieldInput: {
     color: '#fff', fontSize: 14,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
   },
 
   // MBTI
   mbtiCard: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 14, padding: 14, marginTop: 10,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderRadius: 18, padding: 14, marginTop: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
   },
   mbtiQuestion: { color: '#fff', fontSize: 14, marginBottom: 10, fontWeight: '500' },
   mbtiOption: {
     paddingVertical: 10, paddingHorizontal: 12,
-    borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     marginBottom: 6,
   },
   mbtiOptionText: { color: '#ffffffcc', fontSize: 13 },
@@ -3244,13 +3195,13 @@ const styles = StyleSheet.create({
     fontSize: 36, letterSpacing: 4, fontWeight: '600',
   },
   mbtiResultGroup: { color: '#A45BFF', fontSize: 14, marginTop: 4, fontWeight: '700', letterSpacing: 1 },
-  mbtiResultBlurb: { color: '#ffffffcc', fontSize: 12, marginTop: 4, fontStyle: 'italic', textAlign: 'center' },
+  mbtiResultBlurb: { color: '#ffffffcc', fontSize: 12, marginTop: 4, textAlign: 'center' },
 
   // Compatibility
   compatCard: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 14, padding: 14, marginTop: 4,
-    borderWidth: 1, borderColor: 'rgba(255,143,177,0.30)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
   },
   compatName: { color: '#fff', fontSize: 16, fontWeight: '600' },
   compatMeta: { color: '#ffffffaa', fontSize: 12, marginTop: 2 },
@@ -3259,48 +3210,44 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   compatComingSoon: {
-    marginTop: 28, padding: 16,
-    borderRadius: 14, borderStyle: 'dashed',
-    borderWidth: 1, borderColor: '#FF8FB155',
-    backgroundColor: 'rgba(0,0,0,0.20)',
+    marginTop: 24, padding: 16,
+    borderRadius: 18, borderStyle: 'dashed',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
   },
   compatComingTitle: { color: '#FF8FB1', fontSize: 13, fontWeight: '700', letterSpacing: 1, marginBottom: 6 },
   compatComingText: { color: '#ffffffaa', fontSize: 12, lineHeight: 17 },
 
   // AI Insights
   aiBtn: {
-    paddingVertical: 14, borderRadius: 12, marginTop: 10, alignItems: 'center',
+    paddingVertical: 13, borderRadius: 999, marginTop: 10, alignItems: 'center',
   },
   aiBtnText: { color: '#0B0B1F', fontSize: 13, fontWeight: '800', letterSpacing: 1.5 },
+  aiBtnGhost: {
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+  },
+  aiBtnGhostText: { color: '#ffffffCC' },
 
   aiSourceRow: {
     flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4,
   },
   aiSourceChip: {
     paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 999, borderWidth: 1.5,
-    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderRadius: 999, borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.045)',
   },
   aiSourceText: {
     fontSize: 12, fontWeight: '700', letterSpacing: 0.6,
   },
-  aiOutput: {
-    marginTop: 16, padding: 14,
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 14, borderWidth: 1,
-    borderColor: 'rgba(91,208,255,0.30)',
-    minHeight: 60, alignItems: 'center', justifyContent: 'center',
-  },
-  aiOutputText: { color: '#ffffffdd', fontSize: 13, lineHeight: 19 },
   aiFootnote: {
-    color: '#ffffff66', fontSize: 11, fontStyle: 'italic',
-    marginTop: 18, lineHeight: 16, textAlign: 'center',
+    color: '#ffffff77', fontSize: 12,
+    marginTop: 18, lineHeight: 18, textAlign: 'center',
   },
 
   linkText: {
     color: '#5BD0FF',
     textDecorationLine: 'underline',
-    fontStyle: 'italic',
   },
 
   // Dream-journal output card for AI Insights
