@@ -2292,14 +2292,6 @@ function AppContent() {
       <WaveBackground band={activeBand} playing={isTonePlaying} overrideColor={singleColor} />
       <StatusBar style="light" />
       <SafeAreaView style={[styles.safe, styles.webColumn]} edges={['top']}>
-        {/* Reserved strip for the moon chip (and the More launcher's resting
-            spot), so neither can overlap the wordmark or tab content. */}
-        <View style={styles.topStrip} pointerEvents="none">
-          <View style={styles.lunarBar}>
-            <MoonDisc phase={lunar.phase} size={15} />
-            <Text style={styles.lunarText}>{lunar.name}</Text>
-          </View>
-        </View>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
@@ -3341,13 +3333,6 @@ const styles = StyleSheet.create({
     ? { width: '100%' as const, maxWidth: 600, alignSelf: 'center' as const }
     : {},
   onboardingLayer: { backgroundColor: '#0B0B1F' },
-  topStrip: {
-    height: 44,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-  },
   scroll: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 12 : 4,
@@ -3727,24 +3712,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.08)',
-  },
-  lunarBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.20)',
-  },
-  lunarText: {
-    color: '#ffffffcc',
-    fontSize: 9,
-    letterSpacing: 1.6,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    marginLeft: 7,
   },
   tabBar: {
     flexDirection: 'row',
