@@ -1030,7 +1030,11 @@ function MoodGraph({
   onSelectDay?: (date: Date) => void;
 }) {
   const { width: screenW } = useWindowDimensions();
-  const W = screenW - 40;
+  // The app renders inside a centered max-width column on web, so the window
+  // can be far wider than the layout. Size the chart from the measured
+  // container, with a window-derived guess only for the first frame.
+  const [measuredW, setMeasuredW] = useState<number | null>(null);
+  const W = measuredW ?? Math.min(screenW - 40, 560);
   const H = 160;
   const padX = 18;
   const padTop = 14;
@@ -1058,6 +1062,13 @@ function MoodGraph({
   if (current) segments.push(current);
 
   return (
+    <View
+      style={{ width: '100%' }}
+      onLayout={e => {
+        const w = Math.round(e.nativeEvent.layout.width);
+        if (w > 0 && w !== measuredW) setMeasuredW(w);
+      }}
+    >
     <View style={[styles.graphCard, { width: W, height: H }]}>
       <Svg width={W} height={H}>
         {/* Horizontal grid lines for 1..5 */}
@@ -1114,6 +1125,7 @@ function MoodGraph({
         <Text style={styles.graphLabelText}>14d ago</Text>
         <Text style={styles.graphLabelText}>today</Text>
       </View>
+    </View>
     </View>
   );
 }
