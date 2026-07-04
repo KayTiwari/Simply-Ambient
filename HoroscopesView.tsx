@@ -110,6 +110,7 @@ type Props = {
 
 type TarotCard = {
   name: string;
+  type?: string; // 'major' | 'minor' per the API
   meaning_up?: string;
   meaning_rev?: string;
   desc?: string;
@@ -132,10 +133,12 @@ const drawReversed = () => Math.random() < 1 / 3;
 
 const MAJOR_ONLY_KEY = '@simply_ambient_tarot_major_only_v1';
 
-// Minor arcana are the four suits; everything else (including "Wheel of
-// Fortune", which also contains "of") is major.
-function isMinorArcana(name: string): boolean {
-  return /\bof (Wands|Cups|Swords|Pentacles)\b/i.test(name ?? '');
+// The API tags each card with type 'major' | 'minor'; the suit-name pattern
+// is the fallback for any response that omits it. ("Wheel of Fortune" also
+// contains "of", so the pattern requires a suit.)
+function isMinorArcana(card: TarotCard): boolean {
+  if (card.type) return card.type.toLowerCase() === 'minor';
+  return /\bof (Wands|Cups|Swords|Pentacles)\b/i.test(card.name ?? '');
 }
 
 // The API deals at most 10 cards per request and cannot filter by arcana,
@@ -152,7 +155,7 @@ async function fetchCards(count: number, majorOnly: boolean): Promise<TarotCard[
     const cards: TarotCard[] = Array.isArray(json?.cards) ? json.cards : [];
     for (const c of cards) {
       if (!c?.name || seen.has(c.name)) continue;
-      if (majorOnly && isMinorArcana(c.name)) continue;
+      if (majorOnly && isMinorArcana(c)) continue;
       seen.add(c.name);
       out.push(c);
       if (out.length >= count) break;
@@ -250,7 +253,7 @@ export default function HoroscopesView({
     majorOnlyRef.current = next;
     AsyncStorage.setItem(MAJOR_ONLY_KEY, next ? '1' : '0').catch(() => {});
     // If the sitting card no longer qualifies, deal a fresh one.
-    if (next && tarot && isMinorArcana(tarot.name)) drawTarot();
+    if (next && tarot && isMinorArcana(tarot)) drawTarot();
   }
 
   useEffect(() => {
