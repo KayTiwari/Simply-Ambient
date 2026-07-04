@@ -20,6 +20,7 @@ import Slider from '@react-native-community/slider';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import {
   CaretLeft,
+  CaretRight,
   ArrowsClockwise,
   X,
   Plus,
@@ -484,14 +485,15 @@ function Hub({
   // Weekly insights, derived from the parent's live state. The Hub stays
   // mounted underneath the slide-over sub-pages, so a one-shot storage read
   // here would go stale as soon as the user logs an entry.
+  // Mood averages over the past 5 days, trend against the 5 days before.
   const weekly = useMemo(() => {
     const dayMs = 24 * 60 * 60 * 1000;
     const now = Date.now();
-    const week = moodLog.filter(m => now - m.ts < 7 * dayMs);
-    const prev = moodLog.filter(m => now - m.ts >= 7 * dayMs && now - m.ts < 14 * dayMs);
+    const recent = moodLog.filter(m => now - m.ts < 5 * dayMs);
+    const prev = moodLog.filter(m => now - m.ts >= 5 * dayMs && now - m.ts < 10 * dayMs);
     const avg = (arr: MoodEntry[]) =>
       arr.length ? arr.reduce((s, e) => s + e.value, 0) / arr.length : null;
-    const a = avg(week);
+    const a = avg(recent);
     const b = avg(prev);
     const trend: 'up' | 'down' | 'flat' =
       a === null || b === null ? 'flat' :
@@ -499,7 +501,6 @@ function Hub({
       a - b <= -0.25 ? 'down' : 'flat';
     return {
       moodAvg: a,
-      moodCount: week.length,
       gratCount: gratitude.filter(g => now - g.ts < 7 * dayMs).length,
       moodTrend: trend,
     };
@@ -517,8 +518,8 @@ function Hub({
         </View>
       </View>
 
-      {/* Compact pulse row: streak plus the week's numbers at a glance. */}
-      {streak > 0 || weekly.moodCount > 0 || weekly.gratCount > 0 ? (
+      {/* Compact pulse row: streak plus recent numbers at a glance. */}
+      {streak > 0 || weekly.moodAvg !== null || weekly.gratCount > 0 ? (
         <View style={styles.pulseRow}>
           <View style={styles.pulseChip}>
             <Text style={[styles.pulseNum, { color: '#9affc8' }]}>{streak}</Text>
@@ -529,7 +530,7 @@ function Hub({
               {weekly.moodAvg !== null ? weekly.moodAvg.toFixed(1) : '–'}
               {weekly.moodTrend === 'up' ? ' ↑' : weekly.moodTrend === 'down' ? ' ↓' : ''}
             </Text>
-            <Text style={styles.pulseCap}>AVG MOOD · 7D</Text>
+            <Text style={styles.pulseCap}>AVG MOOD · 5D</Text>
           </View>
           <View style={styles.pulseChip}>
             <Text style={[styles.pulseNum, { color: '#FFB05B' }]}>{weekly.gratCount}</Text>
@@ -862,13 +863,15 @@ function MoodPage({
     m => new Date(m.ts).toDateString() === today.toDateString(),
   );
 
-  // Day selected on the graph for retroactive logging.
+  // Day selected on the calendar for retroactive logging.
   const [backfillDate, setBackfillDate] = useState<Date | null>(null);
 
   function selectBackfillDay(date: Date) {
-    // Buckets only cover the past 14 days, but guard anyway.
     if (date.getTime() > Date.now()) return;
-    setBackfillDate(date);
+    // Tapping the selected day again deselects it.
+    setBackfillDate(prev =>
+      prev && prev.toDateString() === date.toDateString() ? null : date,
+    );
   }
 
   function saveBackfill(value: number) {
@@ -939,8 +942,16 @@ function MoodPage({
         </View>
 
         <Text style={[styles.sectionLabel, { marginTop: 28 }]}>LAST 14 DAYS</Text>
-        <Text style={styles.sectionSub}>Daily average. Tap a day to log it retroactively.</Text>
-        <MoodGraph buckets={dayBuckets} onSelectDay={selectBackfillDay} />
+        <Text style={styles.sectionSub}>Daily average over the last two weeks</Text>
+        <MoodGraph buckets={dayBuckets} />
+
+        <Text style={[styles.sectionLabel, { marginTop: 28 }]}>LOG A PAST DAY</Text>
+        <Text style={styles.sectionSub}>Pick a day, then choose the mood it deserved.</Text>
+        <BackfillCalendar
+          moodLog={moodLog}
+          selected={backfillDate}
+          onSelectDay={selectBackfillDay}
+        />
 
         {backfillDate ? (
           <View style={styles.backfillCard}>
@@ -1007,10 +1018,9 @@ function MoodPage({
 }
 
 function MoodGraph({
-  buckets, onSelectDay,
+  buckets,
 }: {
   buckets: Array<{ date: Date; avg: number | null }>;
-  onSelectDay?: (date: Date) => void;
 }) {
   const { width: screenW } = useWindowDimensions();
   // The app renders inside a centered max-width column on web, so the window
@@ -1087,28 +1097,123 @@ function MoodGraph({
           ) : null,
         )}
       </Svg>
-      {/* Invisible per-day tap strips over the chart. Cheaper and more
-          reliable than Svg hit testing, and each strip is a real touch
-          target for screen readers. */}
-      {onSelectDay ? (
-        <View style={[StyleSheet.absoluteFill, { flexDirection: 'row' }]}>
-          {buckets.map((b, i) => (
-            <TouchableOpacity
-              key={i}
-              style={{ flex: 1 }}
-              activeOpacity={0.6}
-              onPress={() => onSelectDay(b.date)}
-              accessibilityRole="button"
-              accessibilityLabel={`Log mood for ${b.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`}
-            />
-          ))}
-        </View>
-      ) : null}
       <View style={styles.graphLabelRow} pointerEvents="none">
         <Text style={styles.graphLabelText}>14d ago</Text>
         <Text style={styles.graphLabelText}>today</Text>
       </View>
     </View>
+    </View>
+  );
+}
+
+// Compact month calendar for retroactive mood logging. Days with entries
+// show a dot in their mood color; future days are disabled.
+function BackfillCalendar({
+  moodLog, selected, onSelectDay,
+}: {
+  moodLog: MoodEntry[];
+  selected: Date | null;
+  onSelectDay: (date: Date) => void;
+}) {
+  const [monthAnchor, setMonthAnchor] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const year = monthAnchor.getFullYear();
+  const month = monthAnchor.getMonth();
+  const now = new Date();
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+
+  // Average mood per day of this month, for the dots.
+  const dayAvg = useMemo(() => {
+    const map = new Map<number, { sum: number; n: number }>();
+    for (const e of moodLog) {
+      const d = new Date(e.ts);
+      if (d.getFullYear() !== year || d.getMonth() !== month) continue;
+      const cur = map.get(d.getDate()) ?? { sum: 0, n: 0 };
+      map.set(d.getDate(), { sum: cur.sum + e.value, n: cur.n + 1 });
+    }
+    const avg = new Map<number, number>();
+    map.forEach((v, day) => avg.set(day, v.sum / v.n));
+    return avg;
+  }, [moodLog, year, month]);
+
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: Array<number | null> = [
+    ...Array.from({ length: firstDow }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  const monthTitle = monthAnchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+  function shiftMonth(delta: number) {
+    setMonthAnchor(prev => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  }
+
+  return (
+    <View style={styles.calCard}>
+      <View style={styles.calHeader}>
+        <TouchableOpacity
+          onPress={() => shiftMonth(-1)}
+          style={styles.calNavBtn}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Previous month"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <CaretLeft size={16} color="#ffffff88" weight="regular" />
+        </TouchableOpacity>
+        <Text style={styles.calTitle}>{monthTitle}</Text>
+        <TouchableOpacity
+          onPress={() => shiftMonth(1)}
+          style={[styles.calNavBtn, isCurrentMonth && { opacity: 0.25 }]}
+          activeOpacity={0.7}
+          disabled={isCurrentMonth}
+          accessibilityRole="button"
+          accessibilityLabel="Next month"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <CaretRight size={16} color="#ffffff88" weight="regular" />
+        </TouchableOpacity>
+      </View>
+      <View style={styles.calGrid}>
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+          <Text key={`${d}${i}`} style={styles.calWeekday}>{d}</Text>
+        ))}
+        {cells.map((day, i) => {
+          if (day === null) return <View key={`b${i}`} style={styles.calCell} />;
+          const date = new Date(year, month, day, 12, 0, 0, 0);
+          const future = date.getTime() > Date.now() && date.toDateString() !== now.toDateString();
+          const isSelected = selected?.toDateString() === date.toDateString();
+          const avg = dayAvg.get(day);
+          return (
+            <TouchableOpacity
+              key={day}
+              style={[styles.calCell, isSelected && styles.calCellSelected]}
+              disabled={future}
+              activeOpacity={0.7}
+              onPress={() => onSelectDay(date)}
+              accessibilityRole="button"
+              accessibilityLabel={`Log mood for ${date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`}
+              accessibilityState={{ selected: isSelected, disabled: future }}
+            >
+              <Text style={[styles.calDay, future && { color: '#ffffff28' }, isSelected && { color: '#5BD0FF' }]}>
+                {day}
+              </Text>
+              <View
+                style={[
+                  styles.calDot,
+                  avg !== undefined
+                    ? { backgroundColor: moodColor(avg) }
+                    : { backgroundColor: 'transparent' },
+                ]}
+              />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -2854,6 +2959,37 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
     marginVertical: 4,
   },
+  calCard: {
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 18, paddingVertical: 12, paddingHorizontal: 10,
+    marginTop: 2,
+  },
+  calHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 6, marginBottom: 8,
+  },
+  calNavBtn: {
+    width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  calTitle: { color: '#ffffffdd', fontSize: 13, fontWeight: '600', letterSpacing: 0.6 },
+  calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calWeekday: {
+    width: '14.28%', textAlign: 'center',
+    color: '#ffffff55', fontSize: 9, fontWeight: '700', letterSpacing: 1,
+    marginBottom: 4,
+  },
+  calCell: {
+    width: '14.28%', height: 38,
+    alignItems: 'center', justifyContent: 'center',
+    borderRadius: 10,
+  },
+  calCellSelected: { backgroundColor: '#5BD0FF22', borderWidth: 1, borderColor: '#5BD0FF' },
+  calDay: { color: '#ffffffcc', fontSize: 12, fontVariant: ['tabular-nums'] },
+  calDot: { width: 4, height: 4, borderRadius: 2, marginTop: 2 },
+
   graphLabelRow: {
     position: 'absolute', bottom: 6, left: 18, right: 18,
     flexDirection: 'row', justifyContent: 'space-between',
