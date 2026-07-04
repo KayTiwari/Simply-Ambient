@@ -1229,7 +1229,7 @@ const styles = StyleSheet.create({
     marginBottom: 10, paddingHorizontal: 4,
   },
   card: {
-    backgroundColor: 'rgba(255,255,255,0.045)',
+    backgroundColor: 'rgba(17,17,38,0.85)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
     borderRadius: 18, padding: 14, marginBottom: 8,
   },
@@ -1248,7 +1248,7 @@ const styles = StyleSheet.create({
   },
 
   malaCard: {
-    backgroundColor: 'rgba(255,255,255,0.045)',
+    backgroundColor: 'rgba(17,17,38,0.85)',
     borderRadius: 18, padding: 14, marginTop: 10, marginBottom: 0,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
   },
