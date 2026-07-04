@@ -156,7 +156,7 @@ type Profile = {
   mbti?: string;      // e.g. 'INFJ'
 };
 
-const MOOD_COLORS = ['#FF5B5B', '#FF8A38', '#FFD000', '#9affc8', '#5BD0FF'];
+const MOOD_COLORS = ['#E07A66', '#FF8A38', '#D9BE7A', '#9DC7AC', '#8FB8DE'];
 const MOOD_LABELS = ['Low', 'Off', 'OK', 'Good', 'Great'];
 
 // Defensive accessors. If storage is corrupted and a mood value is outside
@@ -536,18 +536,18 @@ function Hub({
       {streak > 0 || weekly.moodAvg !== null || weekly.gratCount > 0 ? (
         <View style={styles.pulseRow}>
           <View style={styles.pulseChip}>
-            <Text style={[styles.pulseNum, { color: '#9affc8' }]}>{streak}</Text>
+            <Text style={[styles.pulseNum, { color: '#9DC7AC' }]}>{streak}</Text>
             <Text style={styles.pulseCap}>DAY STREAK</Text>
           </View>
           <View style={styles.pulseChip}>
-            <Text style={[styles.pulseNum, { color: '#5BD0FF' }]}>
+            <Text style={[styles.pulseNum, { color: '#8FB8DE' }]}>
               {weekly.moodAvg !== null ? weekly.moodAvg.toFixed(1) : '–'}
               {weekly.moodTrend === 'up' ? ' ↑' : weekly.moodTrend === 'down' ? ' ↓' : ''}
             </Text>
             <Text style={styles.pulseCap}>AVG MOOD · 5D</Text>
           </View>
           <View style={styles.pulseChip}>
-            <Text style={[styles.pulseNum, { color: '#FFB05B' }]}>{weekly.gratCount}</Text>
+            <Text style={[styles.pulseNum, { color: '#E0A470' }]}>{weekly.gratCount}</Text>
             <Text style={styles.pulseCap}>GRATITUDES · 7D</Text>
           </View>
         </View>
@@ -564,7 +564,7 @@ function Hub({
         <View style={styles.tileGrid}>
           <HubTile
             Icon={Smiley}
-            accent="#5BD0FF"
+            accent="#8FB8DE"
             label="Mood Check-in"
             sub={
               moodToday
@@ -576,7 +576,7 @@ function Hub({
           />
           <HubTile
             glyph="❀"
-            accent="#5BD0FF"
+            accent="#8FB8DE"
             label="Gratitude"
             sub={
               gratitude.length === 0
@@ -587,21 +587,21 @@ function Hub({
           />
           <HubTile
             Icon={CloudLightning}
-            accent="#5BD0FF"
+            accent="#8FB8DE"
             label="Rant"
             sub="Vent it out. Raw, private, unfiltered"
             onPress={() => onOpen('rant')}
           />
           <HubTile
             glyph="✷"
-            accent="#5BD0FF"
+            accent="#8FB8DE"
             label="Manifestation"
             sub="Name what you're calling in"
             onPress={() => onOpen('manifestation')}
           />
           <HubTile
             glyph="⌬"
-            accent="#5BD0FF"
+            accent="#8FB8DE"
             label="AI Insights"
             sub="Reflections on your journal & tarot"
             onPress={() => onOpen('insights')}
@@ -612,7 +612,7 @@ function Hub({
         <View style={styles.tileGrid}>
           <HubTile
             glyph="☉"
-            accent="#9affc8"
+            accent="#9DC7AC"
             label="Daily Affirmation"
             sub={affirmationPreview ? `“${affirmationPreview}”` : 'Anchor a single thought for the day'}
             badge={notifPref === 'off' ? null : notifPref === 'daily' ? '1×/day' : '3×/day'}
@@ -620,21 +620,21 @@ function Hub({
           />
           <HubTile
             glyph="⟁"
-            accent="#9affc8"
+            accent="#9DC7AC"
             label="Routines"
             sub="Chain presets into sessions"
             onPress={() => onOpen('routines')}
           />
           <HubTile
             Icon={Waveform}
-            accent="#9affc8"
+            accent="#9DC7AC"
             label="Soundscapes"
             sub="Rain · ocean · forest · white noise"
             onPress={() => onOpen('soundscapes')}
           />
           <HubTile
             glyph="⌖"
-            accent="#9affc8"
+            accent="#9DC7AC"
             label="Grounding"
             sub="5-4-3-2-1 anxiety reset through the senses"
             onPress={() => onOpen('grounding')}
@@ -645,21 +645,21 @@ function Hub({
         <View style={styles.tileGrid}>
           <HubTile
             glyph="◯"
-            accent="#A45BFF"
+            accent="#B39BE0"
             label="Profile"
             sub="Birth details · MBTI · personality"
             onPress={() => onOpen('profile')}
           />
           <HubTile
             glyph="☌"
-            accent="#A45BFF"
+            accent="#B39BE0"
             label="Natal Chart"
             sub="Western planetary positions"
             onPress={() => onOpen('natal')}
           />
           <HubTile
             glyph="⚭"
-            accent="#A45BFF"
+            accent="#B39BE0"
             label="Compatibility"
             sub="Match your sign with another"
             onPress={() => onOpen('compatibility')}
@@ -794,7 +794,7 @@ function AffirmationsPage({
 
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="Daily Affirmation" accent="#9affc8" onBack={onBack} />
+      <SubHeader title="Daily Affirmation" accent="#9DC7AC" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>TODAY</Text>
         <Text style={styles.sectionSub}>
@@ -803,7 +803,7 @@ function AffirmationsPage({
 
         <View style={styles.bigAffirmCard}>
           {loading ? (
-            <ActivityIndicator color="#9affc8" />
+            <ActivityIndicator color="#9DC7AC" />
           ) : (
             <Text style={styles.bigAffirmText}>“{affirmation ?? 'You are exactly where you need to be.'}”</Text>
           )}
@@ -837,10 +837,10 @@ function AffirmationsPage({
                 accessibilityState={{ selected: active }}
                 style={[
                   styles.notifPill,
-                  active && { borderColor: '#9affc8', backgroundColor: '#9affc822' },
+                  active && { borderColor: '#9DC7AC', backgroundColor: '#9DC7AC22' },
                 ]}
               >
-                <Text style={[styles.notifPillText, active && { color: '#9affc8' }]}>{label}</Text>
+                <Text style={[styles.notifPillText, active && { color: '#9DC7AC' }]}>{label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -922,7 +922,7 @@ function MoodPage({
 
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="Mood" accent="#5BD0FF" onBack={onBack} />
+      <SubHeader title="Mood" accent="#8FB8DE" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>RIGHT NOW</Text>
         <Text style={styles.sectionSub}>
@@ -1093,7 +1093,7 @@ function MoodGraph({
           <Path
             key={idx}
             d={d}
-            stroke="#5BD0FF"
+            stroke="#8FB8DE"
             strokeWidth={2}
             fill="none"
           />
@@ -1213,7 +1213,7 @@ function BackfillCalendar({
               accessibilityLabel={`Log mood for ${date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`}
               accessibilityState={{ selected: isSelected, disabled: future }}
             >
-              <Text style={[styles.calDay, future && { color: '#ffffff28' }, isSelected && { color: '#5BD0FF' }]}>
+              <Text style={[styles.calDay, future && { color: '#ffffff28' }, isSelected && { color: '#8FB8DE' }]}>
                 {day}
               </Text>
               <View
@@ -1296,7 +1296,7 @@ function GratitudePage({
 
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="Gratitude" accent="#FFB05B" onBack={onBack} />
+      <SubHeader title="Gratitude" accent="#E0A470" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>TODAY</Text>
         <Text style={styles.sectionSub}>
@@ -1337,10 +1337,10 @@ function GratitudePage({
                 accessibilityState={{ selected: active }}
                 style={[
                   styles.notifPill,
-                  active && { borderColor: '#FFB05B', backgroundColor: '#FFB05B22' },
+                  active && { borderColor: '#E0A470', backgroundColor: '#E0A47022' },
                 ]}
               >
-                <Text style={[styles.notifPillText, active && { color: '#FFB05B' }]}>{o.label}</Text>
+                <Text style={[styles.notifPillText, active && { color: '#E0A470' }]}>{o.label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -1406,7 +1406,7 @@ function RantPage({
 
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="Rant" accent="#FF5B9C" onBack={onBack} />
+      <SubHeader title="Rant" accent="#D68097" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>WHAT'S ON YOUR MIND</Text>
         <Text style={styles.sectionSub}>
@@ -1421,7 +1421,7 @@ function RantPage({
           multiline
           maxLength={4000}
         />
-        <TouchableOpacity onPress={commit} style={[styles.gratSaveBtn, { backgroundColor: '#FF5B9C' }]} activeOpacity={0.85}>
+        <TouchableOpacity onPress={commit} style={[styles.gratSaveBtn, { backgroundColor: '#D68097' }]} activeOpacity={0.85}>
           <Text style={styles.gratSaveText}>SAVE</Text>
         </TouchableOpacity>
 
@@ -1482,7 +1482,7 @@ function ManifestationPage({
 
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="Manifestation" accent="#A45BFF" onBack={onBack} />
+      <SubHeader title="Manifestation" accent="#B39BE0" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>NEW INTENTION</Text>
         <Text style={styles.sectionSub}>
@@ -1497,7 +1497,7 @@ function ManifestationPage({
           multiline
           maxLength={500}
         />
-        <TouchableOpacity onPress={commit} style={[styles.gratSaveBtn, { backgroundColor: '#A45BFF' }]} activeOpacity={0.85}>
+        <TouchableOpacity onPress={commit} style={[styles.gratSaveBtn, { backgroundColor: '#B39BE0' }]} activeOpacity={0.85}>
           <Text style={styles.gratSaveText}>ADD</Text>
         </TouchableOpacity>
 
@@ -1542,7 +1542,7 @@ function ManifestRow({
       >
         <View style={[
           styles.manifestCheckBox,
-          item.manifested && { backgroundColor: '#A45BFF', borderColor: '#A45BFF' },
+          item.manifested && { backgroundColor: '#B39BE0', borderColor: '#B39BE0' },
         ]}>
           {item.manifested ? <Text style={styles.manifestCheckMark}>✓</Text> : null}
         </View>
@@ -1573,15 +1573,15 @@ function ManifestRow({
 
 function GroundingPage({ onBack }: { onBack: () => void }) {
   const items = [
-    { num: 5, color: '#FF5B5B', sense: 'see' },
-    { num: 4, color: '#FFB05B', sense: 'touch' },
-    { num: 3, color: '#FFD000', sense: 'hear' },
-    { num: 2, color: '#9affc8', sense: 'smell' },
-    { num: 1, color: '#5BD0FF', sense: 'taste' },
+    { num: 5, color: '#E07A66', sense: 'see' },
+    { num: 4, color: '#E0A470', sense: 'touch' },
+    { num: 3, color: '#D9BE7A', sense: 'hear' },
+    { num: 2, color: '#9DC7AC', sense: 'smell' },
+    { num: 1, color: '#8FB8DE', sense: 'taste' },
   ];
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="5-4-3-2-1 Grounding" accent="#5B6CFF" onBack={onBack} />
+      <SubHeader title="5-4-3-2-1 Grounding" accent="#8F97DE" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody}>
         <Text style={styles.sectionLabel}>THE PRACTICE</Text>
         <Text style={styles.sectionSub}>
@@ -1931,7 +1931,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
               <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={wipeAllData}
-                style={[styles.linkConfirmOpenBtn, { backgroundColor: '#FF5B5B' }]}
+                style={[styles.linkConfirmOpenBtn, { backgroundColor: '#E07A66' }]}
                 accessibilityLabel="Confirm wipe all data"
               >
                 <Text style={styles.linkConfirmOpenText}>WIPE</Text>
@@ -2022,7 +2022,7 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="Report a Bug" accent="#FF5B9C" onBack={onBack} />
+      <SubHeader title="Report a Bug" accent="#D68097" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>WHAT WENT WRONG?</Text>
         <Text style={styles.sectionSub}>This goes straight to the developer's inbox.</Text>
@@ -2119,7 +2119,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="Profile" accent="#A45BFF" onBack={onBack} />
+      <SubHeader title="Profile" accent="#B39BE0" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>YOU</Text>
         <Text style={styles.sectionSub}>Stored only on this device.</Text>
@@ -2177,7 +2177,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
                   onPress={() => setAnswer(i, idx as 0 | 1)}
                   style={[
                     styles.mbtiOption,
-                    active && { borderColor: '#A45BFF', backgroundColor: '#A45BFF22' },
+                    active && { borderColor: '#B39BE0', backgroundColor: '#B39BE022' },
                   ]}
                 >
                   <Text style={[styles.mbtiOptionText, active && { color: '#fff' }]}>
@@ -2228,7 +2228,7 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="Natal Chart" accent="#5B6CFF" onBack={onBack} />
+      <SubHeader title="Natal Chart" accent="#8F97DE" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody}>
         <Text style={styles.sectionLabel}>YOUR BIRTH DETAILS</Text>
         {profile.name || profile.birthDate ? (
@@ -2257,7 +2257,7 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
         </Text>
 
         <View style={styles.compatComingSoon}>
-          <Text style={[styles.compatComingTitle, { color: '#5B6CFF' }]}>
+          <Text style={[styles.compatComingTitle, { color: '#8F97DE' }]}>
             In-app chart. Coming soon
           </Text>
           <Text style={styles.compatComingText}>
@@ -2270,7 +2270,7 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
             disabled={!ready}
             style={[
               styles.aiBtn,
-              { backgroundColor: '#5B6CFF', marginTop: 14, opacity: ready ? 1 : 0.4 },
+              { backgroundColor: '#8F97DE', marginTop: 14, opacity: ready ? 1 : 0.4 },
             ]}
           >
             <Text style={styles.aiBtnText}>OPEN ASTRO-SEEK CALCULATOR</Text>
@@ -2298,7 +2298,7 @@ const SAMPLE_ROUTINES: Routine[] = [
     id: 'morning-focus',
     name: 'Morning Focus',
     description: '5 min Beta to wake the mind, 10 min Alpha to settle attention.',
-    color: '#FFB05B',
+    color: '#E0A470',
     steps: [
       { label: 'Beta · 18 Hz',  minutes: 5  },
       { label: 'Alpha · 10 Hz', minutes: 10 },
@@ -2308,7 +2308,7 @@ const SAMPLE_ROUTINES: Routine[] = [
     id: 'evening-windown',
     name: 'Evening Wind-down',
     description: '10 min Alpha to release the day, 15 min Theta to soften.',
-    color: '#8A5BFF',
+    color: '#A498E8',
     steps: [
       { label: 'Alpha · 10 Hz', minutes: 10 },
       { label: 'Theta · 6 Hz',  minutes: 15 },
@@ -2318,7 +2318,7 @@ const SAMPLE_ROUTINES: Routine[] = [
     id: 'deep-sleep',
     name: 'Deep Sleep',
     description: '10 min Theta to drop in, 30 min Delta to rest.',
-    color: '#5B6CFF',
+    color: '#8F97DE',
     steps: [
       { label: 'Theta · 6 Hz', minutes: 10 },
       { label: 'Delta · 2 Hz', minutes: 30 },
@@ -2329,7 +2329,7 @@ const SAMPLE_ROUTINES: Routine[] = [
 function RoutinesPage({ onBack }: { onBack: () => void }) {
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="Routines" accent="#9affc8" onBack={onBack} />
+      <SubHeader title="Routines" accent="#9DC7AC" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody}>
         <Text style={styles.sectionLabel}>SAMPLE ROUTINES</Text>
         <Text style={styles.sectionSub}>
@@ -2353,7 +2353,7 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
           </View>
         ))}
         <View style={styles.compatComingSoon}>
-          <Text style={[styles.compatComingTitle, { color: '#9affc8' }]}>
+          <Text style={[styles.compatComingTitle, { color: '#9DC7AC' }]}>
             Custom routines & auto-sequencer. Coming soon
           </Text>
           <Text style={styles.compatComingText}>
@@ -2393,7 +2393,7 @@ function SoundscapesPage({
 
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="Soundscapes" accent="#5BD0FF" onBack={onBack} />
+      <SubHeader title="Soundscapes" accent="#8FB8DE" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody}>
         <Text style={styles.sectionLabel}>NATURAL AMBIENCE</Text>
         <Text style={styles.sectionSub}>
@@ -2419,9 +2419,9 @@ function SoundscapesPage({
                 minimumValue={0}
                 maximumValue={1}
                 value={soundscapeVolume}
-                minimumTrackTintColor="#5BD0FF"
+                minimumTrackTintColor="#8FB8DE"
                 maximumTrackTintColor="rgba(255,255,255,0.12)"
-                thumbTintColor="#5BD0FF"
+                thumbTintColor="#8FB8DE"
                 onValueChange={onChangeSoundscapeVolume}
               />
             </View>
@@ -2488,7 +2488,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="Compatibility" accent="#FF8FB1" onBack={onBack} />
+      <SubHeader title="Compatibility" accent="#D8A0B0" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody}>
         <Text style={styles.sectionLabel}>YOUR PROFILE</Text>
         {self.name || self.birthDate ? (
@@ -2717,7 +2717,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="AI Insights" accent="#5BD0FF" onBack={onBack} />
+      <SubHeader title="AI Insights" accent="#8FB8DE" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>GEMINI API KEY</Text>
         <Text style={styles.sectionSub}>
@@ -2745,10 +2745,10 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
         </Text>
         <View style={styles.aiSourceRow}>
           {([
-            { id: 'mood',          label: 'Mood',          color: '#5BD0FF' },
-            { id: 'gratitude',     label: 'Gratitude',     color: '#FFB05B' },
-            { id: 'manifestation', label: 'Manifestation', color: '#A45BFF' },
-            { id: 'rant',          label: 'Rant',          color: '#FF5B9C' },
+            { id: 'mood',          label: 'Mood',          color: '#8FB8DE' },
+            { id: 'gratitude',     label: 'Gratitude',     color: '#E0A470' },
+            { id: 'manifestation', label: 'Manifestation', color: '#B39BE0' },
+            { id: 'rant',          label: 'Rant',          color: '#D68097' },
           ] as Array<{ id: AISourceKey; label: string; color: string }>).map(s => {
             const on = sources[s.id];
             return (
@@ -2780,7 +2780,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
           onPress={() => runAnalysis('journal')}
           style={[
             styles.aiBtn,
-            { backgroundColor: '#5BD0FF' },
+            { backgroundColor: '#8FB8DE' },
             (loading || enabledSourceCount === 0) && { opacity: 0.4 },
           ]}
           disabled={loading || enabledSourceCount === 0}
@@ -2805,7 +2805,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
             <Text style={styles.dreamDate}>{today}</Text>
             <View style={styles.dreamRule} />
             {loading ? (
-              <ActivityIndicator color="#A45BFF" style={{ marginTop: 16 }} />
+              <ActivityIndicator color="#B39BE0" style={{ marginTop: 16 }} />
             ) : (
               <Text style={styles.dreamBody}>{output}</Text>
             )}
@@ -2965,12 +2965,12 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: 999,
     borderWidth: 1.5,
-    borderColor: '#FF5B5B',
+    borderColor: '#E07A66',
     backgroundColor: 'rgba(255,91,91,0.10)',
     alignItems: 'center',
   },
   wipeBtnText: {
-    color: '#FF5B5B',
+    color: '#E07A66',
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 2,
@@ -2993,7 +2993,7 @@ const styles = StyleSheet.create({
     marginTop: 18,
     paddingHorizontal: 20, paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: '#9affc8',
+    backgroundColor: '#9DC7AC',
   },
   bigRefreshText: { color: '#0B0B1F', fontSize: 11, fontWeight: '700', letterSpacing: 2 },
 
@@ -3005,7 +3005,7 @@ const styles = StyleSheet.create({
   },
   notifPillText: { color: '#ffffff99', fontSize: 12, fontWeight: '600', letterSpacing: 1 },
   notifHint: { color: '#ffffff77', fontSize: 12, marginTop: 8, lineHeight: 18 },
-  notifWarn: { color: '#FFB05B', fontSize: 12, marginTop: 8, lineHeight: 18 },
+  notifWarn: { color: '#E0A470', fontSize: 12, marginTop: 8, lineHeight: 18 },
 
   // Mood
   moodRow: { flexDirection: 'row', gap: 6 },
@@ -3070,7 +3070,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     borderRadius: 10,
   },
-  calCellSelected: { backgroundColor: '#5BD0FF22', borderWidth: 1, borderColor: '#5BD0FF' },
+  calCellSelected: { backgroundColor: '#8FB8DE22', borderWidth: 1, borderColor: '#8FB8DE' },
   calDay: { color: '#ffffffcc', fontSize: 12, fontVariant: ['tabular-nums'] },
   calDot: { width: 4, height: 4, borderRadius: 2, marginTop: 2 },
 
@@ -3089,7 +3089,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginBottom: 8,
   },
-  backfillTitle: { color: '#5BD0FF', fontSize: 11, letterSpacing: 1.5, fontWeight: '700' },
+  backfillTitle: { color: '#8FB8DE', fontSize: 11, letterSpacing: 1.5, fontWeight: '700' },
 
   moodHistoryRow: {
     flexDirection: 'row', alignItems: 'center',
@@ -3113,7 +3113,7 @@ const styles = StyleSheet.create({
   gratSaveBtn: {
     alignSelf: 'flex-end', marginTop: 10,
     paddingHorizontal: 24, paddingVertical: 13,
-    borderRadius: 999, backgroundColor: '#FFB05B',
+    borderRadius: 999, backgroundColor: '#E0A470',
   },
   gratSaveText: { color: '#0B0B1F', fontWeight: '700', letterSpacing: 2, fontSize: 12 },
   gratDateHeader: {
@@ -3134,7 +3134,7 @@ const styles = StyleSheet.create({
   manifestCheck: { paddingRight: 12, paddingTop: 1 },
   manifestCheckBox: {
     width: 22, height: 22, borderRadius: 6,
-    borderWidth: 1.5, borderColor: '#A45BFF99',
+    borderWidth: 1.5, borderColor: '#B39BE099',
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
@@ -3273,7 +3273,7 @@ const styles = StyleSheet.create({
   },
   bugSendBtn: {
     paddingVertical: 13, borderRadius: 999, marginTop: 16,
-    backgroundColor: '#FF5B9C', alignItems: 'center',
+    backgroundColor: '#D68097', alignItems: 'center',
   },
   bugSendText: { color: '#0B0B1F', fontWeight: '700', letterSpacing: 2, fontSize: 14 },
 
@@ -3301,8 +3301,8 @@ const styles = StyleSheet.create({
   mbtiOptionText: { color: '#ffffffcc', fontSize: 13 },
   mbtiResult: {
     marginTop: 18,
-    backgroundColor: '#A45BFF22',
-    borderWidth: 1, borderColor: '#A45BFF',
+    backgroundColor: '#B39BE022',
+    borderWidth: 1, borderColor: '#B39BE0',
     borderRadius: 14, padding: 18, alignItems: 'center',
   },
   mbtiResultType: {
@@ -3310,7 +3310,7 @@ const styles = StyleSheet.create({
     fontFamily: 'CormorantGaramond_500Medium',
     fontSize: 36, letterSpacing: 4, fontWeight: '600',
   },
-  mbtiResultGroup: { color: '#A45BFF', fontSize: 14, marginTop: 4, fontWeight: '700', letterSpacing: 1 },
+  mbtiResultGroup: { color: '#B39BE0', fontSize: 14, marginTop: 4, fontWeight: '700', letterSpacing: 1 },
   mbtiResultBlurb: { color: '#ffffffcc', fontSize: 12, marginTop: 4, textAlign: 'center' },
 
   // Compatibility
@@ -3322,7 +3322,7 @@ const styles = StyleSheet.create({
   compatName: { color: '#fff', fontSize: 16, fontWeight: '600' },
   compatMeta: { color: '#ffffffaa', fontSize: 12, marginTop: 2 },
   compatMbti: {
-    color: '#A45BFF', fontSize: 13, fontWeight: '700', letterSpacing: 2,
+    color: '#B39BE0', fontSize: 13, fontWeight: '700', letterSpacing: 2,
     marginTop: 6,
   },
   compatComingSoon: {
@@ -3331,7 +3331,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
     backgroundColor: 'rgba(255,255,255,0.045)',
   },
-  compatComingTitle: { color: '#FF8FB1', fontSize: 13, fontWeight: '700', letterSpacing: 1, marginBottom: 6 },
+  compatComingTitle: { color: '#D8A0B0', fontSize: 13, fontWeight: '700', letterSpacing: 1, marginBottom: 6 },
   compatComingText: { color: '#ffffffaa', fontSize: 12, lineHeight: 17 },
 
   // AI Insights
@@ -3362,7 +3362,7 @@ const styles = StyleSheet.create({
   },
 
   linkText: {
-    color: '#5BD0FF',
+    color: '#8FB8DE',
     textDecorationLine: 'underline',
   },
 
@@ -3415,7 +3415,7 @@ const styles = StyleSheet.create({
   },
   linkConfirmTitle: { color: '#fff', fontSize: 17, fontWeight: '700', letterSpacing: 0.5 },
   linkConfirmUrl: {
-    color: '#5BD0FF', fontSize: 12, marginTop: 10,
+    color: '#8FB8DE', fontSize: 12, marginTop: 10,
     backgroundColor: 'rgba(91,208,255,0.10)',
     padding: 8, borderRadius: 8,
   },
@@ -3429,7 +3429,7 @@ const styles = StyleSheet.create({
   linkConfirmCancelText: { color: '#ffffffaa', fontSize: 13, fontWeight: '600', letterSpacing: 1 },
   linkConfirmOpenBtn: {
     flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
-    backgroundColor: '#5BD0FF',
+    backgroundColor: '#8FB8DE',
   },
   linkConfirmOpenText: { color: '#0B0B1F', fontSize: 13, fontWeight: '800', letterSpacing: 2 },
 });

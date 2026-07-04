@@ -453,13 +453,13 @@ type Soundscape = {
 };
 
 const SOUNDSCAPES: Soundscape[] = [
-  { id: 'rain',   name: 'Soft Rain',      blurb: 'A long, gentle rain bed without the umbrella-plastic loop.', color: '#5BD0FF',   Icon: CloudRain },
-  { id: 'ocean',  name: 'Ocean Tide',     blurb: 'Long swells for downshifting into sleep or recovery.',      color: '#5B6CFF',   Icon: Waves },
-  { id: 'forest', name: 'Forest Air',     blurb: 'Birdsong canopy for light, living background texture.', color: '#9affc8', Icon: TreeEvergreen },
-  { id: 'stream', name: 'Trickling Stream', blurb: 'Small moving water with birds tucked into the distance.',  color: '#71E8D4',   Icon: Drop },
-  { id: 'fire',   name: 'Hearth',         blurb: 'A campfire bed with natural ember crackle.',            color: '#FFB05B',   Icon: Campfire },
+  { id: 'rain',   name: 'Soft Rain',      blurb: 'A long, gentle rain bed without the umbrella-plastic loop.', color: '#8FB8DE',   Icon: CloudRain },
+  { id: 'ocean',  name: 'Ocean Tide',     blurb: 'Long swells for downshifting into sleep or recovery.',      color: '#8F97DE',   Icon: Waves },
+  { id: 'forest', name: 'Forest Air',     blurb: 'Birdsong canopy for light, living background texture.', color: '#9DC7AC', Icon: TreeEvergreen },
+  { id: 'stream', name: 'Trickling Stream', blurb: 'Small moving water with birds tucked into the distance.',  color: '#7FC6C9',   Icon: Drop },
+  { id: 'fire',   name: 'Hearth',         blurb: 'A campfire bed with natural ember crackle.',            color: '#E0A470',   Icon: Campfire },
   { id: 'white',  name: 'White Noise',    blurb: 'Even masking for busy rooms and brittle silence.',          color: '#ffffffcc', Icon: WaveSquare },
-  { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer masking with less edge than white noise.',           color: '#FFD0E1',   Icon: WaveSine },
+  { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer masking with less edge than white noise.',           color: '#E0BFCB',   Icon: WaveSine },
   { id: 'brown',  name: 'Brown Noise',    blurb: 'Low, dense, and grounding for a heavy nervous system.',     color: '#8A6B4A',   Icon: WaveTriangle },
 ];
 
@@ -548,28 +548,28 @@ export type Zodiac = {
 export const ZODIAC: Zodiac[] = [
   { id: 'aries',       glyph: '♈', name: 'Aries',       startMonth: 3,  startDay: 21, endMonth: 4,  endDay: 19, element: 'Fire',  qualities: 'Initiator · Bold',          intention: 'Lead with the courage that already lives in you.',
     yearAhead: 'This year your fire is meant to lead. But lead with patience. Begin only what you can finish, and finish what truly matters.',
-    chakraId: 'cr-solar',  color: '#FF5B5B' },
+    chakraId: 'cr-solar',  color: '#E07A66' },
   { id: 'taurus',      glyph: '♉', name: 'Taurus',      startMonth: 4,  startDay: 20, endMonth: 5,  endDay: 20, element: 'Earth', qualities: 'Steady · Sensual',          intention: 'Ground in what nourishes. Slow down to taste it.',
     yearAhead: 'A year for slow, deliberate building. The pleasure is in the process, not the prize. Trust your senses.',
-    chakraId: 'cr-root',   color: '#7FB45B' },
+    chakraId: 'cr-root',   color: '#A3C29A' },
   { id: 'gemini',      glyph: '♊', name: 'Gemini',      startMonth: 5,  startDay: 21, endMonth: 6,  endDay: 20, element: 'Air',   qualities: 'Curious · Versatile',       intention: 'Speak only what is true. Let the rest pass.',
     yearAhead: 'Your many threads come together this year. Choose what to weave and what to release. Less, but deeper.',
-    chakraId: 'cr-throat', color: '#FFE078' },
+    chakraId: 'cr-throat', color: '#D9C98A' },
   { id: 'cancer',      glyph: '♋', name: 'Cancer',      startMonth: 6,  startDay: 21, endMonth: 7,  endDay: 22, element: 'Water', qualities: 'Nurturing · Intuitive',     intention: 'Tend to your inner home before the outer world.',
     yearAhead: 'Tend the inner home this year. Strong roots make lasting branches. Receive as readily as you give.',
-    chakraId: 'cr-sacral', color: '#A0D8FF' },
+    chakraId: 'cr-sacral', color: '#A9C6E8' },
   { id: 'leo',         glyph: '♌', name: 'Leo',         startMonth: 7,  startDay: 23, endMonth: 8,  endDay: 22, element: 'Fire',  qualities: 'Radiant · Generous',        intention: 'Shine without dimming for anyone.',
     yearAhead: 'Step into your light without dimming for anyone. Your warmth is generous, not obligatory.',
-    chakraId: 'cr-solar',  color: '#FFB05B' },
+    chakraId: 'cr-solar',  color: '#E0A470' },
   { id: 'virgo',       glyph: '♍', name: 'Virgo',       startMonth: 8,  startDay: 23, endMonth: 9,  endDay: 22, element: 'Earth', qualities: 'Discerning · Refined',      intention: 'Refine without becoming rigid.',
     yearAhead: 'Refine, don\'t perfect. Done with care beats endless polishing. Trust the simpler path.',
-    chakraId: 'cr-root',   color: '#9affc8' },
+    chakraId: 'cr-root',   color: '#9DC7AC' },
   { id: 'libra',       glyph: '♎', name: 'Libra',       startMonth: 9,  startDay: 23, endMonth: 10, endDay: 22, element: 'Air',   qualities: 'Harmonious · Fair',         intention: 'Balance is a verb, not a state.',
     yearAhead: 'The balance you seek is internal. Stop outsourcing your steadiness to other people\'s moods.',
-    chakraId: 'cr-throat', color: '#FFD0E1' },
+    chakraId: 'cr-throat', color: '#E0BFCB' },
   { id: 'scorpio',     glyph: '♏', name: 'Scorpio',     startMonth: 10, startDay: 23, endMonth: 11, endDay: 21, element: 'Water', qualities: 'Deep · Transformative',     intention: 'Let what is dying complete its dying.',
     yearAhead: 'A year of release. What completes its dying makes room for what is coming. Trust the dark.',
-    chakraId: 'cr-sacral', color: '#A45BFF' },
+    chakraId: 'cr-sacral', color: '#B39BE0' },
   { id: 'sagittarius', glyph: '♐', name: 'Sagittarius', startMonth: 11, startDay: 22, endMonth: 12, endDay: 21, element: 'Fire',  qualities: 'Seeker · Free',             intention: 'The far horizon begins under your feet.',
     yearAhead: 'The horizon you chase is wide enough to include rest. Travel slowly. Notice where you are.',
     chakraId: 'cr-solar',  color: '#FF8A38' },
@@ -578,10 +578,10 @@ export const ZODIAC: Zodiac[] = [
     chakraId: 'cr-root',   color: '#8A6B4A' },
   { id: 'aquarius',    glyph: '♒', name: 'Aquarius',    startMonth: 1,  startDay: 20, endMonth: 2,  endDay: 18, element: 'Air',   qualities: 'Visionary · Independent',   intention: 'Imagine the world you wish to inhabit.',
     yearAhead: 'Imagine larger than you\'ve allowed. The vision you withhold serves no one. Speak it.',
-    chakraId: 'cr-throat', color: '#5BD0FF' },
+    chakraId: 'cr-throat', color: '#8FB8DE' },
   { id: 'pisces',      glyph: '♓', name: 'Pisces',      startMonth: 2,  startDay: 19, endMonth: 3,  endDay: 20, element: 'Water', qualities: 'Dreamy · Compassionate',    intention: 'Dissolve into the larger flow.',
     yearAhead: 'Trust the current. Surrender is not weakness. It is mastery of flow. Soften the grip.',
-    chakraId: 'cr-sacral', color: '#5B6CFF' },
+    chakraId: 'cr-sacral', color: '#8F97DE' },
 ];
 
 export function todaysSign(date: Date = new Date()): Zodiac {
@@ -637,13 +637,13 @@ export const DOSHAS: Dosha[] = [
 ];
 
 const PRESETS: BuiltInPreset[] = [
-  { id: 'delta',    band: 'delta', name: 'Delta',    range: '0.5–4 Hz',  beatHz: 2,  carrier: 200, color: '#5B6CFF', blurb: 'Surrender · Restoration' },
-  { id: 'theta',    band: 'theta', name: 'Theta',    range: '4–8 Hz',    beatHz: 6,  carrier: 200, color: '#8A5BFF', blurb: 'Visualize · Receive' },
-  { id: 'schumann', band: 'alpha', name: 'Schumann', range: '7.83 Hz',   beatHz: 8,  carrier: 200, color: '#9affc8', blurb: 'Earth’s heartbeat' },
-  { id: 'alpha',    band: 'alpha', name: 'Alpha',    range: '8–13 Hz',   beatHz: 10, carrier: 200, color: '#5BD0FF', blurb: 'Aligned focus · Allow' },
-  { id: 'beta',     band: 'beta',  name: 'Beta',     range: '13–30 Hz',  beatHz: 18, carrier: 200, color: '#FFB05B', blurb: 'Direct · Take action' },
-  { id: 'gamma',    band: 'gamma', name: 'Gamma',    range: '30–100 Hz', beatHz: 40, carrier: 200, color: '#FF5B9C', blurb: 'Insight · Knowing' },
-  { id: 'gamma40',  band: 'gamma', name: 'Gamma-40', range: '40 Hz',     beatHz: 40, carrier: 250, color: '#FF8FB1', blurb: 'Memory · Clarity' },
+  { id: 'delta',    band: 'delta', name: 'Delta',    range: '0.5–4 Hz',  beatHz: 2,  carrier: 200, color: '#8F97DE', blurb: 'Surrender · Restoration' },
+  { id: 'theta',    band: 'theta', name: 'Theta',    range: '4–8 Hz',    beatHz: 6,  carrier: 200, color: '#A498E8', blurb: 'Visualize · Receive' },
+  { id: 'schumann', band: 'alpha', name: 'Schumann', range: '7.83 Hz',   beatHz: 8,  carrier: 200, color: '#9DC7AC', blurb: 'Earth’s heartbeat' },
+  { id: 'alpha',    band: 'alpha', name: 'Alpha',    range: '8–13 Hz',   beatHz: 10, carrier: 200, color: '#8FB8DE', blurb: 'Aligned focus · Allow' },
+  { id: 'beta',     band: 'beta',  name: 'Beta',     range: '13–30 Hz',  beatHz: 18, carrier: 200, color: '#E0A470', blurb: 'Direct · Take action' },
+  { id: 'gamma',    band: 'gamma', name: 'Gamma',    range: '30–100 Hz', beatHz: 40, carrier: 200, color: '#D68097', blurb: 'Insight · Knowing' },
+  { id: 'gamma40',  band: 'gamma', name: 'Gamma-40', range: '40 Hz',     beatHz: 40, carrier: 250, color: '#D8A0B0', blurb: 'Memory · Clarity' },
 ];
 
 type TuningOrigin = 'solfeggio' | 'natural' | 'cosmic' | 'archaeo' | 'scientific';
@@ -672,11 +672,11 @@ type Palette = {
 };
 const PALETTES: Record<BandKey, Palette> = {
   none:   { base: ['#1d1d2a', '#2a2a3a', '#1d1d2a'], waves: ['#2a2a3a', '#36364a', '#4a4a5e'], accent: '#9aa0b4' },
-  delta:  { base: ['#0a1240', '#1a2a78', '#0a1240'], waves: ['#172056', '#243596', '#5B6CFF'], accent: '#5B6CFF' },
-  theta:  { base: ['#1a0a3a', '#3a1276', '#1a0a3a'], waves: ['#28115a', '#4a2096', '#8A5BFF'], accent: '#8A5BFF' },
-  alpha:  { base: ['#0a2a4a', '#125878', '#0a2a4a'], waves: ['#0e3458', '#206a96', '#5BD0FF'], accent: '#5BD0FF' },
-  beta:   { base: ['#3a1a0a', '#76402a', '#3a1a0a'], waves: ['#502a14', '#965a3a', '#FFB05B'], accent: '#FFB05B' },
-  gamma:  { base: ['#3a0a1a', '#76124a', '#3a0a1a'], waves: ['#5a0e2a', '#962060', '#FF5B9C'], accent: '#FF5B9C' },
+  delta:  { base: ['#0a1240', '#1a2a78', '#0a1240'], waves: ['#172056', '#243596', '#8F97DE'], accent: '#8F97DE' },
+  theta:  { base: ['#1a0a3a', '#3a1276', '#1a0a3a'], waves: ['#28115a', '#4a2096', '#A498E8'], accent: '#A498E8' },
+  alpha:  { base: ['#0a2a4a', '#125878', '#0a2a4a'], waves: ['#0e3458', '#206a96', '#8FB8DE'], accent: '#8FB8DE' },
+  beta:   { base: ['#3a1a0a', '#76402a', '#3a1a0a'], waves: ['#502a14', '#965a3a', '#E0A470'], accent: '#E0A470' },
+  gamma:  { base: ['#3a0a1a', '#76124a', '#3a0a1a'], waves: ['#5a0e2a', '#962060', '#D68097'], accent: '#D68097' },
   tuning: { base: ['#2a200a', '#5a4218', '#2a200a'], waves: ['#3a2c14', '#7a5e2a', '#d9b35c'], accent: '#d9b35c' },
   // Chakra palettes. Saturated, rainbow progression
   root:     { base: ['#1a0a0a', '#3a1a14', '#1a0a0a'], waves: ['#2a1018', '#5a2030', '#D97B72'], accent: '#D97B72' },
@@ -693,11 +693,11 @@ const PALETTES: Record<BandKey, Palette> = {
 };
 
 function bandFor(beat: number): { name: string; color: string; key: BandKey } {
-  if (beat < 4)  return { name: 'Delta', color: '#5B6CFF', key: 'delta' };
-  if (beat < 8)  return { name: 'Theta', color: '#8A5BFF', key: 'theta' };
-  if (beat < 13) return { name: 'Alpha', color: '#5BD0FF', key: 'alpha' };
-  if (beat < 30) return { name: 'Beta',  color: '#FFB05B', key: 'beta' };
-  return           { name: 'Gamma', color: '#FF5B9C', key: 'gamma' };
+  if (beat < 4)  return { name: 'Delta', color: '#8F97DE', key: 'delta' };
+  if (beat < 8)  return { name: 'Theta', color: '#A498E8', key: 'theta' };
+  if (beat < 13) return { name: 'Alpha', color: '#8FB8DE', key: 'alpha' };
+  if (beat < 30) return { name: 'Beta',  color: '#E0A470', key: 'beta' };
+  return           { name: 'Gamma', color: '#D68097', key: 'gamma' };
 }
 
 // Configure foreground display only outside Expo Go, where this raises a
@@ -3013,14 +3013,14 @@ function FrequenciesView(props: FreqViewProps) {
           <FrequencyControl
             ear="L" label="LEFT"
             hz={leftHz}
-            color="#5BD0FF"
+            color="#8FB8DE"
             onCommit={props.onCommitLeft}
             onSlide={props.onSlideLeft}
           />
           <FrequencyControl
             ear="R" label="RIGHT"
             hz={rightHz}
-            color="#FF5B9C"
+            color="#D68097"
             onCommit={props.onCommitRight}
             onSlide={props.onSlideRight}
           />
@@ -3049,7 +3049,7 @@ function FrequenciesView(props: FreqViewProps) {
         })}
         {userPresets.map(p => {
           const active = activePresetId === p.id;
-          const userColor = '#9affc8';
+          const userColor = '#9DC7AC';
           return (
             <TouchableOpacity
               key={p.id}
@@ -3212,9 +3212,9 @@ function FrequenciesView(props: FreqViewProps) {
                   minimumValue={0}
                   maximumValue={1}
                   value={bgVolume}
-                  minimumTrackTintColor="#9affc8"
+                  minimumTrackTintColor="#9DC7AC"
                   maximumTrackTintColor="rgba(255,255,255,0.12)"
-                  thumbTintColor="#9affc8"
+                  thumbTintColor="#9DC7AC"
                   onValueChange={props.onChangeBgVolume}
                 />
               </View>
@@ -3606,7 +3606,7 @@ const styles = StyleSheet.create({
   bgPlayBtn: {
     width: 48, height: 48, borderRadius: 24,
     alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#9affc8',
+    backgroundColor: '#9DC7AC',
   },
   bgPlayText: { color: '#0B0B1F', fontSize: 18, fontWeight: '700' },
   bgVolLabel: { color: '#ffffff80', fontSize: 10, letterSpacing: 1.5, fontWeight: '600', marginBottom: 2 },
@@ -3638,9 +3638,9 @@ const styles = StyleSheet.create({
   modalBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, marginLeft: 8 },
   modalBtnGhost: { backgroundColor: 'rgba(255,255,255,0.08)' },
   modalBtnGhostText: { color: '#fff', fontWeight: '600' },
-  modalBtnPrimary: { backgroundColor: '#9affc8' },
+  modalBtnPrimary: { backgroundColor: '#9DC7AC' },
   modalBtnPrimaryText: { color: '#0B0B1F', fontWeight: '700' },
-  modalBtnDanger: { backgroundColor: '#FF5B5B' },
+  modalBtnDanger: { backgroundColor: '#E07A66' },
   modalBtnDangerText: { color: '#0B0B1F', fontWeight: '700' },
   confirmCard: { maxWidth: 400 },
   confirmBody: { marginTop: 8, lineHeight: 18 },

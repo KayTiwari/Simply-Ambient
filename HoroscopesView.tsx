@@ -453,7 +453,7 @@ export default function HoroscopesView({
         ) : null}
 
         {/* TAROT CARD OF THE DAY */}
-        <View style={[styles.tarotCard, { borderColor: '#A45BFF55' }]}>
+        <View style={[styles.tarotCard, { borderColor: '#B39BE055' }]}>
           <View style={styles.tarotHeaderRow}>
             <Text style={styles.cardLabel}>CARD OF THE MOMENT</Text>
             <TouchableOpacity
@@ -467,7 +467,7 @@ export default function HoroscopesView({
             </TouchableOpacity>
           </View>
           {tarotLoading ? (
-            <ActivityIndicator color="#A45BFF" style={{ marginVertical: 24 }} />
+            <ActivityIndicator color="#B39BE0" style={{ marginVertical: 24 }} />
           ) : tarot ? (
             <View style={{ alignItems: 'center' }}>
               <FlipCard
@@ -500,7 +500,7 @@ export default function HoroscopesView({
         </View>
 
         {/* TAROT SPREADS */}
-        <View style={[styles.tarotCard, { borderColor: '#A45BFF55' }]}>
+        <View style={[styles.tarotCard, { borderColor: '#B39BE055' }]}>
           <Text style={styles.cardLabel}>DRAW A SPREAD</Text>
           <View style={styles.spreadBtnRow}>
             {SPREAD_SIZES.map(n => {
@@ -509,20 +509,20 @@ export default function HoroscopesView({
                 <TouchableOpacity
                   key={n}
                   onPress={() => drawSpread(n)}
-                  style={[styles.spreadBtn, active && { borderColor: '#A45BFF', backgroundColor: '#A45BFF22' }]}
+                  style={[styles.spreadBtn, active && { borderColor: '#B39BE0', backgroundColor: '#B39BE022' }]}
                   accessibilityLabel={`Draw ${n}-card spread`}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                 >
-                  <Text style={[styles.spreadBtnText, active && { color: '#C9A2FF' }]}>{n}</Text>
-                  <Text style={[styles.spreadBtnSub, active && { color: '#C9A2FF99' }]}>cards</Text>
+                  <Text style={[styles.spreadBtnText, active && { color: '#C6B6EC' }]}>{n}</Text>
+                  <Text style={[styles.spreadBtnSub, active && { color: '#C6B6EC99' }]}>cards</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
           {spreadLoading ? (
-            <ActivityIndicator color="#A45BFF" style={{ marginVertical: 22 }} />
+            <ActivityIndicator color="#B39BE0" style={{ marginVertical: 22 }} />
           ) : spread && spreadSize ? (
             <>
               <Text style={styles.tarotHint}>The cards are laid face down. Turn each in its own time.</Text>
@@ -643,7 +643,7 @@ function CardBack({ width, height, compact }: { width: number; height: number; c
       <View style={styles.cardInner}>
         <Svg width={w} height={h} viewBox="0 0 100 162">
           <SvgCircle cx={50} cy={81} r={compact ? 26 : 30} stroke="#C9A96B55" strokeWidth={1} fill="none" />
-          <SvgCircle cx={50} cy={81} r={compact ? 18 : 21} stroke="#A45BFF33" strokeWidth={0.8} fill="none" />
+          <SvgCircle cx={50} cy={81} r={compact ? 18 : 21} stroke="#B39BE033" strokeWidth={0.8} fill="none" />
           <SvgPath
             d="M 58 63 A 19 19 0 1 0 58 99 A 15 15 0 1 1 58 63"
             fill="#C9A96B"
@@ -834,7 +834,7 @@ const styles = StyleSheet.create({
   spreadRow: { gap: 12, paddingVertical: 14, paddingRight: 8 },
   spreadSlot: { width: 116, alignItems: 'center' },
   spreadPos: {
-    color: '#C9A2FF', fontSize: 10, fontWeight: '800',
+    color: '#C6B6EC', fontSize: 10, fontWeight: '800',
     letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 8,
   },
   spreadCardMeaning: {
@@ -856,7 +856,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#141126',
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#A45BFF66',
+    borderColor: '#B39BE066',
     padding: 4,
   },
   cardInner: {

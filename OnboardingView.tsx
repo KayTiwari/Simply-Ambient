@@ -17,10 +17,10 @@ const STORAGE_PROFILE = '@simply_ambient_profile_v1';
 type Intent = 'sleep' | 'focus' | 'calm' | 'energy';
 
 const INTENTS: Array<{ id: Intent; label: string; glyph: string; color: string; blurb: string }> = [
-  { id: 'sleep',  label: 'Sleep',  glyph: '☾', color: '#5B6CFF', blurb: 'Wind down. Slow the body.' },
-  { id: 'focus',  label: 'Focus',  glyph: '◉', color: '#5BD0FF', blurb: 'Clear the mind. Sharpen attention.' },
-  { id: 'calm',   label: 'Calm',   glyph: '○', color: '#9affc8', blurb: 'Soften. Return to centre.' },
-  { id: 'energy', label: 'Energy', glyph: '✦', color: '#FFB05B', blurb: 'Activate. Build inner heat.' },
+  { id: 'sleep',  label: 'Sleep',  glyph: '☾', color: '#8F97DE', blurb: 'Wind down. Slow the body.' },
+  { id: 'focus',  label: 'Focus',  glyph: '◉', color: '#8FB8DE', blurb: 'Clear the mind. Sharpen attention.' },
+  { id: 'calm',   label: 'Calm',   glyph: '○', color: '#9DC7AC', blurb: 'Soften. Return to centre.' },
+  { id: 'energy', label: 'Energy', glyph: '✦', color: '#E0A470', blurb: 'Activate. Build inner heat.' },
 ];
 
 const RECS: Record<Intent, {
@@ -332,14 +332,14 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
                 title={rec.preset.name}
                 where={`Frequencies tab`}
                 reason={rec.preset.reason}
-                color="#5BD0FF"
+                color="#8FB8DE"
               />
               <RecRow
                 label="BREATH"
                 title={rec.breath.name}
                 where={`Breath tab`}
                 reason={rec.breath.reason}
-                color="#9affc8"
+                color="#9DC7AC"
               />
               <RecRow
                 label="CHAKRA"
