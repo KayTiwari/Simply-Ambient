@@ -477,10 +477,6 @@ function TechniqueList({ onPick }: { onPick: (t: Technique) => void }) {
       contentContainerStyle={{ paddingBottom: insets.bottom + 90, paddingHorizontal: 20 }}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.preface}>
-        Sit upright. Set an intention. Press play when ready.
-      </Text>
-
       <MalaCounter />
 
       <Text style={styles.sectionLabel}>CALMING</Text>
@@ -1287,11 +1283,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.045)',
   },
   malaHapticText: { color: '#ffffff99', fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
-
-  preface: {
-    color: '#ffffffB0', fontSize: 12, lineHeight: 18, textAlign: 'center',
-    marginBottom: 12, paddingHorizontal: 20,
-  },
 
   // Scroll content, so no flex: 1; the ScrollView itself fills the screen.
   sessionWrap: { alignItems: 'center', paddingHorizontal: 20 },
