@@ -11,7 +11,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ArrowsClockwise } from 'phosphor-react-native';
 
-import type { Zodiac } from './App';
+import { MoonDisc, type Zodiac, type LunarInfo } from './App';
 
 const HOROSCOPE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // Local calendar date (not UTC), so "today" matches what the user sees.
@@ -101,7 +101,7 @@ const GLYPH_FONT = Platform.select({
 type Props = {
   zodiac: Zodiac[];
   mySign: Zodiac;
-  lunar: { glyph: string; name: string; illum: number };
+  lunar: LunarInfo;
   onSelectMyZodiac: (z: Zodiac) => void;
 };
 
@@ -381,7 +381,7 @@ export default function HoroscopesView({
           )}
 
           <View style={styles.todayMoon}>
-            <Text style={styles.todayMoonGlyph}>{lunar.glyph}</Text>
+            <MoonDisc phase={lunar.phase} size={18} />
             <Text style={styles.todayMoonText}>
               {lunar.name} · {illumPct}% illuminated
             </Text>
@@ -600,8 +600,7 @@ const styles = StyleSheet.create({
     marginTop: 14, paddingTop: 12,
     borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
   },
-  todayMoonGlyph: { color: '#ffffffcc', fontSize: 16, marginRight: 8 },
-  todayMoonText: { color: '#ffffff99', fontSize: 12, letterSpacing: 0.5 },
+  todayMoonText: { color: '#ffffff99', fontSize: 12, letterSpacing: 0.5, marginLeft: 8 },
 
   sectionLabel: {
     color: '#ffffff80', fontSize: 11, letterSpacing: 2, fontWeight: '600',

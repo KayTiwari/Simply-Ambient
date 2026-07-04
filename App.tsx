@@ -20,6 +20,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Circle as SvgCircle, Path as SvgPath } from 'react-native-svg';
 import { StatusBar } from 'expo-status-bar';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -800,7 +801,9 @@ function randomAffirmation() {
 //   Lunar phase. Conway's algorithm, ~99% accurate
 // ---------------------------------------------------------------------------
 
-function lunarPhase(date: Date = new Date()): { glyph: string; name: string; illum: number } {
+export type LunarInfo = { glyph: string; name: string; illum: number; phase: number };
+
+function lunarPhase(date: Date = new Date()): LunarInfo {
   let y = date.getFullYear();
   let m = date.getMonth() + 1;
   const d = date.getDate();
@@ -809,14 +812,43 @@ function lunarPhase(date: Date = new Date()): { glyph: string; name: string; ill
   const ip = (j / 29.5305882) % 1; // age fraction 0..1
   const age = ip < 0 ? ip + 1 : ip;
   const illum = (1 - Math.cos(age * 2 * Math.PI)) / 2; // 0..1
-  if (age < 0.0625 || age >= 0.9375) return { glyph: '●', name: 'New', illum };
-  if (age < 0.1875)  return { glyph: '◐', name: 'Waxing crescent', illum };
-  if (age < 0.3125)  return { glyph: '◐', name: 'First quarter', illum };
-  if (age < 0.4375)  return { glyph: '◑', name: 'Waxing gibbous', illum };
-  if (age < 0.5625)  return { glyph: '○', name: 'Full', illum };
-  if (age < 0.6875)  return { glyph: '◑', name: 'Waning gibbous', illum };
-  if (age < 0.8125)  return { glyph: '◑', name: 'Last quarter', illum };
-  return                  { glyph: '◐', name: 'Waning crescent', illum };
+  const name =
+    age < 0.0625 || age >= 0.9375 ? 'New' :
+    age < 0.1875 ? 'Waxing crescent' :
+    age < 0.3125 ? 'First quarter' :
+    age < 0.4375 ? 'Waxing gibbous' :
+    age < 0.5625 ? 'Full' :
+    age < 0.6875 ? 'Waning gibbous' :
+    age < 0.8125 ? 'Last quarter' :
+    'Waning crescent';
+  // glyph is kept for any text-only context; the UI renders MoonDisc.
+  const glyph = illum < 0.06 ? '●' : illum > 0.94 ? '○' : age < 0.5 ? '◐' : '◑';
+  return { glyph, name, illum, phase: age };
+}
+
+// A real rendered moon: the lit region is the classic two-arc construction,
+// an outer limb arc plus an elliptical terminator whose width follows the
+// phase angle. Reads as an instrument, and is honest about the sky tonight.
+export function MoonDisc({ phase, size = 16 }: { phase: number; size?: number }) {
+  const c = size / 2;
+  const r = c - 1;
+  const cos = Math.cos(2 * Math.PI * phase);
+  const rx = Math.max(0.4, Math.abs(cos) * r);
+  const waxing = phase < 0.5;
+  const top = `${c} ${c - r}`;
+  const bottom = `${c} ${c + r}`;
+  // Outer limb on the lit side (right while waxing, left while waning),
+  // then back along the terminator, bowing toward or away from the limb
+  // for crescent vs gibbous.
+  const outerSweep = waxing ? 1 : 0;
+  const innerSweep = waxing ? (cos > 0 ? 0 : 1) : (cos > 0 ? 1 : 0);
+  const lit = `M ${top} A ${r} ${r} 0 0 ${outerSweep} ${bottom} A ${rx.toFixed(2)} ${r} 0 0 ${innerSweep} ${top}`;
+  return (
+    <Svg width={size} height={size}>
+      <SvgCircle cx={c} cy={c} r={r} stroke="rgba(255,255,255,0.30)" strokeWidth={1} fill="rgba(255,255,255,0.05)" />
+      {phase * 100 % 100 < 3 || phase > 0.97 ? null : <SvgPath d={lit} fill="#ffffffE0" />}
+    </Svg>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -2228,7 +2260,7 @@ function AppContent() {
             spot), so neither can overlap the wordmark or tab content. */}
         <View style={styles.topStrip} pointerEvents="none">
           <View style={styles.lunarBar}>
-            <Text style={styles.lunarGlyph}>{lunar.glyph}</Text>
+            <MoonDisc phase={lunar.phase} size={15} />
             <Text style={styles.lunarText}>{lunar.name}</Text>
           </View>
         </View>
@@ -3668,16 +3700,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.20)',
   },
-  lunarGlyph: {
-    color: '#fff',
-    fontSize: 14,
-    marginRight: 6,
-  },
   lunarText: {
-    color: '#ffffffdd',
-    fontSize: 10,
-    letterSpacing: 1,
-    fontStyle: 'italic',
+    color: '#ffffffcc',
+    fontSize: 9,
+    letterSpacing: 1.6,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginLeft: 7,
   },
   tabBar: {
     flexDirection: 'row',

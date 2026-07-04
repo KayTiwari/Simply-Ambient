@@ -485,35 +485,54 @@ function TechniqueList({ onPick }: { onPick: (t: Technique) => void }) {
   );
 }
 
-// A technique's own rhythm drawn as a tiny waveform: inhales rise, holds
-// stay level, exhales fall, each segment's width proportional to its
-// seconds. Every card gets a mark that could only belong to that pattern.
-function RhythmGlyph({ phases, color }: { phases: Phase[]; color: string }) {
-  const W = 46;
-  const H = 26;
-  const padY = 3;
-  const total = phases.reduce((s, p) => s + p.seconds, 0) || 1;
-  const yFor = (v: number) => H - padY - v * (H - padY * 2);
-  let x = 0;
-  let v = 0;
-  const pts = [`${x},${yFor(v).toFixed(1)}`];
-  for (const p of phases) {
-    x += (p.seconds / total) * W;
-    if (p.name === 'Inhale') v = p.target ?? 1;
-    else if (p.name === 'Exhale') v = p.target ?? 0;
-    pts.push(`${x.toFixed(1)},${yFor(v).toFixed(1)}`);
-  }
-  return (
-    <Svg width={W} height={H}>
+function polarPoint(c: number, r: number, deg: number): [number, number] {
+  const a = ((deg - 90) * Math.PI) / 180;
+  return [c + r * Math.cos(a), c + r * Math.sin(a)];
+}
+
+// A technique's cycle as one segmented ring: each phase is an arc whose
+// sweep is proportional to its seconds. Inhales carry the technique color,
+// holds are faint hairlines, exhales are dimmed. Box reads as a quartered
+// ring, 4-7-8 as three unequal arcs, a sigh as two short strokes and one
+// long sweep. The cycle length sits in the center.
+function PhaseRing({ phases, color, size = 44 }: { phases: Phase[]; color: string; size?: number }) {
+  const c = size / 2;
+  const r = c - 3;
+  const gapDeg = 16;
+  const totalSec = phases.reduce((s, p) => s + p.seconds, 0) || 1;
+  const usable = 360 - gapDeg * phases.length;
+  let angle = gapDeg / 2;
+  const arcs = phases.map((p, i) => {
+    const sweep = (p.seconds / totalSec) * usable;
+    const [x0, y0] = polarPoint(c, r, angle);
+    const [x1, y1] = polarPoint(c, r, angle + sweep);
+    const large = sweep > 180 ? 1 : 0;
+    const d = `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+    angle += sweep + gapDeg;
+    const stroke =
+      p.name === 'Inhale' ? color :
+      p.name === 'Hold' ? 'rgba(255,255,255,0.26)' :
+      color + '70';
+    return (
       <Path
-        d={`M ${pts.join(' L ')}`}
-        stroke={color}
-        strokeWidth={2}
-        fill="none"
+        key={i}
+        d={d}
+        stroke={stroke}
+        strokeWidth={2.5}
         strokeLinecap="round"
-        strokeLinejoin="round"
+        fill="none"
       />
-    </Svg>
+    );
+  });
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill as object}>
+        {arcs}
+      </Svg>
+      <Text style={{ color: '#ffffff66', fontSize: 8, fontWeight: '600', letterSpacing: 0.3 }}>
+        {totalSec}s
+      </Text>
+    </View>
   );
 }
 
@@ -528,7 +547,7 @@ function TechniqueCard({ technique, onPress }: { technique: Technique; onPress: 
     >
       <View style={styles.cardRow}>
         <View style={styles.cardRhythmWrap}>
-          <RhythmGlyph phases={technique.phases} color={technique.color} />
+          <PhaseRing phases={technique.phases} color={technique.color} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.cardName}>{technique.name}</Text>
