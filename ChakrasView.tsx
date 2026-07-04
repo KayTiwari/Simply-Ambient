@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: 'rgba(255,255,255,0.045)',
+    backgroundColor: 'rgba(17,17,38,0.85)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
     borderRadius: 18, padding: 14, marginBottom: 10,
   },
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   },
 
   doshaCard: {
-    backgroundColor: 'rgba(255,255,255,0.045)',
+    backgroundColor: 'rgba(17,17,38,0.85)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
     borderRadius: 18, padding: 14, marginBottom: 10,
   },

@@ -10,7 +10,7 @@ import {
   Vibration,
   View,
 } from 'react-native';
-import Svg, { Circle, Ellipse, G, Line } from 'react-native-svg';
+import Svg, { Circle, Ellipse, G, Line, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -485,8 +485,39 @@ function TechniqueList({ onPick }: { onPick: (t: Technique) => void }) {
   );
 }
 
+// A technique's own rhythm drawn as a tiny waveform: inhales rise, holds
+// stay level, exhales fall, each segment's width proportional to its
+// seconds. Every card gets a mark that could only belong to that pattern.
+function RhythmGlyph({ phases, color }: { phases: Phase[]; color: string }) {
+  const W = 46;
+  const H = 26;
+  const padY = 3;
+  const total = phases.reduce((s, p) => s + p.seconds, 0) || 1;
+  const yFor = (v: number) => H - padY - v * (H - padY * 2);
+  let x = 0;
+  let v = 0;
+  const pts = [`${x},${yFor(v).toFixed(1)}`];
+  for (const p of phases) {
+    x += (p.seconds / total) * W;
+    if (p.name === 'Inhale') v = p.target ?? 1;
+    else if (p.name === 'Exhale') v = p.target ?? 0;
+    pts.push(`${x.toFixed(1)},${yFor(v).toFixed(1)}`);
+  }
+  return (
+    <Svg width={W} height={H}>
+      <Path
+        d={`M ${pts.join(' L ')}`}
+        stroke={color}
+        strokeWidth={2}
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 function TechniqueCard({ technique, onPress }: { technique: Technique; onPress: () => void }) {
-  const Icon = technique.Icon;
   return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -496,15 +527,8 @@ function TechniqueCard({ technique, onPress }: { technique: Technique; onPress: 
       style={styles.card}
     >
       <View style={styles.cardRow}>
-        <View style={[
-          styles.cardIconWrap,
-          {
-            borderColor: technique.color + '88',
-            shadowColor: technique.color,
-          },
-        ]}>
-          <View style={[styles.cardIconInner, { backgroundColor: technique.color + '14' }]} />
-          <Icon size={26} weight="fill" color={technique.color} />
+        <View style={styles.cardRhythmWrap}>
+          <RhythmGlyph phases={technique.phases} color={technique.color} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.cardName}>{technique.name}</Text>
@@ -1125,15 +1149,9 @@ const styles = StyleSheet.create({
     borderRadius: 18, padding: 14, marginBottom: 8,
   },
   cardRow: { flexDirection: 'row', alignItems: 'center' },
-  cardIconWrap: {
-    width: 42, height: 42, borderRadius: 21,
-    marginRight: 12, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5,
-    overflow: 'hidden',
-    shadowOpacity: 0.45, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
-  },
-  cardIconInner: {
-    ...StyleSheet.absoluteFillObject,
+  cardRhythmWrap: {
+    width: 50, marginRight: 10,
+    alignItems: 'center', justifyContent: 'center',
   },
   cardName: { color: '#fff', fontSize: 16, fontWeight: '600' },
   cardBlurb: { fontSize: 11, marginTop: 2, letterSpacing: 1 },
