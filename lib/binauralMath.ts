@@ -83,6 +83,53 @@ export function atobFallback(b64: string): string {
   return out;
 }
 
+// Short breath-cue tone: a soft sine blip gliding from f0 to f1, mono 16-bit
+// WAV returned as base64. Phase accumulates through the glide so the pitch
+// bend is continuous, and an attack/release envelope keeps it clickless.
+export function buildCueWav(f0: number, f1: number, seconds: number = 0.3): string {
+  const sampleRate = 22050;
+  const n = Math.floor(sampleRate * seconds);
+  const dataSize = n * 2;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+  const ascii = (off: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i));
+  };
+  ascii(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  ascii(8, 'WAVE');
+  ascii(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  ascii(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  const attack = Math.floor(sampleRate * 0.012);
+  const release = Math.floor(sampleRate * 0.12);
+  let phase = 0;
+  let off = 44;
+  for (let i = 0; i < n; i++) {
+    const f = f0 + (f1 - f0) * (i / n);
+    phase += (2 * Math.PI * f) / sampleRate;
+    const env =
+      i < attack ? i / attack :
+      i > n - release ? (n - i) / release :
+      1;
+    view.setInt16(off, Math.round(0.3 * 32767 * env * Math.sin(phase)), true);
+    off += 2;
+  }
+
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoaFallback(binary);
+}
+
 // Streak math (extracted from getStreak/recordActivity in App.tsx) so the
 // branching logic can be unit-tested without AsyncStorage mocks.
 export function nextStreakCount(opts: {

@@ -14,6 +14,9 @@ import Svg, { Circle, Ellipse, G, Line, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
+import * as FileSystem from 'expo-file-system/legacy';
+import { buildCueWav } from './lib/binauralMath';
 import {
   Square,
   MoonStars,
@@ -38,6 +41,16 @@ import {
 
 const STORAGE_HAPTIC = '@simply_ambient_mala_haptic_v1';
 const STORAGE_MALA_COUNT = '@simply_ambient_mala_count_v1';
+const STORAGE_BREATH_CUES = '@simply_ambient_breath_cues_v1';
+
+// Audio cues per phase: a soft sine blip that rises into an inhale, holds
+// level, and falls into an exhale (C5/E5/D5 territory, gentle enough to sit
+// under a running binaural tone or soundscape).
+const CUE_TONES: Record<'Inhale' | 'Hold' | 'Exhale', [number, number]> = {
+  Inhale: [523, 659],
+  Hold: [587, 587],
+  Exhale: [659, 523],
+};
 type HapticLevel = 'off' | 'low' | 'high';
 
 type TechniqueIcon = React.ComponentType<IconProps>;
@@ -587,6 +600,90 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
   const [targetCycles, setTargetCycles] = useState<number | null>(null);
   const [complete, setComplete] = useState(false);
 
+  // Audio cues for eyes-closed practice: a soft blip on each phase change,
+  // played through its own tiny players so it layers over any running
+  // binaural tone, soundscape, or imported audio.
+  const [cuesOn, setCuesOn] = useState(false);
+  const cuesOnRef = useRef(false);
+  useEffect(() => { cuesOnRef.current = cuesOn; }, [cuesOn]);
+  const cuePlayersRef = useRef<Partial<Record<keyof typeof CUE_TONES, AudioPlayer>>>({});
+  const webCueCtxRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_BREATH_CUES).then(v => {
+      if (v === '1') setCuesOn(true);
+    }).catch(() => {});
+    return () => {
+      Object.values(cuePlayersRef.current).forEach(p => {
+        try { p?.release(); } catch {}
+        try { (p as any)?.remove?.(); } catch {}
+      });
+      cuePlayersRef.current = {};
+    };
+  }, []);
+
+  function setCuesPref(on: boolean) {
+    setCuesOn(on);
+    AsyncStorage.setItem(STORAGE_BREATH_CUES, on ? '1' : '0').catch(() => {});
+  }
+
+  // Native players are synthesized lazily the first time cues turn on.
+  useEffect(() => {
+    if (!cuesOn || Platform.OS === 'web' || cuePlayersRef.current.Inhale) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        for (const name of Object.keys(CUE_TONES) as Array<keyof typeof CUE_TONES>) {
+          const [f0, f1] = CUE_TONES[name];
+          const path = `${FileSystem.cacheDirectory}breath-cue-${name.toLowerCase()}.wav`;
+          await FileSystem.writeAsStringAsync(path, buildCueWav(f0, f1), {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          if (cancelled) return;
+          const player = createAudioPlayer({ uri: path });
+          player.volume = 0.5;
+          cuePlayersRef.current[name] = player;
+        }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [cuesOn]);
+
+  function playCue(name: keyof typeof CUE_TONES) {
+    if (!cuesOnRef.current) return;
+    const [f0, f1] = CUE_TONES[name];
+    if (Platform.OS === 'web') {
+      try {
+        if (!webCueCtxRef.current) {
+          const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+          webCueCtxRef.current = new AC();
+        }
+        const ctx = webCueCtxRef.current!;
+        if (ctx.state === 'suspended') ctx.resume();
+        const t = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f0, t);
+        osc.frequency.linearRampToValueAtTime(f1, t + 0.24);
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.2, t + 0.02);
+        gain.gain.linearRampToValueAtTime(0, t + 0.3);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.32);
+      } catch {}
+      return;
+    }
+    const player = cuePlayersRef.current[name];
+    if (!player) return;
+    try {
+      player.seekTo(0);
+      player.play();
+    } catch {}
+  }
+
   // Read by the phase loop through a ref so changing the length mid-session
   // takes effect at the next cycle boundary without restarting the loop.
   const targetCyclesRef = useRef<number | null>(null);
@@ -674,9 +771,12 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
           return;
         }
       }
-      // Skip the tick on the very first phase; it fires on changes only.
+      // Skip the haptic tick on the very first phase; it fires on changes
+      // only. The audio cue sounds on every phase, including the first, so
+      // eyes-closed users get a clear start signal.
       if (started) phaseTick();
       started = true;
+      playCue(phase.name);
       setPhaseIdx(idx);
       setSecondsLeft(phase.seconds);
       if (idx === 0) {
@@ -828,6 +928,22 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
             </TouchableOpacity>
           );
         })}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => setCuesPref(!cuesOn)}
+          accessibilityRole="button"
+          accessibilityLabel={cuesOn ? 'Turn off audio cues' : 'Turn on audio cues, a soft tone on each phase change'}
+          accessibilityState={{ selected: cuesOn }}
+          style={[
+            styles.lengthPill,
+            cuesOn && {
+              backgroundColor: technique.color + '22',
+              borderColor: technique.color,
+            },
+          ]}
+        >
+          <Text style={[styles.lengthText, cuesOn && { color: technique.color }]}>♪ Cues</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.visualStack}>
@@ -1253,7 +1369,10 @@ const styles = StyleSheet.create({
   },
   toggleText: { color: '#ffffff99', fontSize: 12, letterSpacing: 1.5, fontWeight: '600' },
 
-  lengthRow: { flexDirection: 'row', gap: 6, marginTop: 10 },
+  lengthRow: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center',
+    gap: 6, marginTop: 10,
+  },
   lengthPill: {
     paddingHorizontal: 12, paddingVertical: 6,
     borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
