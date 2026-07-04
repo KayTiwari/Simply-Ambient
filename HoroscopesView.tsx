@@ -130,6 +130,37 @@ const SPREAD_POSITIONS: Record<SpreadSize, string[]> = {
 type DrawnCard = { card: TarotCard; reversed: boolean };
 const drawReversed = () => Math.random() < 1 / 3;
 
+const MAJOR_ONLY_KEY = '@simply_ambient_tarot_major_only_v1';
+
+// Minor arcana are the four suits; everything else (including "Wheel of
+// Fortune", which also contains "of") is major.
+function isMinorArcana(name: string): boolean {
+  return /\bof (Wands|Cups|Swords|Pentacles)\b/i.test(name ?? '');
+}
+
+// The API deals at most 10 cards per request and cannot filter by arcana,
+// so draw in batches, dedupe by name, and keep only majors when asked.
+// Majors are ~28% of the deck, so a few batches cover a 7-card spread.
+async function fetchCards(count: number, majorOnly: boolean): Promise<TarotCard[]> {
+  const out: TarotCard[] = [];
+  const seen = new Set<string>();
+  const attempts = majorOnly ? 6 : 2;
+  for (let i = 0; i < attempts && out.length < count; i++) {
+    const r = await fetch(tarotUrl(10));
+    if (!r.ok) continue;
+    const json = await r.json();
+    const cards: TarotCard[] = Array.isArray(json?.cards) ? json.cards : [];
+    for (const c of cards) {
+      if (!c?.name || seen.has(c.name)) continue;
+      if (majorOnly && isMinorArcana(c.name)) continue;
+      seen.add(c.name);
+      out.push(c);
+      if (out.length >= count) break;
+    }
+  }
+  return out;
+}
+
 export default function HoroscopesView({
   zodiac, mySign, lunar, onSelectMyZodiac,
 }: Props) {
@@ -143,6 +174,9 @@ export default function HoroscopesView({
   const [loading, setLoading] = useState(false);
 
   const [tarot, setTarot] = useState<TarotCard | null>(null);
+  const [majorOnly, setMajorOnly] = useState(false);
+  const majorOnlyRef = useRef(false);
+  useEffect(() => { majorOnlyRef.current = majorOnly; }, [majorOnly]);
   const [tarotReversed, setTarotReversed] = useState(false);
   // The card sits face-down until tapped, once per visit. The reveal is the point.
   const [tarotRevealed, setTarotRevealed] = useState(false);
@@ -162,53 +196,71 @@ export default function HoroscopesView({
     return () => { mountedRef.current = false; };
   }, []);
 
-  function drawSpread(n: SpreadSize) {
+  async function drawSpread(n: SpreadSize) {
     setSpreadSize(n);
     setSpread(null);
     setSpreadRevealed([]);
     setSpreadError(false);
     setSpreadLoading(true);
-    fetch(tarotUrl(n))
-      .then(r => (r.ok ? r.json() : null))
-      .then(json => {
-        if (!mountedRef.current) return;
-        const cards = json?.cards;
-        if (Array.isArray(cards) && cards.length) {
-          setSpread(cards.slice(0, n).map((card: TarotCard) => ({ card, reversed: drawReversed() })));
-          setSpreadRevealed(Array(n).fill(false));
-        } else {
-          setSpreadError(true);
-        }
-      })
-      .catch(() => { if (mountedRef.current) setSpreadError(true); })
-      .finally(() => { if (mountedRef.current) setSpreadLoading(false); });
+    try {
+      const cards = await fetchCards(n, majorOnlyRef.current);
+      if (!mountedRef.current) return;
+      if (cards.length === n) {
+        setSpread(cards.map(card => ({ card, reversed: drawReversed() })));
+        setSpreadRevealed(Array(n).fill(false));
+      } else {
+        setSpreadError(true);
+      }
+    } catch {
+      if (mountedRef.current) setSpreadError(true);
+    } finally {
+      if (mountedRef.current) setSpreadLoading(false);
+    }
   }
 
-  function drawTarot(force = false) {
+  async function drawTarot(force = false) {
     setTarotError(false);
     setTarotLoading(true);
     setTarotRevealed(false);
-    fetch(tarotUrl(1))
-      .then(r => (r.ok ? r.json() : null))
-      .then(json => {
-        const c = json?.cards?.[0];
-        if (c) {
-          const reversed = drawReversed();
-          AsyncStorage.setItem(
-            TAROT_CACHE_KEY,
-            JSON.stringify({ ts: Date.now(), card: c, reversed }),
-          ).catch(() => {});
-          if (mountedRef.current) {
-            setTarot(c);
-            setTarotReversed(reversed);
-          }
-        } else if (mountedRef.current) {
-          setTarotError(true);
+    try {
+      const [c] = await fetchCards(1, majorOnlyRef.current);
+      if (c) {
+        const reversed = drawReversed();
+        AsyncStorage.setItem(
+          TAROT_CACHE_KEY,
+          JSON.stringify({ ts: Date.now(), card: c, reversed }),
+        ).catch(() => {});
+        if (mountedRef.current) {
+          setTarot(c);
+          setTarotReversed(reversed);
         }
-      })
-      .catch(() => { if (mountedRef.current) setTarotError(true); })
-      .finally(() => { if (mountedRef.current) setTarotLoading(false); });
+      } else if (mountedRef.current) {
+        setTarotError(true);
+      }
+    } catch {
+      if (mountedRef.current) setTarotError(true);
+    } finally {
+      if (mountedRef.current) setTarotLoading(false);
+    }
   }
+
+  function toggleMajorOnly() {
+    const next = !majorOnly;
+    setMajorOnly(next);
+    majorOnlyRef.current = next;
+    AsyncStorage.setItem(MAJOR_ONLY_KEY, next ? '1' : '0').catch(() => {});
+    // If the sitting card no longer qualifies, deal a fresh one.
+    if (next && tarot && isMinorArcana(tarot.name)) drawTarot();
+  }
+
+  useEffect(() => {
+    AsyncStorage.getItem(MAJOR_ONLY_KEY).then(v => {
+      if (v === '1') {
+        setMajorOnly(true);
+        majorOnlyRef.current = true;
+      }
+    }).catch(() => {});
+  }, []);
 
   // On first open: show the cached card immediately, refresh once a day.
   useEffect(() => {
@@ -466,6 +518,18 @@ export default function HoroscopesView({
               <ArrowsClockwise size={16} color="#fff" weight="regular" />
             </TouchableOpacity>
           </View>
+          <TouchableOpacity
+            onPress={toggleMajorOnly}
+            activeOpacity={0.85}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: majorOnly }}
+            accessibilityLabel="Draw from the major arcana only"
+            style={[styles.arcanaToggle, majorOnly && { borderColor: '#B39BE0', backgroundColor: '#B39BE022' }]}
+          >
+            <Text style={[styles.arcanaToggleText, majorOnly && { color: '#C6B6EC' }]}>
+              ✦ MAJOR ARCANA ONLY
+            </Text>
+          </TouchableOpacity>
           {tarotLoading ? (
             <ActivityIndicator color="#B39BE0" style={{ marginVertical: 24 }} />
           ) : tarot ? (
@@ -526,39 +590,51 @@ export default function HoroscopesView({
           ) : spread && spreadSize ? (
             <>
               <Text style={styles.tarotHint}>The cards are laid face down. Turn each in its own time.</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.spreadRow}
-              >
+              {/* Wrapping rows sized so nothing scrolls or clips: 3 across,
+                  5 as 3+2, 7 as 4+3. Meanings collect in a list below as
+                  cards are revealed. */}
+              <View style={styles.spreadGrid}>
                 {spread.map((item, i) => {
                   const revealed = spreadRevealed[i] === true;
                   const pos = SPREAD_POSITIONS[spreadSize][i] ?? `Card ${i + 1}`;
+                  const cw = spreadSize === 7 ? 70 : 90;
+                  const ch = spreadSize === 7 ? 114 : 146;
                   return (
                     <View key={i} style={styles.spreadSlot}>
-                      <Text style={styles.spreadPos}>{pos}</Text>
+                      <Text style={styles.spreadPos} numberOfLines={1}>{pos}</Text>
                       <FlipCard
-                        width={104}
-                        height={168}
+                        width={cw}
+                        height={ch}
                         revealed={revealed}
                         onReveal={() =>
                           setSpreadRevealed(prev => prev.map((v, j) => (j === i ? true : v)))
                         }
                         label={revealed ? `${item.card.name}, ${item.reversed ? 'reversed' : 'upright'}` : `Turn the ${pos} card`}
-                        back={<CardBack width={104} height={168} compact />}
-                        face={<CardFace name={item.card.name} reversed={item.reversed} compact />}
+                        back={<CardBack width={cw} height={ch} compact />}
+                        face={<CardFace name={item.card.name} reversed={item.reversed} compact small={spreadSize === 7} />}
                       />
-                      {revealed ? (
-                        <Text style={styles.spreadCardMeaning} numberOfLines={4}>
-                          {(item.reversed ? item.card.meaning_rev : item.card.meaning_up) ?? item.card.meaning_up ?? ''}
-                        </Text>
-                      ) : (
-                        <View style={styles.spreadMeaningGhost} />
-                      )}
                     </View>
                   );
                 })}
-              </ScrollView>
+              </View>
+              {spread.some((_, i) => spreadRevealed[i]) ? (
+                <View style={styles.spreadReadList}>
+                  {spread.map((item, i) => {
+                    if (!spreadRevealed[i]) return null;
+                    const pos = SPREAD_POSITIONS[spreadSize][i] ?? `Card ${i + 1}`;
+                    return (
+                      <View key={i} style={styles.spreadReadItem}>
+                        <Text style={styles.spreadPos}>
+                          {pos} · {item.card.name}{item.reversed ? ' · reversed' : ''}
+                        </Text>
+                        <Text style={styles.spreadReadMeaning} numberOfLines={3}>
+                          {(item.reversed ? item.card.meaning_rev : item.card.meaning_up) ?? item.card.meaning_up ?? ''}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
             </>
           ) : spreadError ? (
             <Text style={styles.tarotMeaning}>Could not reach the cards. Try again.</Text>
@@ -665,15 +741,28 @@ function CardBack({ width, height, compact }: { width: number; height: number; c
 
 // Face-up card: ornament, serif name, orientation. Reversed keeps the text
 // readable and turns the ornament instead; the chip carries the meaning.
-function CardFace({ name, reversed, compact }: { name: string; reversed: boolean; compact?: boolean }) {
+function CardFace({
+  name, reversed, compact, small,
+}: {
+  name: string;
+  reversed: boolean;
+  compact?: boolean;
+  small?: boolean;
+}) {
   return (
     <View style={styles.cardShellFace}>
-      <View style={[styles.cardInner, { justifyContent: 'space-between', paddingVertical: 12 }]}>
-        <Text style={[styles.cardOrnament, reversed && { transform: [{ rotate: '180deg' }] }]}>✦</Text>
-        <Text style={[styles.cardFaceName, compact && { fontSize: 15, lineHeight: 19 }]}>
+      <View style={[styles.cardInner, { justifyContent: 'space-between', paddingVertical: small ? 8 : 12 }]}>
+        <Text style={[styles.cardOrnament, small && { fontSize: 10 }, reversed && { transform: [{ rotate: '180deg' }] }]}>✦</Text>
+        <Text
+          style={[
+            styles.cardFaceName,
+            compact && { fontSize: 15, lineHeight: 19 },
+            small && { fontSize: 12, lineHeight: 15, paddingHorizontal: 4 },
+          ]}
+        >
           {name}
         </Text>
-        <Text style={[styles.cardOrient, { color: reversed ? '#D68097' : '#9DC7AC' }]}>
+        <Text style={[styles.cardOrient, small && { fontSize: 7, letterSpacing: 1.2 }, { color: reversed ? '#D68097' : '#9DC7AC' }]}>
           {reversed ? 'REVERSED' : 'UPRIGHT'}
         </Text>
       </View>
@@ -831,17 +920,26 @@ const styles = StyleSheet.create({
   },
   spreadBtnText: { color: '#ffffffdd', fontSize: 15, fontWeight: '700', letterSpacing: 0.4 },
   spreadBtnSub: { color: '#ffffff66', fontSize: 10, fontWeight: '600', marginTop: 2, letterSpacing: 0.4 },
-  spreadRow: { gap: 12, paddingVertical: 14, paddingRight: 8 },
-  spreadSlot: { width: 116, alignItems: 'center' },
+  spreadGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center',
+    columnGap: 8, rowGap: 14, marginTop: 14,
+  },
+  spreadSlot: { alignItems: 'center' },
   spreadPos: {
-    color: '#C6B6EC', fontSize: 10, fontWeight: '800',
-    letterSpacing: 1.6, textTransform: 'uppercase', marginBottom: 8,
+    color: '#C6B6EC', fontSize: 9, fontWeight: '800',
+    letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6,
   },
-  spreadCardMeaning: {
-    color: '#ffffff99', fontSize: 11, lineHeight: 15,
-    marginTop: 8, textAlign: 'center', minHeight: 60,
+  spreadReadList: { marginTop: 16, gap: 12 },
+  spreadReadItem: { borderLeftWidth: 2, borderLeftColor: '#B39BE0', paddingLeft: 10 },
+  spreadReadMeaning: { color: '#ffffffAA', fontSize: 12, lineHeight: 17, marginTop: 3 },
+  arcanaToggle: {
+    alignSelf: 'center',
+    paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    marginBottom: 12,
   },
-  spreadMeaningGhost: { minHeight: 60, marginTop: 8 },
+  arcanaToggleText: { color: '#ffffff77', fontSize: 9, fontWeight: '700', letterSpacing: 1.6 },
 
   cardShellBack: {
     flex: 1,
