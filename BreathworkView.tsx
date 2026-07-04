@@ -472,14 +472,14 @@ function TechniqueList({ onPick }: { onPick: (t: Technique) => void }) {
         <TechniqueCard key={t.id} technique={t} onPress={() => onPick(t)} />
       ))}
 
-      <Text style={[styles.sectionLabel, { marginTop: 24 }]}>ACTIVATING</Text>
+      <Text style={styles.sectionLabel}>ACTIVATING</Text>
       <Text style={styles.sectionSub}>Build energy. Open awareness.</Text>
       {activating.map(t => (
         <TechniqueCard key={t.id} technique={t} onPress={() => onPick(t)} />
       ))}
 
       <Text style={styles.footnote}>
-        Sit upright. Set an intention. The animation will begin when you press play.
+        Sit upright. Set an intention. Press play when ready.
       </Text>
     </ScrollView>
   );
@@ -493,7 +493,7 @@ function TechniqueCard({ technique, onPress }: { technique: Technique; onPress: 
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${technique.name}, ${technique.blurb}. Open breathing session.`}
-      style={[styles.card, { borderColor: technique.color + '55' }]}
+      style={styles.card}
     >
       <View style={styles.cardRow}>
         <View style={[
@@ -830,7 +830,7 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
 
       <Text style={styles.sessionDescription}>{technique.description}</Text>
 
-      <View style={[styles.mudraBlock, { borderColor: technique.color + '55' }]}>
+      <View style={styles.mudraBlock}>
         <Text style={[styles.mudraLabel, { color: technique.color }]}>
           MUDRA · {technique.mudra.name.toUpperCase()}
         </Text>
@@ -1080,7 +1080,7 @@ const styles = StyleSheet.create({
   // whatever global band/tuning palette is active behind the tab.
   tabScrim: { backgroundColor: 'rgba(0,0,0,0.32)' },
 
-  headerWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 14 },
+  headerWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 8 },
   ambience: {
     color: '#fff',
     fontFamily: 'CormorantGaramond_500Medium',
@@ -1094,7 +1094,7 @@ const styles = StyleSheet.create({
     letterSpacing: 4, textTransform: 'uppercase',
     marginTop: 2,
   },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   dividerLine: { width: 28, height: 1, backgroundColor: 'rgba(255,255,255,0.35)' },
   subtitle: {
     color: '#ffffffaa', fontSize: 10, letterSpacing: 4,
@@ -1103,31 +1103,31 @@ const styles = StyleSheet.create({
 
   toneStrip: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
-    marginHorizontal: 20, marginTop: 4,
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    marginHorizontal: 20, marginTop: 2,
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14,
   },
   toneDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
   toneText: { fontSize: 12, letterSpacing: 0.5 },
 
   sectionLabel: {
-    color: '#ffffff80', fontSize: 11, letterSpacing: 2, fontWeight: '600',
-    marginTop: 16, marginBottom: 4, paddingHorizontal: 4,
+    color: '#ffffff77', fontSize: 10, letterSpacing: 2, fontWeight: '700',
+    marginTop: 24, marginBottom: 4, paddingHorizontal: 4,
   },
   sectionSub: {
-    color: '#ffffff66', fontSize: 11, fontStyle: 'italic',
+    color: '#ffffffB0', fontSize: 12, lineHeight: 18,
     marginBottom: 10, paddingHorizontal: 4,
   },
   card: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 18, padding: 16, marginBottom: 10, borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 18, padding: 14, marginBottom: 8,
   },
   cardRow: { flexDirection: 'row', alignItems: 'center' },
-  cardDot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
   cardIconWrap: {
-    width: 46, height: 46, borderRadius: 23,
-    marginRight: 14, alignItems: 'center', justifyContent: 'center',
+    width: 42, height: 42, borderRadius: 21,
+    marginRight: 12, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1.5,
     overflow: 'hidden',
     shadowOpacity: 0.45, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
@@ -1137,91 +1137,96 @@ const styles = StyleSheet.create({
   },
   cardName: { color: '#fff', fontSize: 16, fontWeight: '600' },
   cardBlurb: { fontSize: 11, marginTop: 2, letterSpacing: 1 },
-  cardChevron: { color: '#ffffff66', fontSize: 22 },
-  cardDescription: { color: '#ffffff88', fontSize: 12, marginTop: 8, lineHeight: 17 },
-  cardMudra: { fontSize: 10, marginTop: 6, letterSpacing: 1, fontStyle: 'italic' },
+  cardChevron: { color: '#ffffff44', fontSize: 20 },
+  cardDescription: { color: '#ffffffB0', fontSize: 12, marginTop: 8, lineHeight: 17 },
+  cardMudra: {
+    fontSize: 10, marginTop: 6, letterSpacing: 1.5,
+    fontWeight: '600', textTransform: 'uppercase',
+  },
 
   malaCard: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 18, padding: 16, marginTop: 8, marginBottom: 14,
-    borderWidth: 1, borderColor: '#d9b35c55',
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderRadius: 18, padding: 14, marginTop: 10, marginBottom: 0,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
   },
   malaTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   malaCountText: { color: '#d9b35c', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
   malaBar: {
     height: 4, marginTop: 10,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 2, overflow: 'hidden',
   },
   malaBarFill: { height: '100%', backgroundColor: '#d9b35c' },
-  malaActions: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 10 },
+  malaActions: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
   malaResetBtn: {
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 16, paddingVertical: 11,
+    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
   },
-  malaResetText: { color: '#ffffffaa', fontSize: 12, fontWeight: '600', letterSpacing: 1 },
+  malaResetText: { color: '#ffffffB0', fontSize: 12, fontWeight: '600', letterSpacing: 1 },
   malaCountBtn: {
-    flex: 1, paddingVertical: 14, borderRadius: 999,
+    flex: 1, paddingVertical: 13, borderRadius: 999,
     backgroundColor: '#d9b35c', alignItems: 'center',
   },
   malaCountBtnText: { color: '#0B0B1F', fontSize: 14, fontWeight: '800', letterSpacing: 4 },
-  malaHint: { color: '#ffffff66', fontSize: 11, fontStyle: 'italic', marginTop: 10, textAlign: 'center' },
+  malaHint: { color: '#ffffff77', fontSize: 11, marginTop: 10, textAlign: 'center' },
   malaHapticRow: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 14, paddingTop: 12,
-    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)',
+    marginTop: 12, paddingTop: 10,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)',
   },
-  malaHapticLabel: { color: '#ffffff80', fontSize: 10, letterSpacing: 1.5, fontWeight: '600' },
+  malaHapticLabel: { color: '#ffffff77', fontSize: 10, letterSpacing: 2, fontWeight: '700' },
   malaHapticPills: { flexDirection: 'row', gap: 6 },
   malaHapticPill: {
     paddingHorizontal: 12, paddingVertical: 5,
-    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
-    backgroundColor: 'rgba(0,0,0,0.20)',
+    borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
   },
   malaHapticText: { color: '#ffffff99', fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
 
   footnote: {
-    color: '#ffffff66', fontSize: 12, textAlign: 'center',
-    marginTop: 24, paddingHorizontal: 20, fontStyle: 'italic',
+    color: '#ffffffB0', fontSize: 12, lineHeight: 18, textAlign: 'center',
+    marginTop: 24, paddingHorizontal: 20,
   },
 
   // Scroll content, so no flex: 1; the ScrollView itself fills the screen.
   sessionWrap: { alignItems: 'center', paddingHorizontal: 20 },
   backBtn: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 4 },
-  backText: { color: '#ffffffaa', fontSize: 13 },
+  backText: { color: '#ffffffB0', fontSize: 13, letterSpacing: 0.5 },
   sessionName: {
-    color: '#fff', fontSize: 26, fontWeight: '300',
-    letterSpacing: 1, marginTop: 8,
+    color: '#fff',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 28, letterSpacing: 1, marginTop: 6,
   },
-  sessionBlurb: { fontSize: 13, marginTop: 4, letterSpacing: 1.5 },
+  sessionBlurb: { fontSize: 13, marginTop: 2, letterSpacing: 1.5 },
 
   visualToggle: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: 999,
-    padding: 4,
-    marginTop: 16,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 14,
+    padding: 3,
+    marginTop: 14,
   },
   toggleBtn: {
     paddingHorizontal: 16, paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: 11,
     borderWidth: 1, borderColor: 'transparent',
   },
   toggleText: { color: '#ffffff99', fontSize: 12, letterSpacing: 1.5, fontWeight: '600' },
 
-  lengthRow: { flexDirection: 'row', gap: 6, marginTop: 12 },
+  lengthRow: { flexDirection: 'row', gap: 6, marginTop: 10 },
   lengthPill: {
-    paddingHorizontal: 12, paddingVertical: 5,
-    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
-    backgroundColor: 'rgba(0,0,0,0.20)',
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    backgroundColor: 'rgba(255,255,255,0.045)',
   },
   lengthText: { color: '#ffffff99', fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
 
   visualStack: {
     width: 280, height: 280,
-    marginVertical: 24,
+    marginVertical: 20,
     alignSelf: 'center',
   },
   visualLayer: {
@@ -1283,22 +1288,23 @@ const styles = StyleSheet.create({
   cycleText: { color: '#ffffff66', fontSize: 11, letterSpacing: 2, marginTop: 4 },
 
   playBtn: {
-    height: 64, width: '100%',
-    borderRadius: 32, alignItems: 'center', justifyContent: 'center',
-    marginTop: 16,
+    height: 58, width: '100%',
+    borderRadius: 999, alignItems: 'center', justifyContent: 'center',
+    marginTop: 14,
   },
   playBtnText: { fontSize: 18, fontWeight: '700', letterSpacing: 4, color: '#0B0B1F' },
 
   sessionDescription: {
-    color: '#ffffff88', fontSize: 13, textAlign: 'center',
-    marginTop: 22, paddingHorizontal: 12, lineHeight: 19,
+    color: '#ffffffB0', fontSize: 13, textAlign: 'center',
+    marginTop: 20, paddingHorizontal: 12, lineHeight: 18,
   },
   mudraBlock: {
-    borderWidth: 1, borderRadius: 14,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 14, width: '100%',
     paddingHorizontal: 14, paddingVertical: 12,
-    marginTop: 16,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    marginTop: 14,
+    backgroundColor: 'rgba(255,255,255,0.045)',
   },
   mudraLabel: { fontSize: 10, letterSpacing: 2, fontWeight: '700', marginBottom: 4 },
-  mudraText: { color: '#ffffffaa', fontSize: 12, lineHeight: 17 },
+  mudraText: { color: '#ffffffB0', fontSize: 12, lineHeight: 18 },
 });

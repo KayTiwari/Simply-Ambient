@@ -75,7 +75,7 @@ export default function ChakrasView({
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.sectionLabel}>CHAKRAS</Text>
-        <Text style={styles.sectionSub}>Seven energy gates of the body</Text>
+        <Text style={styles.sectionSub}>Tap one to tune the tone to its frequency.</Text>
 
         {chakras.map(c => {
           const active = activePresetId === c.id;
@@ -84,12 +84,7 @@ export default function ChakrasView({
               key={c.id}
               activeOpacity={0.85}
               onPress={() => onApplyChakra(c)}
-              style={[
-                styles.card,
-                {
-                  borderColor: active ? c.color : c.color + '55',
-                },
-              ]}
+              style={[styles.card, active && { borderColor: c.color }]}
             >
               <View style={styles.cardTopRow}>
                 <View style={[styles.symbolBox, { borderColor: c.color + '55' }]}>
@@ -129,7 +124,7 @@ export default function ChakrasView({
               </Text>
 
               <Text style={[styles.governs, { color: c.color }]}>{c.governs}</Text>
-              <Text style={styles.blocked}>Blocked: <Text style={{ color: '#ffffffaa' }}>{c.blocked}</Text></Text>
+              <Text style={styles.blocked}>Blocked: <Text style={{ color: '#ffffffB0' }}>{c.blocked}</Text></Text>
 
               <View style={styles.correspondenceRow}>
                 <View style={styles.correspondenceCol}>
@@ -158,13 +153,7 @@ export default function ChakrasView({
               key={d.id}
               activeOpacity={0.85}
               onPress={() => onApplyDosha(d)}
-              style={[
-                styles.doshaCard,
-                {
-                  borderColor: active ? d.color : d.color + '55',
-                  borderWidth: active ? 2 : 1,
-                },
-              ]}
+              style={[styles.doshaCard, active && { borderColor: d.color }]}
             >
               <View style={styles.cardTopRow}>
                 <View style={[
@@ -209,7 +198,7 @@ export default function ChakrasView({
 }
 
 const styles = StyleSheet.create({
-  headerWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 14 },
+  headerWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 8 },
   ambience: {
     color: '#fff',
     fontFamily: 'CormorantGaramond_500Medium',
@@ -222,7 +211,7 @@ const styles = StyleSheet.create({
     color: '#ffffff99', fontSize: 10, fontWeight: '400',
     letterSpacing: 4, textTransform: 'uppercase', marginTop: 2,
   },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   dividerLine: { width: 28, height: 1, backgroundColor: 'rgba(255,255,255,0.35)' },
   subtitle: {
     color: '#ffffffaa', fontSize: 10, letterSpacing: 4,
@@ -231,10 +220,10 @@ const styles = StyleSheet.create({
 
   toneStrip: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
-    marginHorizontal: 20, marginTop: 4,
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    marginHorizontal: 20,
+    paddingHorizontal: 12, paddingVertical: 9, borderRadius: 14,
   },
   toneDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
   toneText: { fontSize: 12, letterSpacing: 0.5 },
@@ -243,19 +232,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     marginTop: 4,
-    marginBottom: 14,
-  },
-  controlHint: {
-    flex: 1,
-    color: '#ffffff77',
-    fontSize: 12,
-    fontStyle: 'italic',
-    letterSpacing: 0.5,
+    marginBottom: 12,
   },
   playBtn: {
     height: 44,
     paddingHorizontal: 22,
-    borderRadius: 22,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 10,
@@ -269,24 +251,21 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: 'rgba(11, 11, 31, 0.78)',
-    borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 18, padding: 14, marginBottom: 10,
   },
   cardTopRow: {
     flexDirection: 'row', alignItems: 'center', marginBottom: 8,
   },
-  numAndDot: {
-    width: 36, alignItems: 'center', marginRight: 12,
-  },
-  colorDot: { width: 14, height: 14, borderRadius: 7, marginBottom: 4 },
   numText: { color: '#ffffff66', fontSize: 10, letterSpacing: 1, fontWeight: '600' },
   symbolBox: {
     width: 52, height: 52,
     borderRadius: 26,
     borderWidth: 1,
-    backgroundColor: 'rgba(11, 11, 31, 0.85)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     alignItems: 'center', justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   chakraSymbol: {
     fontSize: 26,
@@ -323,10 +302,10 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 8 },
-  metaText: { color: '#ffffffaa', fontSize: 11, letterSpacing: 0.3 },
+  metaText: { color: '#ffffffB0', fontSize: 11, letterSpacing: 0.3 },
   metaDot: { color: '#ffffff44', fontSize: 11, marginHorizontal: 6 },
   governs: { fontSize: 13, fontWeight: '600', letterSpacing: 0.3, marginBottom: 4 },
-  blocked: { color: '#ffffff66', fontSize: 11, fontStyle: 'italic' },
+  blocked: { color: '#ffffff77', fontSize: 11, lineHeight: 16 },
 
   sanskritMeaning: {
     color: '#ffffff66',
@@ -345,15 +324,15 @@ const styles = StyleSheet.create({
   },
   correspondenceRow: {
     flexDirection: 'row',
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: 'rgba(255,255,255,0.07)',
     gap: 18,
   },
   correspondenceCol: { flex: 1 },
   correspondenceLabel: {
-    color: '#ffffff55',
+    color: '#ffffff66',
     fontSize: 9,
     letterSpacing: 1.5,
     fontWeight: '700',
@@ -366,32 +345,33 @@ const styles = StyleSheet.create({
   },
 
   sectionLabel: {
-    color: '#ffffff80', fontSize: 11, letterSpacing: 2, fontWeight: '600',
+    color: '#ffffff77', fontSize: 10, letterSpacing: 2, fontWeight: '700',
     paddingHorizontal: 4, marginBottom: 4,
   },
   sectionSub: {
-    color: '#ffffff66', fontSize: 11, fontStyle: 'italic',
+    color: '#ffffffB0', fontSize: 12, lineHeight: 18,
     marginBottom: 10, paddingHorizontal: 4,
   },
 
   doshaCard: {
-    backgroundColor: 'rgba(11, 11, 31, 0.78)',
-    borderRadius: 18, padding: 16, marginBottom: 10, borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 18, padding: 14, marginBottom: 10,
   },
   doshaIconWrap: {
-    width: 46, height: 46, borderRadius: 23,
-    marginRight: 14, alignItems: 'center', justifyContent: 'center',
+    width: 42, height: 42, borderRadius: 21,
+    marginRight: 12, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1.5, overflow: 'hidden',
     shadowOpacity: 0.45, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
   },
   doshaIconInner: { ...StyleSheet.absoluteFillObject },
   doshaName: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  qualities: { color: '#ffffff88', fontSize: 12, marginTop: 4, letterSpacing: 0.5 },
-  doshaDescription: { color: '#ffffff99', fontSize: 12, marginTop: 8, lineHeight: 18 },
+  qualities: { color: '#ffffff99', fontSize: 12, marginTop: 4, letterSpacing: 0.5 },
+  doshaDescription: { color: '#ffffffB0', fontSize: 12, marginTop: 6, lineHeight: 18 },
   balanceLine: { fontSize: 12, marginTop: 8 },
 
   footnote: {
-    color: '#ffffff66', fontSize: 12, textAlign: 'center',
-    marginTop: 24, paddingHorizontal: 12, fontStyle: 'italic', lineHeight: 18,
+    color: '#ffffffB0', fontSize: 12, textAlign: 'center',
+    marginTop: 24, paddingHorizontal: 12, lineHeight: 18,
   },
 });
