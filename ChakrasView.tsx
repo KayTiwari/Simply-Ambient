@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
 
   toneStrip: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.09)',
+    backgroundColor: 'rgba(15,15,32,0.55)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
     marginHorizontal: 20,
     paddingHorizontal: 12, paddingVertical: 9, borderRadius: 14,
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: 'rgba(255,255,255,0.09)',
+    backgroundColor: 'rgba(15,15,32,0.55)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
     borderRadius: 18, padding: 14, marginBottom: 10,
   },
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   },
 
   doshaCard: {
-    backgroundColor: 'rgba(255,255,255,0.09)',
+    backgroundColor: 'rgba(15,15,32,0.55)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
     borderRadius: 18, padding: 14, marginBottom: 10,
   },
