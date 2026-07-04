@@ -131,7 +131,8 @@ const SPREAD_POSITIONS: Record<SpreadSize, string[]> = {
 type DrawnCard = { card: TarotCard; reversed: boolean };
 const drawReversed = () => Math.random() < 1 / 3;
 
-const MAJOR_ONLY_KEY = '@simply_ambient_tarot_major_only_v1';
+// '1' = the minor arcana are shuffled in; majors are always in the pool.
+const INCLUDE_MINOR_KEY = '@simply_ambient_tarot_minor_v1';
 
 // The API tags each card with type 'major' | 'minor'; the suit-name pattern
 // is the fallback for any response that omits it. ("Wheel of Fortune" also
@@ -177,9 +178,9 @@ export default function HoroscopesView({
   const [loading, setLoading] = useState(false);
 
   const [tarot, setTarot] = useState<TarotCard | null>(null);
-  const [majorOnly, setMajorOnly] = useState(false);
-  const majorOnlyRef = useRef(false);
-  useEffect(() => { majorOnlyRef.current = majorOnly; }, [majorOnly]);
+  const [includeMinor, setIncludeMinor] = useState(false);
+  const includeMinorRef = useRef(false);
+  useEffect(() => { includeMinorRef.current = includeMinor; }, [includeMinor]);
   const [tarotReversed, setTarotReversed] = useState(false);
   // The card sits face-down until tapped, once per visit. The reveal is the point.
   const [tarotRevealed, setTarotRevealed] = useState(false);
@@ -206,7 +207,7 @@ export default function HoroscopesView({
     setSpreadError(false);
     setSpreadLoading(true);
     try {
-      const cards = await fetchCards(n, majorOnlyRef.current);
+      const cards = await fetchCards(n, !includeMinorRef.current);
       if (!mountedRef.current) return;
       if (cards.length === n) {
         setSpread(cards.map(card => ({ card, reversed: drawReversed() })));
@@ -226,7 +227,7 @@ export default function HoroscopesView({
     setTarotLoading(true);
     setTarotRevealed(false);
     try {
-      const [c] = await fetchCards(1, majorOnlyRef.current);
+      const [c] = await fetchCards(1, !includeMinorRef.current);
       if (c) {
         const reversed = drawReversed();
         AsyncStorage.setItem(
@@ -247,20 +248,20 @@ export default function HoroscopesView({
     }
   }
 
-  function toggleMajorOnly() {
-    const next = !majorOnly;
-    setMajorOnly(next);
-    majorOnlyRef.current = next;
-    AsyncStorage.setItem(MAJOR_ONLY_KEY, next ? '1' : '0').catch(() => {});
-    // If the sitting card no longer qualifies, deal a fresh one.
-    if (next && tarot && isMinorArcana(tarot)) drawTarot();
+  function toggleIncludeMinor() {
+    const next = !includeMinor;
+    setIncludeMinor(next);
+    includeMinorRef.current = next;
+    AsyncStorage.setItem(INCLUDE_MINOR_KEY, next ? '1' : '0').catch(() => {});
+    // Turning minors off while a minor card sits face-down deals a fresh one.
+    if (!next && tarot && isMinorArcana(tarot)) drawTarot();
   }
 
   useEffect(() => {
-    AsyncStorage.getItem(MAJOR_ONLY_KEY).then(v => {
+    AsyncStorage.getItem(INCLUDE_MINOR_KEY).then(v => {
       if (v === '1') {
-        setMajorOnly(true);
-        majorOnlyRef.current = true;
+        setIncludeMinor(true);
+        includeMinorRef.current = true;
       }
     }).catch(() => {});
   }, []);
@@ -522,15 +523,15 @@ export default function HoroscopesView({
             </TouchableOpacity>
           </View>
           <TouchableOpacity
-            onPress={toggleMajorOnly}
+            onPress={toggleIncludeMinor}
             activeOpacity={0.85}
             accessibilityRole="switch"
-            accessibilityState={{ checked: majorOnly }}
-            accessibilityLabel="Draw from the major arcana only"
-            style={[styles.arcanaToggle, majorOnly && { borderColor: '#B39BE0', backgroundColor: '#B39BE022' }]}
+            accessibilityState={{ checked: includeMinor }}
+            accessibilityLabel="Shuffle the minor arcana into the deck"
+            style={[styles.arcanaToggle, includeMinor && { borderColor: '#B39BE0', backgroundColor: '#B39BE022' }]}
           >
-            <Text style={[styles.arcanaToggleText, majorOnly && { color: '#C6B6EC' }]}>
-              ✦ MAJOR ARCANA ONLY
+            <Text style={[styles.arcanaToggleText, includeMinor && { color: '#C6B6EC' }]}>
+              ✦ INCLUDE MINOR ARCANA
             </Text>
           </TouchableOpacity>
           {tarotLoading ? (
