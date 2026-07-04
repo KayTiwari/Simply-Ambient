@@ -477,6 +477,10 @@ function TechniqueList({ onPick }: { onPick: (t: Technique) => void }) {
       contentContainerStyle={{ paddingBottom: insets.bottom + 90, paddingHorizontal: 20 }}
       showsVerticalScrollIndicator={false}
     >
+      <Text style={styles.preface}>
+        Sit upright. Set an intention. Press play when ready.
+      </Text>
+
       <MalaCounter />
 
       <Text style={styles.sectionLabel}>CALMING</Text>
@@ -490,10 +494,6 @@ function TechniqueList({ onPick }: { onPick: (t: Technique) => void }) {
       {activating.map(t => (
         <TechniqueCard key={t.id} technique={t} onPress={() => onPick(t)} />
       ))}
-
-      <Text style={styles.footnote}>
-        Sit upright. Set an intention. Press play when ready.
-      </Text>
     </ScrollView>
   );
 }
@@ -1288,9 +1288,9 @@ const styles = StyleSheet.create({
   },
   malaHapticText: { color: '#ffffff99', fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
 
-  footnote: {
+  preface: {
     color: '#ffffffB0', fontSize: 12, lineHeight: 18, textAlign: 'center',
-    marginTop: 24, paddingHorizontal: 20,
+    marginBottom: 12, paddingHorizontal: 20,
   },
 
   // Scroll content, so no flex: 1; the ScrollView itself fills the screen.
