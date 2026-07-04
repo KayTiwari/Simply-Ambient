@@ -10,7 +10,7 @@ import {
   Vibration,
   View,
 } from 'react-native';
-import Svg, { Circle, Ellipse, G, Line, Path } from 'react-native-svg';
+import Svg, { Circle, Ellipse, G, Line } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -87,7 +87,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 4 },
       { name: 'Hold',   seconds: 4 },
     ],
-    color: '#5BD0FF', Icon: Square, petalSides: 4, petalCount: 4, centerSides: 4,
+    color: '#8FB8DE', Icon: Square, petalSides: 4, petalCount: 4, centerSides: 4,
     mudra: { name: 'Gyan Mudra', instruction: 'Touch thumb and index fingertip; rest hands palms-up on knees.' },
   },
   {
@@ -99,7 +99,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Hold',   seconds: 7 },
       { name: 'Exhale', seconds: 8 },
     ],
-    color: '#8A5BFF', Icon: MoonStars, petalSides: 6, petalCount: 6, centerSides: 6,
+    color: '#A498E8', Icon: MoonStars, petalSides: 6, petalCount: 6, centerSides: 6,
     mudra: { name: 'Anjali Mudra', instruction: 'Press palms together at the heart center; relax the shoulders.' },
   },
   {
@@ -110,7 +110,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 6 },
     ],
-    color: '#5B6CFF', Icon: Wind, petalSides: 8, petalCount: 8, centerSides: 8,
+    color: '#8B96E0', Icon: Wind, petalSides: 8, petalCount: 8, centerSides: 8,
     mudra: { name: 'Hakini Mudra', instruction: 'Touch all five fingertips of one hand to the opposite hand in front of the chest.' },
   },
   {
@@ -121,7 +121,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 2 },
       { name: 'Exhale', seconds: 4 },
     ],
-    color: '#9affc8', Icon: Waves, petalSides: 5, petalCount: 5, centerSides: 5,
+    color: '#93CFBB', Icon: Waves, petalSides: 5, petalCount: 5, centerSides: 5,
     mudra: { name: 'Vayu Mudra', instruction: 'Curl the index finger to the base of the thumb; thumb covers the index. Rest other fingers extended.' },
   },
   {
@@ -132,7 +132,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 2 },
       { name: 'Exhale', seconds: 2 },
     ],
-    color: '#FF5B9C', Icon: Lightning, petalSides: 3, petalCount: 6, centerSides: 3,
+    color: '#E07A66', Icon: Lightning, petalSides: 3, petalCount: 6, centerSides: 3,
     mudra: { name: 'Open palms', instruction: 'Lay hands palms-up on knees, fingers softly extended. Receiving and surrender.' },
   },
   {
@@ -143,7 +143,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 2 },
       { name: 'Exhale', seconds: 1 },
     ],
-    color: '#FFB05B', Icon: Fire, petalSides: 3, petalCount: 8, centerSides: 6,
+    color: '#C08063', Icon: Fire, petalSides: 3, petalCount: 8, centerSides: 6,
     mudra: { name: 'Power fists', instruction: 'Loose fists at the solar plexus, knuckles facing each other. Gathering inner fire.' },
   },
   {
@@ -155,7 +155,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Exhale', seconds: 1 },
       { name: 'Hold',   seconds: 2 },
     ],
-    color: '#d9b35c', Icon: Sun, petalSides: 6, petalCount: 6, centerSides: 3,
+    color: '#E3B368', Icon: Sun, petalSides: 6, petalCount: 6, centerSides: 3,
     mudra: { name: 'Apana Mudra', instruction: 'Tip of thumb touches tips of middle and ring fingers; index and pinky extended.' },
   },
   {
@@ -166,7 +166,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 5 },
       { name: 'Exhale', seconds: 5 },
     ],
-    color: '#5BD0FF', Icon: Heartbeat, petalSides: 6, petalCount: 6, centerSides: 6,
+    color: '#7FC6C9', Icon: Heartbeat, petalSides: 6, petalCount: 6, centerSides: 6,
     mudra: { name: 'Apana Vayu Mudra', instruction: 'Index curls to base of thumb; tips of middle and ring touch thumb; pinky extended. Heart-opening.' },
   },
   {
@@ -177,7 +177,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 8 },
     ],
-    color: '#9affc8', Icon: Butterfly, petalSides: 8, petalCount: 8, centerSides: 8,
+    color: '#D3C08A', Icon: Butterfly, petalSides: 8, petalCount: 8, centerSides: 8,
     mudra: { name: 'Shanmukhi Mudra', instruction: 'Use thumbs to gently close ears; index over closed eyes; middle fingers beside nostrils; ring + pinky around lips.' },
   },
   {
@@ -189,7 +189,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Hold',   seconds: 2 },
       { name: 'Exhale', seconds: 4 },
     ],
-    color: '#8A5BFF', Icon: ArrowsDownUp, petalSides: 5, petalCount: 6, centerSides: 5,
+    color: '#B3A6DE', Icon: ArrowsDownUp, petalSides: 5, petalCount: 6, centerSides: 5,
     mudra: { name: 'Vishnu Mudra', instruction: 'Right hand: fold index and middle fingers into palm. Use thumb to close right nostril, ring + pinky to close left.' },
   },
   {
@@ -200,7 +200,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 6 },
     ],
-    color: '#5B6CFF', Icon: Snowflake, petalSides: 4, petalCount: 8, centerSides: 4,
+    color: '#9FD3E3', Icon: Snowflake, petalSides: 4, petalCount: 8, centerSides: 4,
     mudra: { name: 'Bhairava Mudra', instruction: 'Right hand resting in left palm, both palms facing up in lap.' },
   },
   {
@@ -212,7 +212,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 1, target: 1.0 },
       { name: 'Exhale', seconds: 6 },
     ],
-    color: '#5BD0FF', Icon: Sparkle, petalSides: 3, petalCount: 6, centerSides: 6,
+    color: '#A9C6E8', Icon: Sparkle, petalSides: 3, petalCount: 6, centerSides: 6,
     mudra: { name: 'Pran Mudra', instruction: 'Tips of thumb, ring, and pinky touch; index and middle extended. Activates life force.' },
   },
   {
@@ -223,7 +223,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 1 },
       { name: 'Exhale', seconds: 1 },
     ],
-    color: '#FFB05B', Icon: Flame, petalSides: 3, petalCount: 8, centerSides: 3,
+    color: '#DE9455', Icon: Flame, petalSides: 3, petalCount: 8, centerSides: 3,
     mudra: { name: 'Knee grip', instruction: 'Sit upright, grasp the knees firmly with thumbs out. Anchors the diaphragmatic effort.' },
   },
   {
@@ -234,7 +234,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 4 },
     ],
-    color: '#FF5B9C', Icon: HandFist, petalSides: 5, petalCount: 5, centerSides: 5,
+    color: '#D68097', Icon: HandFist, petalSides: 5, petalCount: 5, centerSides: 5,
     mudra: { name: 'Lion claws', instruction: 'Stretch fingers wide on the knees like claws, palms down. Opens the throat and chest.' },
   },
   {
@@ -245,7 +245,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 1 },
       { name: 'Exhale', seconds: 1 },
     ],
-    color: '#FF8FB1', Icon: InfinityIcon, petalSides: 6, petalCount: 8, centerSides: 3,
+    color: '#E19E7E', Icon: InfinityIcon, petalSides: 6, petalCount: 8, centerSides: 3,
     mudra: { name: 'Chin Mudra', instruction: 'Touch tip of thumb and index together; rest hands palms-up on knees, other fingers extended.' },
   },
   {
@@ -256,7 +256,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 6 },
     ],
-    color: '#5BD0FF', Icon: Drop, petalSides: 6, petalCount: 8, centerSides: 6,
+    color: '#7FB8B0', Icon: Drop, petalSides: 6, petalCount: 8, centerSides: 6,
     mudra: { name: 'Jnana Mudra', instruction: 'Tip of thumb meets tip of index; remaining fingers extended. Hands rest on knees, palms up. Receiving wisdom.' },
   },
   {
@@ -267,7 +267,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 6 },
       { name: 'Exhale', seconds: 6 },
     ],
-    color: '#9affc8', Icon: Tree, petalSides: 3, petalCount: 8, centerSides: 6,
+    color: '#A3C29A', Icon: Tree, petalSides: 3, petalCount: 8, centerSides: 6,
     mudra: { name: 'Padma Mudra', instruction: 'Heels of palms and pinkies touch; thumbs touch; other fingers spread like lotus petals at the heart.' },
   },
   {
@@ -278,7 +278,7 @@ const TECHNIQUES: Technique[] = [
       { name: 'Inhale', seconds: 2 },
       { name: 'Exhale', seconds: 1 },
     ],
-    color: '#5B6CFF', Icon: Mountains, petalSides: 6, petalCount: 8, centerSides: 6,
+    color: '#B9C4D9', Icon: Mountains, petalSides: 6, petalCount: 8, centerSides: 6,
     mudra: { name: 'Open palms upward', instruction: 'Hands rest on knees or thighs, palms facing up. Fully open to receive breath.' },
   },
 ];
@@ -498,58 +498,8 @@ function TechniqueList({ onPick }: { onPick: (t: Technique) => void }) {
   );
 }
 
-function polarPoint(c: number, r: number, deg: number): [number, number] {
-  const a = ((deg - 90) * Math.PI) / 180;
-  return [c + r * Math.cos(a), c + r * Math.sin(a)];
-}
-
-// A technique's cycle as one segmented ring: each phase is an arc whose
-// sweep is proportional to its seconds. Inhales carry the technique color,
-// holds are faint hairlines, exhales are dimmed. Box reads as a quartered
-// ring, 4-7-8 as three unequal arcs, a sigh as two short strokes and one
-// long sweep. The cycle length sits in the center.
-function PhaseRing({ phases, color, size = 44 }: { phases: Phase[]; color: string; size?: number }) {
-  const c = size / 2;
-  const r = c - 3;
-  const gapDeg = 16;
-  const totalSec = phases.reduce((s, p) => s + p.seconds, 0) || 1;
-  const usable = 360 - gapDeg * phases.length;
-  let angle = gapDeg / 2;
-  const arcs = phases.map((p, i) => {
-    const sweep = (p.seconds / totalSec) * usable;
-    const [x0, y0] = polarPoint(c, r, angle);
-    const [x1, y1] = polarPoint(c, r, angle + sweep);
-    const large = sweep > 180 ? 1 : 0;
-    const d = `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
-    angle += sweep + gapDeg;
-    const stroke =
-      p.name === 'Inhale' ? color :
-      p.name === 'Hold' ? 'rgba(255,255,255,0.26)' :
-      color + '70';
-    return (
-      <Path
-        key={i}
-        d={d}
-        stroke={stroke}
-        strokeWidth={2.5}
-        strokeLinecap="round"
-        fill="none"
-      />
-    );
-  });
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={StyleSheet.absoluteFill as object}>
-        {arcs}
-      </Svg>
-      <Text style={{ color: '#ffffff66', fontSize: 8, fontWeight: '600', letterSpacing: 0.3 }}>
-        {totalSec}s
-      </Text>
-    </View>
-  );
-}
-
 function TechniqueCard({ technique, onPress }: { technique: Technique; onPress: () => void }) {
+  const Icon = technique.Icon;
   return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -559,8 +509,8 @@ function TechniqueCard({ technique, onPress }: { technique: Technique; onPress: 
       style={styles.card}
     >
       <View style={styles.cardRow}>
-        <View style={styles.cardRhythmWrap}>
-          <PhaseRing phases={technique.phases} color={technique.color} />
+        <View style={styles.cardIconSlot}>
+          <Icon size={24} weight="duotone" color={technique.color} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.cardName}>{technique.name}</Text>
@@ -1284,8 +1234,8 @@ const styles = StyleSheet.create({
     borderRadius: 18, padding: 14, marginBottom: 8,
   },
   cardRow: { flexDirection: 'row', alignItems: 'center' },
-  cardRhythmWrap: {
-    width: 50, marginRight: 10,
+  cardIconSlot: {
+    width: 34, marginRight: 10,
     alignItems: 'center', justifyContent: 'center',
   },
   cardName: { color: '#fff', fontSize: 16, fontWeight: '600' },
