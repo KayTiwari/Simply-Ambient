@@ -236,6 +236,7 @@ import {
   btoaFallback,
 } from './lib/binauralMath';
 import { NOTIF_AFFIRMATIONS } from './lib/affirmations';
+import { recordAppOpen, recordSessionCompleted } from './lib/rateApp';
 const STORAGE_KEY = '@binaural_user_presets_v1';
 const STORAGE_KEY_ZODIAC = '@simply_ambient_zodiac_v1';
 const STORAGE_KEY_STREAK = '@simply_ambient_streak_v1';
@@ -1570,6 +1571,8 @@ function AppContent() {
     AsyncStorage.getItem(STORAGE_KEY_SINGLE_COLOR).then(v => {
       if (v) setSingleColor(v);
     }).catch(() => {});
+    // One of the rate-prompt gate counters (see lib/rateGate.ts).
+    recordAppOpen().catch(() => {});
   }, []);
 
   // "Single app color": when set, the backdrop is pinned to this flat color
@@ -1906,6 +1909,10 @@ function AppContent() {
     const tone = tonePlayerRef.current;
     const bg = bgPlayerRef.current;
     const soundscape = soundscapePlayerRef.current;
+    // Both callers are sleep-timer completions, so a playing tone here means
+    // the user listened through a whole timed session. Never prompts for a
+    // review here (they may be asleep); it only feeds the gate counters.
+    if (stateRef.current.isTonePlaying) recordSessionCompleted().catch(() => {});
     if (Platform.OS === 'web') {
       stopTones();
       stopSoundscape();

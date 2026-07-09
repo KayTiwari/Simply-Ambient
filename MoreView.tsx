@@ -35,6 +35,7 @@ import {
 } from 'phosphor-react-native';
 
 import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
+import { openStoreListing } from './lib/rateApp';
 
 // Every AsyncStorage key this app writes starts with one of these, so the
 // wipe below stays correct as new keys are added.
@@ -1657,6 +1658,21 @@ function SupportPage({ onBack }: { onBack: () => void }) {
           </TouchableOpacity>
         </View>
 
+        <Text style={styles.sectionLabel}>LEAVE A REVIEW</Text>
+        <Text style={styles.sectionSub}>
+          A rating on Google Play helps other people find the app. It costs nothing and means a lot.
+        </Text>
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => { openStoreListing().catch(() => {}); }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Rate Simply Ambient on Google Play"
+        >
+          <Text style={styles.settingLabel}>Rate Simply Ambient</Text>
+          <Text style={styles.settingRowChevron}>›</Text>
+        </TouchableOpacity>
+
         {ROADMAP.map(group => (
           <View key={group.phase}>
             <Text style={styles.sectionLabel}>{group.phase}</Text>
@@ -3029,6 +3045,7 @@ const styles = StyleSheet.create({
     borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14,
   },
   settingLabel: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  settingRowChevron: { color: '#ffffff66', fontSize: 20, fontWeight: '300', marginTop: -2 },
   settingToggle: {
     paddingHorizontal: 16, paddingVertical: 6,
     borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',

@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 import { buildCueWav } from './lib/binauralMath';
+import { maybeRequestReview, recordSessionCompleted } from './lib/rateApp';
 import {
   Square,
   MoonStars,
@@ -400,6 +401,9 @@ function MalaCounter() {
       const next = Math.min(target, c + 1);
       if (next === target && c < target) {
         buzzTimeouts.current = malaCompleteBuzz(haptic);
+        // A full mala counts toward the rate-prompt gate; no dialog here so
+        // the celebration buzz stays undisturbed.
+        recordSessionCompleted().catch(() => {});
       }
       persistCount(next);
       return next;
@@ -704,6 +708,11 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         } catch {}
       }
+      recordSessionCompleted().catch(() => {});
+      // A finished breath session is the calmest good moment in the app, so
+      // it is the one place the (heavily gated, once-ever) review dialog may
+      // appear. Delayed so the "Complete" state lands first.
+      setTimeout(() => { maybeRequestReview().catch(() => {}); }, 1500);
     };
 
     const runPhase = (idx: number) => {
