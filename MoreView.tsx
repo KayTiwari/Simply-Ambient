@@ -38,6 +38,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
 import { openStoreListing } from './lib/rateApp';
+import { ZODIAC, type Zodiac } from './lib/content';
 
 // The store the current platform rates on. The app ships on Google Play
 // today; a future iOS build gets truthful copy for free.
@@ -167,6 +168,9 @@ type Profile = {
   birthTime?: string; // HH:MM
   birthLocation?: string;
   mbti?: string;      // e.g. 'INFJ'
+  // Personality-quiz answers, one per question, so a returning user sees
+  // their previous choices selected.
+  mbtiAnswers?: Array<0 | 1 | null>;
 };
 
 const MOOD_COLORS = ['#E07A66', '#FF8A38', '#D9BE7A', '#9DC7AC', '#8FB8DE'];
@@ -215,6 +219,43 @@ function safeParse<T>(raw: string | null, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+// Parses a birth date string and returns the matching sun sign, or null.
+// Accepts YYYY-MM-DD, and tolerates MM/DD/YYYY and M/D/YYYY. The date must
+// be a real calendar date in the past.
+function sunSignFromBirthDate(birthDate: string | undefined): Zodiac | null {
+  if (!birthDate) return null;
+  const s = birthDate.trim();
+  let year: number;
+  let month: number;
+  let day: number;
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  if (m) {
+    year = Number(m[1]);
+    month = Number(m[2]);
+    day = Number(m[3]);
+  } else {
+    m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+    if (!m) return null;
+    month = Number(m[1]);
+    day = Number(m[2]);
+    year = Number(m[3]);
+  }
+  const d = new Date(year, month - 1, day);
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+  if (d.getTime() > Date.now()) return null;
+  for (const z of ZODIAC) {
+    const onOrAfterStart = month > z.startMonth || (month === z.startMonth && day >= z.startDay);
+    const onOrBeforeEnd = month < z.endMonth || (month === z.endMonth && day <= z.endDay);
+    if (z.startMonth <= z.endMonth) {
+      if (onOrAfterStart && onOrBeforeEnd) return z;
+    } else if (onOrAfterStart || onOrBeforeEnd) {
+      // Capricorn wraps the year end: late December or early January.
+      return z;
+    }
+  }
+  return null;
 }
 
 // Sub-page scroll bodies clear the tab bar on gesture-nav devices. 120 was
@@ -463,7 +504,15 @@ export default function MoreView({
             <CompatibilityPage onBack={close} />
           )}
           {page === 'insights' && (
-            <InsightsPage onBack={close} />
+            <InsightsPage
+              onBack={close}
+              counts={{
+                mood: moodLog.length,
+                gratitude: gratitude.length,
+                rant: rants.length,
+                manifestation: manifestations.length,
+              }}
+            />
           )}
           {page === 'routines' && (
             <RoutinesPage onBack={close} />
@@ -2716,6 +2765,30 @@ function mbtiGroupFor(type: string) {
   return MBTI_GROUPS[key] ?? null;
 }
 
+// Shared sun-sign payoff card: glyph tinted with the sign's color, name,
+// element and qualities, with an optional intention line.
+function SunSignCard({
+  sign, caption, showIntention,
+}: {
+  sign: Zodiac;
+  caption: string;
+  showIntention?: boolean;
+}) {
+  return (
+    <View style={[styles.compatCard, styles.sunSignCard]}>
+      <Text style={[styles.sunSignGlyph, { color: sign.color }]}>{sign.glyph}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.compatName}>{sign.name}</Text>
+        <Text style={styles.compatMeta}>{sign.element} · {sign.qualities}</Text>
+        {showIntention ? (
+          <Text style={styles.sunSignIntention}>{sign.intention}</Text>
+        ) : null}
+        <Text style={styles.sunSignCaption}>{caption}</Text>
+      </View>
+    </View>
+  );
+}
+
 function ProfilePage({ onBack }: { onBack: () => void }) {
   const subBodyPad = useSubBodyPad();
   const [profile, setProfile] = useState<Profile>({});
@@ -2724,34 +2797,56 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_PROFILE).then(v => {
       const parsed = safeParse<Profile>(v, {});
-      if (parsed && typeof parsed === 'object') setProfile(parsed);
+      if (parsed && typeof parsed === 'object') {
+        setProfile(parsed);
+        if (Array.isArray(parsed.mbtiAnswers) && parsed.mbtiAnswers.length === MBTI_QUESTIONS.length) {
+          setAnswers(parsed.mbtiAnswers.map(a => (a === 0 || a === 1 ? a : null)));
+        }
+      }
     }).catch(() => {});
   }, []);
 
-  function update<K extends keyof Profile>(key: K, value: Profile[K]) {
-    const next = { ...profile, [key]: value };
+  function persist(next: Profile) {
     setProfile(next);
     AsyncStorage.setItem(STORAGE_PROFILE, JSON.stringify(next)).catch(() => {});
+  }
+
+  function update<K extends keyof Profile>(key: K, value: Profile[K]) {
+    persist({ ...profile, [key]: value });
   }
 
   function setAnswer(qIdx: number, choice: 0 | 1) {
     const next = answers.slice() as Array<0 | 1 | null>;
     next[qIdx] = choice;
     setAnswers(next);
+    // Answers are saved alongside the type, and the type recomputes whenever
+    // all four are in place, including after changing a single answer.
+    const nextProfile: Profile = { ...profile, mbtiAnswers: next };
     if (next.every(a => a !== null)) {
-      const type = next.map((a, i) => MBTI_QUESTIONS[i].letters[a as 0 | 1]).join('');
-      update('mbti', type);
+      nextProfile.mbti = next.map((a, i) => MBTI_QUESTIONS[i].letters[a as 0 | 1]).join('');
     }
+    persist(nextProfile);
+  }
+
+  function retakeQuiz() {
+    setAnswers([null, null, null, null]);
+    const next = { ...profile };
+    delete next.mbti;
+    delete next.mbtiAnswers;
+    persist(next);
   }
 
   const mbtiGroup = profile.mbti ? mbtiGroupFor(profile.mbti) : null;
+  const sunSign = sunSignFromBirthDate(profile.birthDate);
 
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Profile" accent="#B39BE0" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>YOU</Text>
-        <Text style={styles.sectionSub}>Stored only on this device.</Text>
+        <Text style={styles.sectionSub}>
+          Used for your natal chart and compatibility. Stored only on this device.
+        </Text>
 
         <Text style={styles.fieldLabel}>Name</Text>
         <TextInput
@@ -2790,9 +2885,17 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
           maxLength={120}
         />
 
-        <Text style={styles.sectionLabel}>MBTI · 16 PERSONALITIES</Text>
+        {sunSign ? (
+          <SunSignCard sign={sunSign} caption="Your sun sign, from your birth date." />
+        ) : (profile.birthDate ?? '').trim() ? (
+          <Text style={styles.notifHint}>
+            That date does not look complete yet. YYYY-MM-DD works best.
+          </Text>
+        ) : null}
+
+        <Text style={styles.sectionLabel}>PERSONALITY SKETCH</Text>
         <Text style={styles.sectionSub}>
-          Four quick questions for a rough type indicator.
+          Four quick questions for a rough sketch. Take it lightly.
         </Text>
         {MBTI_QUESTIONS.map((q, i) => (
           <View key={i} style={styles.mbtiCard}>
@@ -2819,15 +2922,26 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
         ))}
 
         {profile.mbti ? (
-          <View style={styles.mbtiResult}>
-            <Text style={styles.mbtiResultType}>{profile.mbti}</Text>
-            {mbtiGroup ? (
-              <>
-                <Text style={styles.mbtiResultGroup}>{mbtiGroup.name}</Text>
-                <Text style={styles.mbtiResultBlurb}>{mbtiGroup.blurb}</Text>
-              </>
-            ) : null}
-          </View>
+          <>
+            <View style={styles.mbtiResult}>
+              <Text style={styles.mbtiResultType}>{profile.mbti}</Text>
+              {mbtiGroup ? (
+                <>
+                  <Text style={styles.mbtiResultGroup}>{mbtiGroup.name}</Text>
+                  <Text style={styles.mbtiResultBlurb}>{mbtiGroup.blurb}</Text>
+                </>
+              ) : null}
+            </View>
+            <TouchableOpacity
+              onPress={retakeQuiz}
+              style={styles.rantLetGoBtn}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Retake the personality questions"
+            >
+              <Text style={styles.rantLetGoText}>Retake</Text>
+            </TouchableOpacity>
+          </>
         ) : null}
       </ScrollView>
     </View>
@@ -2838,9 +2952,13 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
 //   Natal Chart sub-page (uses Profile data + external chart link)
 // ===========================================================================
 
+// astro-seek's free natal chart calculator.
+const NATAL_CALCULATOR_URL = 'https://horoscopes.astro-seek.com/birth-chart-horoscope-online';
+
 function NatalChartPage({ onBack }: { onBack: () => void }) {
   const subBodyPad = useSubBodyPad();
   const [profile, setProfile] = useState<Profile>({});
+  const [pendingOpenUrl, setPendingOpenUrl] = useState<string | null>(null);
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_PROFILE).then(v => {
       const parsed = safeParse<Profile>(v, {});
@@ -2848,22 +2966,30 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
     }).catch(() => {});
   }, []);
 
-  function openExternal() {
-    // astro-seek's free natal chart calculator opens with a clean form to fill
-    const url = 'https://horoscopes.astro-seek.com/birth-chart-horoscope-online';
-    Linking.openURL(url).catch(() => {});
-  }
-
-  const ready = !!(profile.birthDate && profile.birthTime && profile.birthLocation);
+  const sunSign = sunSignFromBirthDate(profile.birthDate);
+  const ready = sunSign !== null;
 
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="Natal Chart" accent="#8F97DE" onBack={onBack} />
+      <SubHeader title="Natal Chart" accent="#B39BE0" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
+        {sunSign ? (
+          <>
+            <Text style={styles.sectionLabel}>YOUR SUN SIGN</Text>
+            <SunSignCard
+              sign={sunSign}
+              showIntention
+              caption="Your Sun sign, computed from your birth date on this device."
+            />
+          </>
+        ) : null}
+
         <Text style={styles.sectionLabel}>YOUR BIRTH DETAILS</Text>
-        {profile.name || profile.birthDate ? (
+        {profile.name?.trim() || profile.birthDate ? (
           <View style={styles.compatCard}>
-            <Text style={styles.compatName}>{profile.name ?? '·'}</Text>
+            {profile.name?.trim() ? (
+              <Text style={styles.compatName}>{profile.name}</Text>
+            ) : null}
             <Text style={styles.compatMeta}>
               {profile.birthDate ?? 'Birth date not set'}
               {profile.birthTime ? ` · ${profile.birthTime}` : ' · time not set'}
@@ -2887,31 +3013,34 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
         </Text>
 
         <View style={styles.compatComingSoon}>
-          <Text style={[styles.compatComingTitle, { color: '#8F97DE' }]}>
-            In-app chart. Coming soon
+          <Text style={[styles.compatComingTitle, { color: '#B39BE0' }]}>
+            In-app chart
           </Text>
           <Text style={styles.compatComingText}>
-            A built-in chart with planet positions, houses, and aspects is in the works.
-            For now, the button below opens a free public calculator in your browser. Have
-            your birth details handy; the form starts blank.
+            A built-in chart with houses and aspects is on the roadmap.
           </Text>
           <TouchableOpacity
-            onPress={openExternal}
+            onPress={() => setPendingOpenUrl(NATAL_CALCULATOR_URL)}
             disabled={!ready}
             style={[
               styles.aiBtn,
-              { backgroundColor: '#8F97DE', marginTop: 14, opacity: ready ? 1 : 0.4 },
+              { backgroundColor: '#B39BE0', marginTop: 14, opacity: ready ? 1 : 0.4 },
             ]}
+            accessibilityRole="button"
+            accessibilityLabel="Open a free chart calculator in your browser"
+            accessibilityState={{ disabled: !ready }}
           >
-            <Text style={styles.aiBtnText}>OPEN ASTRO-SEEK CALCULATOR</Text>
+            <Text style={styles.aiBtnText}>OPEN CHART CALCULATOR</Text>
           </TouchableOpacity>
           {!ready ? (
-            <Text style={[styles.compatComingText, { marginTop: 10 }]}>
-              (Fill in birth date, time, and location on Profile first.)
+            <Text style={styles.notifHint}>
+              Add your birth date on Profile to continue.
             </Text>
           ) : null}
         </View>
       </ScrollView>
+
+      <LinkConfirmModal url={pendingOpenUrl} onClose={() => setPendingOpenUrl(null)} />
     </View>
   );
 }
@@ -3130,6 +3259,42 @@ function SoundscapesPage({
 //   Compatibility scaffold
 // ===========================================================================
 
+type ZodiacElement = Zodiac['element'];
+
+// Honest, non-predictive reflections on how two elements traditionally sit
+// together. Same-element pairs share one voice per element; cross pairs are
+// keyed by the two elements sorted alphabetically.
+const SAME_ELEMENT_REFLECTIONS: Record<ZodiacElement, string> = {
+  Fire:
+    'Two Fire signs share a language of heat and momentum. Enthusiasm builds fast between you, and so can friction. Leaving room for both flames keeps the warmth generous.',
+  Earth:
+    'Two Earth signs share a language of steadiness and care. You build slowly and value what lasts. Tending the routine keeps comfort from going quiet.',
+  Air:
+    'Two Air signs share a language of ideas and conversation. Talk flows easily and curiosity keeps things fresh. Grounding the words in small acts helps them land.',
+  Water:
+    'Two Water signs share a language of feeling and intuition. You often read each other without much explaining. Naming things out loud now and then keeps the depth clear.',
+};
+
+const CROSS_ELEMENT_REFLECTIONS: Record<string, string> = {
+  'Air+Fire':
+    'Fire and Air tend to feed each other. Air fans the flame with ideas, and Fire gives those ideas heat and motion. The pairing is lively, so rest is worth planning on purpose.',
+  'Fire+Water':
+    'Fire and Water make steam. Water can soften Fire\'s edges, and Fire can warm Water\'s depths, though each can also dampen or scorch the other. This pairing asks for care and honest pacing.',
+  'Earth+Fire':
+    'Fire brings the spark and Earth brings the steadiness. One starts things, the other sees them through. Respecting each other\'s tempo turns the difference into a strength.',
+  'Air+Water':
+    'Air leads with ideas and Water leads with feeling. When both stay curious about the other\'s language, conversations can bridge head and heart.',
+  'Air+Earth':
+    'Air sketches the plan and Earth checks the ground. Together the vision gains structure and the structure gets fresh air. Patience with each other\'s pace helps.',
+  'Earth+Water':
+    'Earth and Water are a garden pairing. Water nourishes and Earth holds, so growth between you can feel natural. Keeping the flow moving helps nothing stagnate.',
+};
+
+function elementReflection(a: ZodiacElement, b: ZodiacElement): string {
+  if (a === b) return SAME_ELEMENT_REFLECTIONS[a];
+  return CROSS_ELEMENT_REFLECTIONS[[a, b].sort().join('+')] ?? '';
+}
+
 function CompatibilityPage({ onBack }: { onBack: () => void }) {
   const subBodyPad = useSubBodyPad();
   const [self, setSelf] = useState<Profile>({});
@@ -3151,6 +3316,17 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
     setPartner(next);
     AsyncStorage.setItem(STORAGE_PARTNER, JSON.stringify(next)).catch(() => {});
   }
+
+  function clearPartner() {
+    setPartner({});
+    AsyncStorage.removeItem(STORAGE_PARTNER).catch(() => {});
+  }
+
+  const selfSign = sunSignFromBirthDate(self.birthDate);
+  const partnerSign = sunSignFromBirthDate(partner.birthDate);
+  const hasPartnerData = !!(
+    partner.name || partner.birthDate || partner.birthTime || partner.birthLocation
+  );
 
   return (
     <View style={{ flex: 1 }}>
@@ -3175,6 +3351,15 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
 
         <Text style={styles.sectionLabel}>OTHER PERSON</Text>
         <Text style={styles.sectionSub}>Their birth details, stored only on this device.</Text>
+        <Text style={styles.fieldLabel}>Birth date (needed for the match)</Text>
+        <TextInput
+          style={styles.fieldInput}
+          placeholder="YYYY-MM-DD"
+          placeholderTextColor="#ffffff77"
+          value={partner.birthDate ?? ''}
+          onChangeText={t => updatePartner('birthDate', t)}
+          maxLength={10}
+        />
         <Text style={styles.fieldLabel}>Name</Text>
         <TextInput
           style={styles.fieldInput}
@@ -3184,16 +3369,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
           onChangeText={t => updatePartner('name', t)}
           maxLength={60}
         />
-        <Text style={styles.fieldLabel}>Birth date</Text>
-        <TextInput
-          style={styles.fieldInput}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor="#ffffff77"
-          value={partner.birthDate ?? ''}
-          onChangeText={t => updatePartner('birthDate', t)}
-          maxLength={10}
-        />
-        <Text style={styles.fieldLabel}>Birth time</Text>
+        <Text style={styles.fieldLabel}>Birth time (optional, saved for the full chart later)</Text>
         <TextInput
           style={styles.fieldInput}
           placeholder="HH:MM"
@@ -3202,7 +3378,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
           onChangeText={t => updatePartner('birthTime', t)}
           maxLength={5}
         />
-        <Text style={styles.fieldLabel}>Birth location</Text>
+        <Text style={styles.fieldLabel}>Birth location (optional, saved for the full chart later)</Text>
         <TextInput
           style={styles.fieldInput}
           placeholder="City, country"
@@ -3211,13 +3387,53 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
           onChangeText={t => updatePartner('birthLocation', t)}
           maxLength={120}
         />
+        {hasPartnerData ? (
+          <TouchableOpacity
+            onPress={clearPartner}
+            style={styles.rantLetGoBtn}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Clear this person's saved details"
+          >
+            <Text style={styles.rantLetGoText}>Clear this person</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {selfSign && partnerSign ? (
+          <>
+            <Text style={styles.sectionLabel}>HOW YOUR SIGNS MEET</Text>
+            <View style={styles.compatCard}>
+              <View style={styles.compatSignsRow}>
+                <View style={styles.compatSignCol}>
+                  <Text style={[styles.compatPairGlyph, { color: selfSign.color }]}>
+                    {selfSign.glyph}
+                  </Text>
+                  <Text style={styles.compatName}>{selfSign.name}</Text>
+                  <Text style={styles.compatMeta}>{selfSign.element}</Text>
+                </View>
+                <Text style={styles.compatPairJoin}>+</Text>
+                <View style={styles.compatSignCol}>
+                  <Text style={[styles.compatPairGlyph, { color: partnerSign.color }]}>
+                    {partnerSign.glyph}
+                  </Text>
+                  <Text style={styles.compatName}>{partnerSign.name}</Text>
+                  <Text style={styles.compatMeta}>{partnerSign.element}</Text>
+                </View>
+              </View>
+              <Text style={styles.compatReflection}>
+                {elementReflection(selfSign.element, partnerSign.element)}
+              </Text>
+              <Text style={styles.sunSignCaption}>
+                A traditional astrology lens on how your elements meet. Take what resonates.
+              </Text>
+            </View>
+          </>
+        ) : null}
 
         <View style={styles.compatComingSoon}>
-          <Text style={styles.compatComingTitle}>Synastry chart. Coming soon</Text>
+          <Text style={styles.compatComingTitle}>Full chart comparison</Text>
           <Text style={styles.compatComingText}>
-            Full synastry (planet-by-planet alignment between two natal charts) will be added once
-            the natal-chart pipeline is wired in. Your details are saved locally so the moment that
-            ships, the analysis is one tap away.
+            A planet-by-planet reading is on the roadmap. Your saved details will be ready for it.
           </Text>
         </View>
       </ScrollView>
@@ -3230,17 +3446,43 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
 // ===========================================================================
 
 const GEMINI_KEY_URL = 'https://aistudio.google.com/apikey';
+const STORAGE_TAROT = '@simply_ambient_tarot_v1';
+const STORAGE_LAST_REFLECTION = '@simply_ambient_last_reflection_v1';
+const GEMINI_ERROR_TEXT = 'Gemini could not process this request. Check the key and try again.';
 
-function InsightsPage({ onBack }: { onBack: () => void }) {
+// Shown before a key is saved, so the page demonstrates its value first.
+const EXAMPLE_REFLECTION =
+  'This week leaned tired, with low evenings and slow mornings. Still, small gratitudes kept ' +
+  'surfacing: the light through the kitchen window, a friend who called at the right moment. ' +
+  'Rest seems to be asking for a little more room.';
+
+type SavedReflection = { ts: number; kind: 'themes' | 'tarot'; text: string };
+
+function InsightsPage({
+  onBack, counts,
+}: {
+  onBack: () => void;
+  // Live entry counts from the parent's state, one per toggleable source.
+  counts: Record<AISourceKey, number>;
+}) {
   const subBodyPad = useSubBodyPad();
-  const [apiKey, setApiKey] = useState('');
+  const [savedKey, setSavedKey] = useState('');
+  const [keyDraft, setKeyDraft] = useState('');
+  const [keyInputOpen, setKeyInputOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [output, setOutput] = useState<string | null>(null);
+  const [reflection, setReflection] = useState<SavedReflection | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [confirmOpenLink, setConfirmOpenLink] = useState(false);
   const [sources, setSources] = useState<AISources>(DEFAULT_AI_SOURCES);
+  const [hasTarot, setHasTarot] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_GEMINI_KEY).then(v => v && setApiKey(v)).catch(() => {});
+    AsyncStorage.getItem(STORAGE_GEMINI_KEY).then(v => {
+      if (v) {
+        setSavedKey(v);
+        setKeyDraft(v);
+      }
+    }).catch(() => {});
     AsyncStorage.getItem(STORAGE_AI_SOURCES).then(v => {
       if (!v) return;
       try {
@@ -3248,11 +3490,41 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
         setSources({ ...DEFAULT_AI_SOURCES, ...parsed });
       } catch {}
     }).catch(() => {});
+    AsyncStorage.getItem(STORAGE_TAROT).then(v => {
+      const parsed = safeParse<{ card?: unknown }>(v, {});
+      setHasTarot(!!(parsed && typeof parsed === 'object' && parsed.card));
+    }).catch(() => {});
+    AsyncStorage.getItem(STORAGE_LAST_REFLECTION).then(v => {
+      const parsed = safeParse<SavedReflection | null>(v, null);
+      if (
+        parsed && typeof parsed === 'object' &&
+        typeof parsed.ts === 'number' &&
+        typeof parsed.text === 'string' &&
+        (parsed.kind === 'themes' || parsed.kind === 'tarot')
+      ) {
+        setReflection(parsed);
+      }
+    }).catch(() => {});
   }, []);
 
-  function saveKey(value: string) {
-    setApiKey(value);
-    AsyncStorage.setItem(STORAGE_GEMINI_KEY, value).catch(() => {});
+  const hasKey = savedKey.trim().length > 0;
+
+  // Persists only non-empty values, so clearing the field can never silently
+  // erase a stored key. Removal happens only through the explicit button.
+  function handleKeyInput(value: string) {
+    setKeyDraft(value);
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    if (!hasKey) setKeyInputOpen(true); // Keep the field visible as the layout switches.
+    setSavedKey(trimmed);
+    AsyncStorage.setItem(STORAGE_GEMINI_KEY, trimmed).catch(() => {});
+  }
+
+  function removeKey() {
+    setSavedKey('');
+    setKeyDraft('');
+    setKeyInputOpen(false);
+    AsyncStorage.removeItem(STORAGE_GEMINI_KEY).catch(() => {});
   }
 
   function toggleSource(k: AISourceKey) {
@@ -3261,15 +3533,17 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
     AsyncStorage.setItem(STORAGE_AI_SOURCES, JSON.stringify(next)).catch(() => {});
   }
 
-  const enabledSourceCount = (Object.keys(sources) as AISourceKey[]).filter(k => sources[k]).length;
+  // The journal reading needs at least one enabled source that has entries.
+  const canRunJournal = (Object.keys(sources) as AISourceKey[])
+    .some(k => sources[k] && counts[k] > 0);
 
   async function runAnalysis(kind: 'journal' | 'tarot') {
-    if (!apiKey.trim()) {
+    if (!savedKey.trim()) {
       notify('Add your Gemini API key', 'Get a free key from aistudio.google.com and paste it above.');
       return;
     }
     setLoading(true);
-    setOutput(null);
+    setErrorMsg(null);
     try {
       let prompt = '';
       if (kind === 'journal') {
@@ -3326,7 +3600,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
           'Write in flowing prose suitable for reading by candlelight. Under 260 words.\n\n' +
           sections.join('\n\n');
       } else {
-        const tarotRaw = await AsyncStorage.getItem('@simply_ambient_tarot_v1');
+        const tarotRaw = await AsyncStorage.getItem(STORAGE_TAROT);
         type TarotCardLite = { name?: string; meaning_up?: string; desc?: string };
         const tarotParsed = safeParse<{ card?: TarotCardLite }>(tarotRaw, {});
         const card: TarotCardLite | null =
@@ -3359,7 +3633,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
         const res = await fetch(url, {
           method: 'POST',
           signal: abort.signal,
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey.trim() },
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': savedKey.trim() },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
           }),
@@ -3368,13 +3642,22 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
       } finally {
         clearTimeout(timeout);
       }
-      const text =
-        json?.candidates?.[0]?.content?.parts?.[0]?.text ??
-        json?.error?.message ??
-        'No response.';
-      setOutput(text);
+      // Only a genuine reflection reaches the dream card. API errors and
+      // empty responses surface as a warning line instead.
+      const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (typeof text === 'string' && text.trim()) {
+        const entry: SavedReflection = {
+          ts: Date.now(),
+          kind: kind === 'journal' ? 'themes' : 'tarot',
+          text: text.trim(),
+        };
+        setReflection(entry);
+        AsyncStorage.setItem(STORAGE_LAST_REFLECTION, JSON.stringify(entry)).catch(() => {});
+      } else {
+        setErrorMsg(GEMINI_ERROR_TEXT);
+      }
     } catch (e) {
-      setOutput('Could not reach the AI service. Check your network and API key.');
+      setErrorMsg(GEMINI_ERROR_TEXT);
     } finally {
       setLoading(false);
     }
@@ -3388,24 +3671,74 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
     <View style={{ flex: 1 }}>
       <SubHeader title="AI Insights" accent="#8FB8DE" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
+        {!hasKey ? (
+          <>
+            <View style={[styles.supportHero, { marginTop: 16 }]}>
+              <Text style={styles.supportHeadline}>A quiet reader for your journal</Text>
+              <Text style={[styles.supportText, { marginBottom: 0 }]}>
+                Your mood, gratitude, and manifestations already hold patterns. With a free
+                Gemini key, this page writes you a short reflection in the style of a dream
+                journal. Everything stays on this device until you choose to share it.
+              </Text>
+            </View>
+            <View style={styles.dreamPage}>
+              <Text style={styles.dreamDate}>A week, read gently</Text>
+              <View style={styles.dreamRule} />
+              <Text style={styles.dreamBody}>{EXAMPLE_REFLECTION}</Text>
+              <Text style={styles.dreamSig}>· example</Text>
+            </View>
+          </>
+        ) : null}
+
         <Text style={styles.sectionLabel}>GEMINI API KEY</Text>
-        <Text style={styles.sectionSub}>
-          Free at{' '}
-          <Text style={styles.linkText} onPress={() => setConfirmOpenLink(true)}>
-            aistudio.google.com
+        {hasKey ? (
+          <View style={styles.settingRow}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={styles.settingLabel}>Gemini key</Text>
+              <Text style={styles.bugAppInfoPreview}>Saved on this device</Text>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => setKeyInputOpen(o => !o)}
+              style={styles.settingToggle}
+              accessibilityRole="button"
+              accessibilityLabel={keyInputOpen ? 'Hide the key field' : 'Change the saved key'}
+            >
+              <Text style={styles.settingToggleText}>{keyInputOpen ? 'HIDE' : 'CHANGE'}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <Text style={styles.sectionSub}>
+            Free at{' '}
+            <Text style={styles.linkText} onPress={() => setConfirmOpenLink(true)}>
+              aistudio.google.com
+            </Text>
+            . Saved on this device only.
           </Text>
-          . Saved on this device only.
-        </Text>
-        <TextInput
-          style={styles.fieldInput}
-          placeholder="paste your key here"
-          placeholderTextColor="#ffffff77"
-          value={apiKey}
-          onChangeText={saveKey}
-          autoCapitalize="none"
-          autoCorrect={false}
-          secureTextEntry
-        />
+        )}
+        {!hasKey || keyInputOpen ? (
+          <TextInput
+            style={[styles.fieldInput, hasKey && { marginTop: 10 }]}
+            placeholder="paste your key here"
+            placeholderTextColor="#ffffff77"
+            value={keyDraft}
+            onChangeText={handleKeyInput}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+          />
+        ) : null}
+        {hasKey ? (
+          <TouchableOpacity
+            onPress={removeKey}
+            style={styles.rantLetGoBtn}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Remove the saved Gemini key from this device"
+          >
+            <Text style={styles.rantLetGoText}>Remove key</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <Text style={styles.sectionLabel}>SHARE WITH AI</Text>
         <Text style={styles.sectionSub}>
@@ -3420,23 +3753,28 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
             { id: 'rant',          label: 'Rant',          color: '#D68097' },
           ] as Array<{ id: AISourceKey; label: string; color: string }>).map(s => {
             const on = sources[s.id];
+            const count = counts[s.id];
             return (
               <TouchableOpacity
                 key={s.id}
                 activeOpacity={0.85}
                 onPress={() => toggleSource(s.id)}
+                accessibilityRole="switch"
+                accessibilityLabel={`${s.label}, ${count} ${count === 1 ? 'entry' : 'entries'}`}
+                accessibilityState={{ checked: on }}
                 style={[
                   styles.aiSourceChip,
                   on
                     ? { borderColor: s.color, backgroundColor: s.color + '22' }
                     : { borderColor: 'rgba(255,255,255,0.15)' },
+                  count === 0 && { opacity: 0.4 },
                 ]}
               >
                 <Text style={[
                   styles.aiSourceText,
                   on ? { color: s.color } : { color: '#ffffff77' },
                 ]}>
-                  {on ? '✓ ' : ''}{s.label}
+                  {on ? '✓ ' : ''}{s.label} · {count}
                 </Text>
               </TouchableOpacity>
             );
@@ -3450,41 +3788,62 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
           style={[
             styles.aiBtn,
             { backgroundColor: '#8FB8DE' },
-            (loading || enabledSourceCount === 0) && { opacity: 0.4 },
+            (loading || !canRunJournal) && { opacity: 0.4 },
           ]}
-          disabled={loading || enabledSourceCount === 0}
+          disabled={loading || !canRunJournal}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: loading || !canRunJournal }}
         >
-          <Text style={styles.aiBtnText}>
-            {enabledSourceCount === 0
-              ? 'JOURNAL THEMES (no sources enabled)'
-              : `JOURNAL THEMES (${enabledSourceCount} ${enabledSourceCount === 1 ? 'source' : 'sources'})`}
-          </Text>
+          <Text style={styles.aiBtnText}>JOURNAL THEMES</Text>
         </TouchableOpacity>
+        {!canRunJournal ? (
+          <Text style={styles.notifHint}>
+            Turn on at least one source with entries to run this.
+          </Text>
+        ) : null}
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={() => runAnalysis('tarot')}
-          style={[styles.aiBtn, styles.aiBtnGhost]}
-          disabled={loading}
+          style={[styles.aiBtn, styles.aiBtnGhost, (loading || !hasTarot) && { opacity: 0.4 }]}
+          disabled={loading || !hasTarot}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: loading || !hasTarot }}
         >
           <Text style={[styles.aiBtnText, styles.aiBtnGhostText]}>INTERPRET TODAY'S TAROT</Text>
         </TouchableOpacity>
+        {!hasTarot ? (
+          <Text style={styles.notifHint}>Draw a card in Horoscopes first.</Text>
+        ) : null}
 
-        {(loading || output) ? (
+        {errorMsg ? <Text style={styles.notifWarn}>{errorMsg}</Text> : null}
+
+        {(loading || reflection) ? (
           <View style={styles.dreamPage}>
-            <Text style={styles.dreamDate}>{today}</Text>
+            <Text style={styles.dreamDate}>
+              {loading || !reflection
+                ? today
+                : new Date(reflection.ts).toLocaleDateString(undefined, {
+                    weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+                  })}
+            </Text>
             <View style={styles.dreamRule} />
             {loading ? (
               <ActivityIndicator color="#B39BE0" style={{ marginTop: 16 }} />
-            ) : (
-              <Text style={styles.dreamBody}>{output}</Text>
-            )}
-            <Text style={styles.dreamSig}>· reflection</Text>
+            ) : reflection ? (
+              <Text style={styles.dreamBody}>{reflection.text}</Text>
+            ) : null}
+            {!loading && reflection ? (
+              <Text style={styles.dreamSig}>
+                · {reflection.kind === 'tarot' ? 'tarot' : 'reflection'}
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
         <Text style={styles.aiFootnote}>
-          Powered by Google Gemini. Only the data sources you've enabled above are sent, and only
-          when you tap an analyse button. Nothing leaves the app otherwise.
+          Powered by Google Gemini with your own key. Journal analysis sends only the sources
+          you toggle on. Tarot interpretation sends the drawn card. Nothing is sent until you
+          tap a button.
         </Text>
       </ScrollView>
 
@@ -3998,10 +4357,11 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#B39BE0',
     borderRadius: 14, padding: 18, alignItems: 'center',
   },
+  // Kept quiet on purpose: the temperament group carries the emphasis.
   mbtiResultType: {
     color: '#fff',
     fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 36, letterSpacing: 4, fontWeight: '600',
+    fontSize: 24, letterSpacing: 3, fontWeight: '600',
   },
   mbtiResultGroup: { color: '#B39BE0', fontSize: 14, marginTop: 4, fontWeight: '700', letterSpacing: 1 },
   mbtiResultBlurb: { color: '#ffffffcc', fontSize: 12, marginTop: 4, textAlign: 'center' },
@@ -4018,6 +4378,24 @@ const styles = StyleSheet.create({
     color: '#B39BE0', fontSize: 13, fontWeight: '700', letterSpacing: 2,
     marginTop: 6,
   },
+
+  // Sun-sign payoff card (Profile, Natal Chart) and the element pairing
+  // result (Compatibility).
+  sunSignCard: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+  sunSignGlyph: { fontSize: 42, marginRight: 16 },
+  sunSignIntention: {
+    color: '#ffffffcc', fontSize: 12, fontStyle: 'italic',
+    marginTop: 6, lineHeight: 17,
+  },
+  sunSignCaption: { color: '#ffffff66', fontSize: 11, marginTop: 8, lineHeight: 15 },
+  compatSignsRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly',
+    marginBottom: 12,
+  },
+  compatSignCol: { alignItems: 'center', flex: 1 },
+  compatPairGlyph: { fontSize: 36 },
+  compatPairJoin: { color: '#ffffff55', fontSize: 18, paddingHorizontal: 6 },
+  compatReflection: { color: '#ffffffcc', fontSize: 13, lineHeight: 20 },
   compatComingSoon: {
     marginTop: 24, padding: 16,
     borderRadius: 18, borderStyle: 'dashed',
