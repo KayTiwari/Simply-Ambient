@@ -2165,11 +2165,17 @@ function AppContent() {
 
   // --- Render --------------------------------------------------------------
 
+  // Web always gets the centered phone-width column. Tablets get the same
+  // treatment once the window is wide enough that single-column cards would
+  // stretch uncomfortably; the gradient stays full-bleed behind the column.
+  const { width: windowW } = useWindowDimensions();
+  const columnClamp = Platform.OS === 'web' || windowW >= 700 ? styles.contentColumn : null;
+
   return (
     <View style={styles.root}>
       <WaveBackground band={activeBand} playing={isTonePlaying} overrideColor={singleColor} />
       <StatusBar style="light" />
-      <SafeAreaView style={[styles.safe, styles.webColumn]} edges={['top']}>
+      <SafeAreaView style={[styles.safe, columnClamp]} edges={['top']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
@@ -2301,7 +2307,7 @@ function AppContent() {
 
       {onboardingChecked && showOnboarding ? (
         <View style={[StyleSheet.absoluteFill, styles.onboardingLayer]}>
-          <View style={[{ flex: 1, width: '100%' }, styles.webColumn]}>
+          <View style={[{ flex: 1, width: '100%' }, columnClamp]}>
             <OnboardingView onDone={dismissOnboarding} isReplay={onboardingIsReplay} />
           </View>
         </View>
@@ -3206,11 +3212,9 @@ function FrequencyControl({ ear, label, hz, color, onCommit, onSlide }: ControlP
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#0B0B1F' },
   safe: { flex: 1 },
-  // On web, keep the app in a centered phone-width column; the gradient
-  // background stays full-bleed behind it.
-  webColumn: Platform.OS === 'web'
-    ? { width: '100%' as const, maxWidth: 600, alignSelf: 'center' as const }
-    : {},
+  // Centered phone-width column used on web and on wide (tablet) windows;
+  // the gradient background stays full-bleed behind it.
+  contentColumn: { width: '100%' as const, maxWidth: 600, alignSelf: 'center' as const },
   onboardingLayer: { backgroundColor: '#0B0B1F' },
   scroll: {
     paddingHorizontal: 20,

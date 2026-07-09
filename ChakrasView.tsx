@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { Wind, Flame, Mountains, type IconProps } from 'phosphor-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Chakra, Dosha } from './lib/content';
 
@@ -37,6 +38,7 @@ export default function ChakrasView({
   toneIsPlaying, toneIsLoading, onTogglePlay,
   beatHz, bandName, bandColor,
 }: Props) {
+  const insets = useSafeAreaInsets();
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.headerWrap}>
@@ -71,7 +73,7 @@ export default function ChakrasView({
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 96 }}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.sectionLabel}>CHAKRAS</Text>

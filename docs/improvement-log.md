@@ -292,3 +292,46 @@ into lib/content/ modules with invariant tests and an adding-content guide.
 Tablet/responsive polish (backlog priority 6).
 
 ---
+
+## Cycle 6: Tablet and responsive polish
+
+- **Date:** 2026-07-08
+- **Goal:** Backlog priority 6. Make wide screens read as intentional without
+  redesigning the app, and fix the inconsistent bottom padding.
+
+### What was implemented
+
+- The centered phone-width column the web build already used is now
+  width-aware: any window 700 dp or wider (Android tablets, resized web)
+  gets the same centered max-600 column over the full-bleed gradient. The
+  walkthrough overlay is clamped identically. (`styles.webColumn` became
+  `styles.contentColumn` plus a `useWindowDimensions` check.)
+- Chakras and Horoscopes ScrollViews switch from a hardcoded
+  `paddingBottom: 120` to safe-area-aware `insets.bottom + 96`, matching the
+  Breathwork tab, so the last card clears the tab bar on gesture-nav phones.
+- New `docs/qa-checklist.md`: phone, tablet, gesture-nav, and web manual QA
+  covering audio, walkthrough, rate/feedback, privacy, and regressions.
+
+### Files changed
+
+- `App.tsx`, `ChakrasView.tsx`, `HoroscopesView.tsx`, `docs/qa-checklist.md`.
+
+### Tests run
+
+- `npx tsc --noEmit`: pass. `npm test`: 58/58 pass.
+- `npm run build:web`: exports cleanly (also smoke-tests the whole bundle
+  after the registry refactor).
+
+### Known risks
+
+- MoreView sub-pages still use a fixed `paddingBottom: 120` (15 call sites
+  share one style); consistent with prior behavior, left for a dedicated
+  pass. Noted in the QA checklist.
+- The 700 dp breakpoint only affects layouts wider than any phone; phone
+  rendering is byte-identical.
+
+### Suggested next cycle
+
+Play Store assets and ASO support doc (backlog priority 7).
+
+---

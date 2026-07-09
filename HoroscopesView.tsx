@@ -13,6 +13,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle as SvgCircle, Path as SvgPath } from 'react-native-svg';
 import { ArrowsClockwise } from 'phosphor-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MoonDisc, type LunarInfo } from './App';
 import type { Zodiac } from './lib/content';
@@ -169,6 +170,7 @@ async function fetchCards(count: number, majorOnly: boolean): Promise<TarotCard[
 export default function HoroscopesView({
   zodiac, mySign, lunar, onSelectMyZodiac,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const [period, setPeriod] = useState<Period>('daily');
   // The 12-sign picker is collapsed behind a CHANGE button; a permanent
   // "tap to set your sign" strip reads like onboarding that never ends.
@@ -386,7 +388,7 @@ export default function HoroscopesView({
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 96 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Today / week / month widget */}
