@@ -14,7 +14,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle as SvgCircle, Path as SvgPath } from 'react-native-svg';
 import { ArrowsClockwise } from 'phosphor-react-native';
 
-import { MoonDisc, type Zodiac, type LunarInfo } from './App';
+import { MoonDisc, type LunarInfo } from './App';
+import type { Zodiac } from './lib/content';
 
 const HOROSCOPE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // Local calendar date (not UTC), so "today" matches what the user sees.

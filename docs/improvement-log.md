@@ -240,3 +240,55 @@ Content registry (backlog priority 5): move the hardcoded content arrays
 into lib/content/ modules with invariant tests and an adding-content guide.
 
 ---
+
+## Cycle 5: Content registry
+
+- **Date:** 2026-07-08
+- **Goal:** Backlog priority 5. One place to add sounds, frequencies, and
+  practices, with tests that catch content mistakes.
+
+### What was implemented
+
+- New `lib/content/` registry, a verbatim move with zero behavior change:
+  - `bands.ts`: the `BandKey` union (drives palettes and preset theming).
+  - `chakras.ts`: `Chakra`/`CHAKRAS` and `Dosha`/`DOSHAS`.
+  - `zodiac.ts`: `Zodiac`/`ZODIAC` (including year-ahead copy).
+  - `techniques.ts`: `Technique`/`TECHNIQUES` (all 17 breath techniques with
+    phases, mudras, and their phosphor icons).
+  - `index.ts`: single import surface.
+- `App.tsx` shrank by ~139 lines and `BreathworkView.tsx` by ~252;
+  `ChakrasView`/`HoroscopesView` now import content types from the registry
+  instead of from `App.tsx`.
+- `__tests__/content.test.ts` (19 tests): counts, unique ids, hex colors,
+  frequency ranges, valid phases, and the cross-references that used to be
+  silent drift risks: every dosha `balanceTechnique` must exactly match a
+  technique name, and the onboarding recommendation names are checked against
+  the registry.
+- `docs/adding-content.md`: how to add a technique, chakra/dosha, zodiac
+  copy, soundscape (including the `ATTRIBUTION.md` licensing step and gain
+  table), affirmations, and where tuning presets deliberately remain
+  (`App.tsx`, tied to the audio engine).
+
+### Files changed
+
+- New: `lib/content/` (5 files), `__tests__/content.test.ts`,
+  `docs/adding-content.md`.
+- Modified: `App.tsx`, `BreathworkView.tsx`, `ChakrasView.tsx`,
+  `HoroscopesView.tsx`.
+
+### Tests run
+
+- `npx tsc --noEmit`: pass. `npm test`: 4 suites, 58 tests, all pass.
+
+### Known risks
+
+- Moves were verified by typecheck, the full suite, and diff review; the
+  remaining risk is any code path that only fails at runtime. Manual QA:
+  open each tab, play a chakra preset, run one breath technique, check the
+  dosha cards.
+
+### Suggested next cycle
+
+Tablet/responsive polish (backlog priority 6).
+
+---

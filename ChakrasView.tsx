@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Wind, Flame, Mountains, type IconProps } from 'phosphor-react-native';
 
-import type { Chakra, Dosha } from './App';
+import type { Chakra, Dosha } from './lib/content';
 
 const DOSHA_ICONS: Record<Dosha['id'], React.ComponentType<IconProps>> = {
   vata: Wind,
