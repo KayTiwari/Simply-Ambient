@@ -188,10 +188,6 @@ export default function ChakrasView({
             </TouchableOpacity>
           );
         })}
-
-        <Text style={styles.footnote}>
-          Tap a chakra to tune both ears around its carrier frequency with a 6 Hz theta beat. Sit upright, place attention on the body location, and let the bija mantra arise inwardly.
-        </Text>
       </ScrollView>
     </View>
   );
@@ -369,9 +365,4 @@ const styles = StyleSheet.create({
   qualities: { color: '#ffffff99', fontSize: 12, marginTop: 4, letterSpacing: 0.5 },
   doshaDescription: { color: '#ffffffB0', fontSize: 12, marginTop: 6, lineHeight: 18 },
   balanceLine: { fontSize: 12, marginTop: 8 },
-
-  footnote: {
-    color: '#ffffffB0', fontSize: 12, textAlign: 'center',
-    marginTop: 24, paddingHorizontal: 12, lineHeight: 18,
-  },
 });
