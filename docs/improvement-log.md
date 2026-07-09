@@ -131,3 +131,56 @@ Onboarding walkthrough (backlog priority 3): add the missing teaching beats
 entry point in Settings.
 
 ---
+
+## Cycle 3: Onboarding walkthrough upgrade
+
+- **Date:** 2026-07-08
+- **Goal:** Backlog priority 3. Close the teaching gaps in the existing 5-step
+  flow, make progress visible, and make the walkthrough replayable.
+
+### What was implemented
+
+- New final "Good to know" step with four tips the old flow never taught:
+  soundscape layering (the app's ambient sounds), the sleep timer, tuning and
+  saving custom presets, and Settings (single app color) plus where to replay
+  the walkthrough. Rendered with the existing recommendation-card styling.
+- Step indicator dots (top center, replay-aware count), so the flow reads as
+  a finite walkthrough instead of an unknown number of gates.
+- Replay support: More > Settings gains a WALKTHROUGH section with a
+  "Replay the intro" row. Replay mode (`isReplay` prop) skips the legal step
+  (already agreed once) and the profile step (already stored), so a replay is
+  purely welcome, intent, recommendations, tips. The onboarded flag is never
+  cleared; a replay that is closed mid-way changes nothing.
+- Step transitions now walk a declared sequence (`FIRST_RUN_STEPS` /
+  `REPLAY_STEPS`) instead of hardcoded targets.
+- Fixed the grammatically broken outro sentence on the recommendations step.
+
+### Files changed
+
+- `OnboardingView.tsx`, `App.tsx`, `MoreView.tsx`.
+
+### Tests run
+
+- `npx tsc --noEmit`: pass. `npm test`: 35/35 pass.
+
+### Manual QA instructions
+
+1. Fresh install: 6 dots, flow = welcome, safety, intent, profile, recs, tips.
+   "Skip the rest" on the intent step still exits immediately (skippable).
+2. Profile step Skip lands on recommendations, then tips, then ENTER.
+3. More > Settings > "Replay the intro": 4 dots, no legal step, no profile
+   step. Finishing returns to Settings exactly as it was.
+4. Replay with an existing profile, type nothing: profile is unchanged.
+
+### Known risks
+
+- The tips copy names real UI ("below Play", "More → Settings"); if those
+  move, the copy must follow. Content-registry cycle will note this coupling.
+
+### Suggested next cycle
+
+Privacy reassurance (backlog priority 4): a verified at-a-glance privacy
+summary in Settings with the hosted policy link, plus a wording fix in the
+policy for the feedback rename.
+
+---

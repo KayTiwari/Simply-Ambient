@@ -1589,6 +1589,14 @@ function AppContent() {
     setShowOnboarding(false);
   }
 
+  // "Replay the intro" from More > Settings. Replay skips the legal and
+  // profile steps (see OnboardingView) and never clears the onboarded flag.
+  const [onboardingIsReplay, setOnboardingIsReplay] = useState(false);
+  function replayOnboarding() {
+    setOnboardingIsReplay(true);
+    setShowOnboarding(true);
+  }
+
   const [leftHz, setLeftHz] = useState(DEFAULT_LEFT);
   const [rightHz, setRightHz] = useState(DEFAULT_RIGHT);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
@@ -2389,6 +2397,7 @@ function AppContent() {
                 onRequestedPageHandled={() => setMorePageRequest(null)}
                 singleColor={singleColor}
                 onChangeSingleColor={setSingleColorPref}
+                onReplayOnboarding={replayOnboarding}
               />
             )}
           </Animated.View>
@@ -2430,7 +2439,7 @@ function AppContent() {
       {onboardingChecked && showOnboarding ? (
         <View style={[StyleSheet.absoluteFill, styles.onboardingLayer]}>
           <View style={[{ flex: 1, width: '100%' }, styles.webColumn]}>
-            <OnboardingView onDone={dismissOnboarding} />
+            <OnboardingView onDone={dismissOnboarding} isReplay={onboardingIsReplay} />
           </View>
         </View>
       ) : null}

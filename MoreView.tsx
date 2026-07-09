@@ -117,6 +117,8 @@ type Props = {
   // "Single app color" setting: null = animated band transitions.
   singleColor: string | null;
   onChangeSingleColor: (c: string | null) => void;
+  // Re-show the first-run walkthrough (replay mode skips legal + profile).
+  onReplayOnboarding: () => void;
 };
 
 type SoundscapeOption = {
@@ -198,6 +200,7 @@ export default function MoreView({
   onRequestedPageHandled,
   singleColor,
   onChangeSingleColor,
+  onReplayOnboarding,
 }: Props) {
   const [moodLog, setMoodLog] = useState<MoodEntry[]>([]);
   const [gratitude, setGratitude] = useState<GratEntry[]>([]);
@@ -458,6 +461,7 @@ export default function MoreView({
               onBack={close}
               singleColor={singleColor}
               onChangeSingleColor={onChangeSingleColor}
+              onReplayOnboarding={onReplayOnboarding}
             />
           )}
           {page === 'bug' && (
@@ -1771,11 +1775,12 @@ const SINGLE_COLOR_CHOICES = [
 ];
 
 function SettingsPage({
-  onBack, singleColor, onChangeSingleColor,
+  onBack, singleColor, onChangeSingleColor, onReplayOnboarding,
 }: {
   onBack: () => void;
   singleColor: string | null;
   onChangeSingleColor: (c: string | null) => void;
+  onReplayOnboarding: () => void;
 }) {
   const on = singleColor != null;
   return (
@@ -1826,6 +1831,22 @@ function SettingsPage({
             })}
           </View>
         ) : null}
+
+        <Text style={styles.sectionLabel}>WALKTHROUGH</Text>
+        <Text style={styles.sectionSub}>
+          The short intro from your first launch: what brings you here, tailored
+          recommendations, and a few good-to-know tips.
+        </Text>
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={onReplayOnboarding}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Replay the intro walkthrough"
+        >
+          <Text style={styles.settingLabel}>Replay the intro</Text>
+          <Text style={styles.settingRowChevron}>›</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );

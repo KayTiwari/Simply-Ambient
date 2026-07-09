@@ -50,7 +50,37 @@ const RECS: Record<Intent, {
   },
 };
 
-type Step = 0 | 1 | 2 | 3 | 4;
+type Step = 0 | 1 | 2 | 3 | 4 | 5;
+
+// The walkthrough is a sequence, replay-aware: a returning user replaying it
+// from Settings skips the legal step (already agreed) and the profile step
+// (already stored), keeping the replay purely about learning the app.
+const FIRST_RUN_STEPS: Step[] = [0, 1, 2, 3, 4, 5];
+const REPLAY_STEPS: Step[] = [0, 2, 4, 5];
+
+// Practical tips that the guided part of the flow doesn't teach.
+const TIPS: Array<{ label: string; body: string; color: string }> = [
+  {
+    label: 'SOUNDSCAPES',
+    body: 'Layer rain, ocean, forest, or fire under any frequency. Find them under More, or in the mini player while a tone plays.',
+    color: '#8FB8DE',
+  },
+  {
+    label: 'SLEEP TIMER',
+    body: 'On the Frequencies tab, just below Play. The audio fades out gently on its own, so you can drift off.',
+    color: '#8F97DE',
+  },
+  {
+    label: 'YOUR OWN MIX',
+    body: 'Tune each ear separately, or tap a displayed Hz to type an exact value. Save any combination as a preset with the save button.',
+    color: '#9DC7AC',
+  },
+  {
+    label: 'MAKE IT YOURS',
+    body: 'More → Settings pins the background to a single calm color. You can replay this walkthrough from there any time.',
+    color: '#E0A470',
+  },
+];
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -66,7 +96,14 @@ function daysInMonth(monthIndex: number, year: number): number {
   return new Date(year || 2000, monthIndex + 1, 0).getDate();
 }
 
-export default function OnboardingView({ onDone }: { onDone: () => void }) {
+export default function OnboardingView({
+  onDone,
+  isReplay = false,
+}: {
+  onDone: () => void;
+  isReplay?: boolean;
+}) {
+  const steps = isReplay ? REPLAY_STEPS : FIRST_RUN_STEPS;
   const [step, setStep] = useState<Step>(0);
   const [intent, setIntent] = useState<Intent | null>(null);
   const [name, setName] = useState('');
@@ -101,6 +138,14 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
       });
   }
 
+  // Advance along the active sequence, so replay mode skips the right steps.
+  function goNext() {
+    const idx = steps.indexOf(step);
+    const next = steps[idx + 1];
+    if (next === undefined) persistProfileAndDone();
+    else transition(next);
+  }
+
   const rec = intent ? RECS[intent] : null;
   const intentMeta = intent ? INTENTS.find(i => i.id === intent) : null;
 
@@ -125,7 +170,7 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
                 frequencies. The effect only works when each ear hears its own tone.
               </Text>
             </View>
-            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={() => transition(1)}>
+            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={goNext}>
               <Text style={styles.primaryBtnText}>BEGIN</Text>
             </TouchableOpacity>
           </ScrollView>
@@ -181,7 +226,7 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
               & Disclaimer.
             </Text>
 
-            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={() => transition(2)}>
+            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={goNext}>
               <Text style={styles.primaryBtnText}>I AGREE & CONTINUE</Text>
             </TouchableOpacity>
           </ScrollView>
@@ -220,7 +265,7 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
               activeOpacity={0.85}
               style={[styles.primaryBtn, !intent && { opacity: 0.4 }]}
               disabled={!intent}
-              onPress={() => transition(3)}
+              onPress={goNext}
             >
               <Text style={styles.primaryBtnText}>CONTINUE</Text>
             </TouchableOpacity>
@@ -310,10 +355,10 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
               You can fill more (birth time, location, MBTI) later under More → Profile.
             </Text>
 
-            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={() => transition(4)}>
+            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={goNext}>
               <Text style={styles.primaryBtnText}>CONTINUE</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => transition(4)} style={styles.skipBtn}>
+            <TouchableOpacity onPress={goNext} style={styles.skipBtn}>
               <Text style={styles.skipText}>Skip</Text>
             </TouchableOpacity>
           </ScrollView>
@@ -350,22 +395,40 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
               />
             </View>
             <Text style={styles.outro}>
-              Everything else. Horoscopes, mood, gratitude, grounding. Is on the
-              Horoscopes and More tabs.
+              Horoscopes, mood, gratitude, and grounding live on the Horoscopes
+              and More tabs.
             </Text>
-            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={persistProfileAndDone}>
-              <Text style={styles.primaryBtnText}>ENTER</Text>
+            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={goNext}>
+              <Text style={styles.primaryBtnText}>CONTINUE</Text>
             </TouchableOpacity>
           </ScrollView>
         )}
 
         {/* Defensive fallback: if step 4 is reached without an intent picked
-            (shouldn't happen, but state could desync), show a plain ENTER. */}
+            (shouldn't happen, but state could desync), continue to the tips. */}
         {step === 4 && (!rec || !intentMeta) && (
           <ScrollView contentContainerStyle={styles.scroll}>
             <View style={styles.center}>
               <Text style={styles.smallTitle}>You're all set</Text>
               <Text style={styles.smallSub}>Everything is on the tabs at the bottom.</Text>
+            </View>
+            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={goNext}>
+              <Text style={styles.primaryBtnText}>CONTINUE</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+
+        {step === 5 && (
+          <ScrollView contentContainerStyle={styles.scroll}>
+            <Text style={styles.smallTitle}>Good to know</Text>
+            <Text style={styles.smallSub}>Four small things people find later. Now you won't have to.</Text>
+            <View style={{ marginTop: 10 }}>
+              {TIPS.map(tip => (
+                <View key={tip.label} style={[styles.recRow, { borderColor: tip.color + '55' }]}>
+                  <Text style={[styles.recLabel, { color: tip.color }]}>{tip.label}</Text>
+                  <Text style={styles.recReason}>{tip.body}</Text>
+                </View>
+              ))}
             </View>
             <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={persistProfileAndDone}>
               <Text style={styles.primaryBtnText}>ENTER</Text>
@@ -373,6 +436,18 @@ export default function OnboardingView({ onDone }: { onDone: () => void }) {
           </ScrollView>
         )}
       </Animated.View>
+
+      <View style={styles.dotsRow} pointerEvents="none">
+        {steps.map((s, i) => (
+          <View
+            key={s}
+            style={[
+              styles.dot,
+              i === Math.max(0, steps.indexOf(step)) && styles.dotActive,
+            ]}
+          />
+        ))}
+      </View>
     </View>
   );
 }
@@ -395,6 +470,15 @@ function RecRow({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#0B0B1F' },
   scroll: { flexGrow: 1, padding: 24, paddingTop: 80, paddingBottom: 40 },
+  dotsRow: {
+    position: 'absolute', top: 52, left: 0, right: 0,
+    flexDirection: 'row', justifyContent: 'center', gap: 8,
+  },
+  dot: {
+    width: 6, height: 6, borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+  },
+  dotActive: { backgroundColor: 'rgba(255,255,255,0.85)' },
   center: { alignItems: 'center', marginBottom: 24 },
   enso: {
     width: 56, height: 56, borderRadius: 28,
