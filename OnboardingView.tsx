@@ -214,9 +214,11 @@ export default function OnboardingView({
               <Text style={styles.safetyLabel}>YOUR DATA</Text>
               <Text style={styles.safetyBody}>
                 Everything you enter (profile, mood, gratitude, rants, manifestations) is
-                stored only on this device. Nothing leaves the app unless you explicitly
-                tap an analyse button on the AI Insights page, which sends only the data
-                sources you toggle on to Google Gemini using your own API key.
+                stored only on this device. Horoscopes send only your sign; crash reports
+                carry only anonymous diagnostics, never journal content. Beyond that,
+                nothing leaves the app unless you explicitly tap an analyse button on the
+                AI Insights page, which sends only the data sources you toggle on to
+                Google Gemini using your own API key.
               </Text>
             </View>
 

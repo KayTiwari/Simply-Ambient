@@ -184,3 +184,59 @@ summary in Settings with the hosted policy link, plus a wording fix in the
 policy for the feedback rename.
 
 ---
+
+## Cycle 4: Privacy reassurance
+
+- **Date:** 2026-07-08
+- **Goal:** Backlog priority 4. Surface verified privacy facts where users
+  look for them, and keep every claim in sync with what the code does.
+
+### What was implemented
+
+- Settings gains a YOUR PRIVACY section: a card of five at-a-glance facts
+  (each verified against the implementation: local-first storage, no
+  accounts/ads/tracking, horoscope requests send only sign + period, crash
+  reports never carry journal content, AI Insights is opt-in per source),
+  a "Read the privacy policy" row that opens the hosted policy behind the
+  existing confirm-before-browser modal, and a pointer to WIPE ALL DATA.
+- Extracted `LinkConfirmModal` as a shared component (was inline in
+  SafetyPage) so Settings and Safety use one implementation.
+- Accuracy fix: the "YOUR DATA" copy in both onboarding and Safety claimed
+  nothing leaves the device except AI Insights; that omitted Sentry crash
+  diagnostics and the horoscope fetch. Both now state the full truth.
+- `docs/privacy-policy.md` (the source of the hosted GitHub Pages policy):
+  bumped last-updated, added the rate-prompt counters to the on-device list,
+  and renamed bug-report references to the new Feedback form, including the
+  attached app-info line.
+
+### Files changed
+
+- `MoreView.tsx`, `OnboardingView.tsx`, `docs/privacy-policy.md`.
+
+### Tests run
+
+- `npx tsc --noEmit`: pass. `npm test`: 35/35 pass.
+
+### Manual QA instructions
+
+1. More > Settings: YOUR PRIVACY card renders under WALKTHROUGH; the policy
+   row opens the confirm modal, Open launches the browser, Cancel stays.
+2. More > Safety: privacy policy and terms links still work through the same
+   modal (shared component now).
+3. Onboarding step 2 (Before you begin): YOUR DATA section mentions
+   horoscopes and crash reports.
+
+### Known risks
+
+- The hosted policy only updates when docs/ is pushed to GitHub Pages;
+  until then the app links to the May 15 version. Noted in the Play Store
+  update checklist.
+- PRIVACY_FACTS is a hand-maintained list; any new network call must update
+  it (comment in code says so).
+
+### Suggested next cycle
+
+Content registry (backlog priority 5): move the hardcoded content arrays
+into lib/content/ modules with invariant tests and an adding-content guide.
+
+---

@@ -1740,10 +1740,13 @@ export function SafetyContent() {
       <Text style={styles.sectionLabel}>YOUR DATA</Text>
       <Text style={styles.safetyBody}>
         All journal data (mood, gratitude, rants, manifestations, profile) is stored
-        only on this device. Nothing is uploaded automatically. Data leaves the device
-        only when you explicitly tap an analyse button on the AI Insights page, in which
-        case the sources you have toggled on are sent to Google Gemini using your own
-        API key. You control which sources are shared.
+        only on this device. Fetching a horoscope sends only your sign and the period.
+        If the app crashes, an anonymous diagnostic (device model, OS and app version,
+        stack trace) is sent so the bug can be fixed; journal content is never included.
+        Beyond that, data leaves the device only when you explicitly tap an analyse
+        button on the AI Insights page, in which case the sources you have toggled on
+        are sent to Google Gemini using your own API key. You control which sources
+        are shared.
       </Text>
 
       <Text style={styles.sectionLabel}>NO WARRANTY</Text>
@@ -1760,6 +1763,52 @@ export function SafetyContent() {
 
 const PRIVACY_POLICY_URL = 'https://kaytiwari.github.io/Simply-Ambient/privacy-policy.html';
 const TERMS_OF_SERVICE_URL = 'https://kaytiwari.github.io/Simply-Ambient/terms-of-service.html';
+
+// Shared confirm-before-leaving-the-app modal for external document links.
+function LinkConfirmModal({ url, onClose }: { url: string | null; onClose: () => void }) {
+  return (
+    <Modal visible={url !== null} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.linkConfirmBackdrop}>
+        <View style={styles.linkConfirmCard}>
+          <Text style={styles.linkConfirmTitle}>Open in browser?</Text>
+          <Text style={styles.linkConfirmUrl}>{url ?? ''}</Text>
+          <Text style={styles.linkConfirmHint}>You'll leave the app to view this document.</Text>
+          <View style={styles.linkConfirmActions}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={onClose}
+              style={styles.linkConfirmCancelBtn}
+              accessibilityLabel="Cancel"
+            >
+              <Text style={styles.linkConfirmCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => {
+                onClose();
+                if (url) Linking.openURL(url).catch(() => {});
+              }}
+              style={styles.linkConfirmOpenBtn}
+              accessibilityLabel="Open link in browser"
+            >
+              <Text style={styles.linkConfirmOpenText}>Open</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// At-a-glance privacy facts. Every line here is verified against the actual
+// implementation; update this list if a new network call is ever added.
+const PRIVACY_FACTS: string[] = [
+  'Journals, mood, profile, and presets stay on this device.',
+  'No account, no sign-in, no ads, no tracking across apps.',
+  'Horoscopes send only your sign and the period, nothing else.',
+  'Crash reports carry device model and app version, never journal content.',
+  'AI Insights shares only sources you toggle on, only when you tap analyse.',
+];
 
 // ===========================================================================
 //   Settings sub-page
@@ -1783,6 +1832,7 @@ function SettingsPage({
   onReplayOnboarding: () => void;
 }) {
   const on = singleColor != null;
+  const [pendingOpenUrl, setPendingOpenUrl] = useState<string | null>(null);
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Settings" accent="#d9b35c" onBack={onBack} />
@@ -1847,7 +1897,32 @@ function SettingsPage({
           <Text style={styles.settingLabel}>Replay the intro</Text>
           <Text style={styles.settingRowChevron}>›</Text>
         </TouchableOpacity>
+
+        <Text style={styles.sectionLabel}>YOUR PRIVACY</Text>
+        <View style={styles.privacyCard}>
+          {PRIVACY_FACTS.map(fact => (
+            <View key={fact} style={styles.privacyRow}>
+              <Text style={styles.privacyCheck}>✓</Text>
+              <Text style={styles.privacyText}>{fact}</Text>
+            </View>
+          ))}
+        </View>
+        <TouchableOpacity
+          style={[styles.settingRow, { marginTop: 10 }]}
+          onPress={() => setPendingOpenUrl(PRIVACY_POLICY_URL)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Read the full privacy policy"
+        >
+          <Text style={styles.settingLabel}>Read the privacy policy</Text>
+          <Text style={styles.settingRowChevron}>›</Text>
+        </TouchableOpacity>
+        <Text style={styles.bugAppInfoHint}>
+          Delete everything the app stores any time under More → Safety → Wipe all data.
+        </Text>
       </ScrollView>
+
+      <LinkConfirmModal url={pendingOpenUrl} onClose={() => setPendingOpenUrl(null)} />
     </View>
   );
 }
@@ -1907,42 +1982,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
         </TouchableOpacity>
       </ScrollView>
 
-      <Modal
-        visible={pendingOpenUrl !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPendingOpenUrl(null)}
-      >
-        <View style={styles.linkConfirmBackdrop}>
-          <View style={styles.linkConfirmCard}>
-            <Text style={styles.linkConfirmTitle}>Open in browser?</Text>
-            <Text style={styles.linkConfirmUrl}>{pendingOpenUrl ?? ''}</Text>
-            <Text style={styles.linkConfirmHint}>You'll leave the app to view this document.</Text>
-            <View style={styles.linkConfirmActions}>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => setPendingOpenUrl(null)}
-                style={styles.linkConfirmCancelBtn}
-                accessibilityLabel="Cancel"
-              >
-                <Text style={styles.linkConfirmCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => {
-                  const url = pendingOpenUrl;
-                  setPendingOpenUrl(null);
-                  if (url) Linking.openURL(url).catch(() => {});
-                }}
-                style={styles.linkConfirmOpenBtn}
-                accessibilityLabel="Open link in browser"
-              >
-                <Text style={styles.linkConfirmOpenText}>Open</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <LinkConfirmModal url={pendingOpenUrl} onClose={() => setPendingOpenUrl(null)} />
 
       <Modal
         visible={confirmWipe}
@@ -3381,6 +3421,15 @@ const styles = StyleSheet.create({
   bugSendText: { color: '#0B0B1F', fontWeight: '700', letterSpacing: 2, fontSize: 14 },
   bugAppInfoPreview: { color: '#ffffff77', fontSize: 11, marginTop: 3 },
   bugAppInfoHint: { color: '#ffffff66', fontSize: 11, lineHeight: 16, marginTop: 8 },
+
+  privacyCard: {
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    borderRadius: 14, paddingVertical: 6, paddingHorizontal: 14,
+  },
+  privacyRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 7 },
+  privacyCheck: { color: '#9DC7AC', fontSize: 12, fontWeight: '700', marginRight: 10, marginTop: 1 },
+  privacyText: { color: '#ffffffB0', fontSize: 12, lineHeight: 17, flex: 1 },
 
   fieldLabel: { color: '#ffffff80', fontSize: 11, letterSpacing: 1, fontWeight: '600', marginTop: 12, marginBottom: 6 },
   fieldInput: {

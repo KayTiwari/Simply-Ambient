@@ -1,6 +1,6 @@
 # Privacy Policy — Simply Ambient
 
-_Last updated: May 15, 2026_
+_Last updated: July 8, 2026_
 
 Simply Ambient ("the app") is a meditation, breath-work, and wellness tool published by **Like Chess**.
 
@@ -25,6 +25,7 @@ The following are stored locally on your device using the operating system's sta
 - Your Gemini API key (only if you enter one)
 - Whether you've completed the first-launch onboarding
 - The current tarot card draw
+- Rate-prompt counters (number of app opens, completed sessions, and whether the one-time review prompt has already been shown). These decide when the app may ask, once ever, for a Play Store rating. They contain no dates of birth, journal content, or identifiers, and they never leave the device; the rating dialog itself is drawn by Google Play.
 
 ## Network requests we make
 
@@ -35,10 +36,10 @@ The app contacts a small number of services. None of these requests include pers
 | `freehoroscopeapi.com` | Your selected zodiac sign and the period (daily / monthly) | Public horoscope text | Each time you open the Horoscopes tab; cached for 6 h |
 | Developer's proxy (Vercel) | Your selected zodiac sign and, as with any web server, the IP address of the request | Relays the horoscope or tarot response | **Web version only.** Horoscope and tarot requests route through it. It stores nothing and no logs are kept beyond standard hosting. |
 | `generativelanguage.googleapis.com` (Google Gemini) | The journal sources you have toggled ON for AI Insights (any of: mood log, gratitude entries, manifestations, rants) + the API key you entered | A short AI reflection | **Only when you tap "Journal Themes" or "Interpret Tarot" on the AI Insights page.** Rant sharing is OFF by default; the user must explicitly enable it. |
-| `formsubmit.co` | Subject and body of your bug report | Forwards to the developer's inbox | Only when you submit a bug report |
+| `formsubmit.co` | Subject and body of your feedback or bug report, plus (only if you leave "Attach app info" on) one line with the app version, platform, and OS version | Forwards to the developer's inbox | Only when you submit the Feedback form |
 | `sentry.io` (Sentry) | Crash diagnostics (stack trace, device model, OS version, app version) | Nothing visible to you | Automatically when the app crashes or encounters an unexpected error. No journal data is attached. |
 
-If sending a bug report fails (e.g. you have no network), the app falls back to opening your **mail app** with a pre-filled message that you can choose to send. The destination address is the developer's email; nothing is sent without you pressing your mail app's Send button.
+If sending feedback fails (e.g. you have no network), the app falls back to opening your **mail app** with a pre-filled message that you can choose to send. The destination address is the developer's email; nothing is sent without you pressing your mail app's Send button.
 
 ## What we do NOT do
 
@@ -56,7 +57,7 @@ You have two ways to delete data the app has stored on your device:
 1. **In-app, instantly:** open **More → Safety & Disclaimer**, scroll to **WIPE ALL DATA**, and confirm. This removes every entry stored locally: profile, mood log, gratitude, rants, manifestations, presets, the tarot cache, your Gemini API key, and all settings.
 2. **By uninstalling the app**, which also removes everything the app stored.
 
-Crash diagnostics that have already been sent to Sentry are retained per Sentry's standard retention policy and are tied to anonymous installation IDs, not to a user account. If you would like a Sentry record removed, contact the developer using the **Report a Bug** form inside the app or by email (below) with a brief description; we will request deletion from Sentry on your behalf.
+Crash diagnostics that have already been sent to Sentry are retained per Sentry's standard retention policy and are tied to anonymous installation IDs, not to a user account. If you would like a Sentry record removed, contact the developer using the **Feedback** form inside the app or by email (below) with a brief description; we will request deletion from Sentry on your behalf.
 
 ## Notifications
 
@@ -76,7 +77,7 @@ If this policy changes, the "Last updated" date at the top will change and the n
 
 ## Contact
 
-For privacy questions, please contact the developer through the **Report a Bug** form inside the app, which routes to the developer's email.
+For privacy questions, please contact the developer through the **Feedback** form inside the app, which routes to the developer's email.
 
 ---
 
