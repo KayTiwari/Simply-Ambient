@@ -1407,7 +1407,17 @@ type Tab = 'frequencies' | 'breath' | 'chakras' | 'horoscopes' | 'more';
 
 const STORAGE_KEY_NOTIF = '@simply_ambient_notif_pref_v1';
 const STORAGE_KEY_SINGLE_COLOR = '@simply_ambient_single_color_v1';
+// The day's affirmation, stored as JSON {date: 'YYYY-MM-DD' local, text} so
+// one phrase holds for the whole day across launches and hub previews.
+const STORAGE_KEY_AFFIRMATION = '@simply_ambient_affirmation_v1';
 const SLEEP_TIMER_OPTIONS = [0, 5, 10, 15, 30, 60] as const; // minutes
+
+// Local calendar date as YYYY-MM-DD, for day-keyed storage.
+function localDateKey(d: Date = new Date()): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
 
 function AppContent() {
   const insets = useSafeAreaInsets();
@@ -1521,11 +1531,45 @@ function AppContent() {
     AsyncStorage.setItem(STORAGE_KEY_ZODIAC, z.id).catch(() => {});
   }
 
-  // Affirmations
+  // Affirmations. The explicit reroll draws a fresh phrase and stores it as
+  // today's pick, so the choice holds for the rest of the day and the hub
+  // preview shows the same text.
   async function refreshAffirmation() {
     setAffLoading(true);
     try {
-      setAffirmation(randomAffirmation());
+      const text = randomAffirmation();
+      setAffirmation(text);
+      AsyncStorage.setItem(
+        STORAGE_KEY_AFFIRMATION,
+        JSON.stringify({ date: localDateKey(), text }),
+      ).catch(() => {});
+    } finally {
+      setAffLoading(false);
+    }
+  }
+
+  // On launch, reuse a pick stored earlier today; on a new day, draw and
+  // store a fresh one. This keeps the "daily" framing true.
+  async function loadDailyAffirmation() {
+    setAffLoading(true);
+    try {
+      const today = localDateKey();
+      const raw = await AsyncStorage.getItem(STORAGE_KEY_AFFIRMATION).catch(() => null);
+      if (raw) {
+        try {
+          const stored = JSON.parse(raw) as { date?: string; text?: string };
+          if (stored?.date === today && typeof stored.text === 'string' && stored.text) {
+            setAffirmation(stored.text);
+            return;
+          }
+        } catch {}
+      }
+      const text = randomAffirmation();
+      setAffirmation(text);
+      AsyncStorage.setItem(
+        STORAGE_KEY_AFFIRMATION,
+        JSON.stringify({ date: today, text }),
+      ).catch(() => {});
     } finally {
       setAffLoading(false);
     }
@@ -1540,7 +1584,7 @@ function AppContent() {
         scheduleAffirmationNotifs(v);
       }
     }).catch(() => {});
-    refreshAffirmation();
+    loadDailyAffirmation();
   }, []);
 
   function changeNotifPref(pref: NotifPref) {

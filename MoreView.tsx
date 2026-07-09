@@ -152,6 +152,10 @@ type SubPage =
 const STORAGE_PROFILE = '@simply_ambient_profile_v1';
 const STORAGE_PARTNER = '@simply_ambient_partner_v1';
 const STORAGE_GEMINI_KEY = '@simply_ambient_gemini_key_v1';
+// Written by onboarding: what brings the user here (sleep/focus/calm/energy).
+const STORAGE_INTENT = '@simply_ambient_intent_v1';
+
+type Intent = 'sleep' | 'focus' | 'calm' | 'energy';
 
 type Profile = {
   name?: string;
@@ -237,8 +241,21 @@ export default function MoreView({
   const [rants, setRants] = useState<RantEntry[]>([]);
   const [manifestations, setManifestations] = useState<ManifestEntry[]>([]);
   const [streak, setStreak] = useState(0);
+  // Personalizes the hub greeting. The intent is loaded alongside the name so
+  // the hub can lean on it as personalization grows.
+  const [profileName, setProfileName] = useState<string | null>(null);
+  const [, setIntent] = useState<Intent | null>(null);
 
   useEffect(() => {
+    AsyncStorage.getItem(STORAGE_PROFILE).then(v => {
+      const parsed = safeParse<Profile>(v, {});
+      if (parsed && typeof parsed === 'object' && typeof parsed.name === 'string') {
+        setProfileName(parsed.name);
+      }
+    }).catch(() => {});
+    AsyncStorage.getItem(STORAGE_INTENT).then(v => {
+      if (v === 'sleep' || v === 'focus' || v === 'calm' || v === 'energy') setIntent(v);
+    }).catch(() => {});
     AsyncStorage.getItem(STORAGE_MOOD).then(v => {
       const parsed = safeParse<MoodEntry[]>(v, []);
       if (Array.isArray(parsed)) setMoodLog(parsed);
@@ -420,6 +437,7 @@ export default function MoreView({
           moodLog={moodLog}
           gratitude={gratitude}
           streak={streak}
+          profileName={profileName}
           onOpen={open}
         />
       </Animated.View>
@@ -547,8 +565,14 @@ type HubProps = {
   moodLog: MoodEntry[];
   gratitude: GratEntry[];
   streak: number;
+  profileName: string | null;
   onOpen: (p: Exclude<SubPage, null>) => void;
 };
+
+// First word of a display name, for the greeting.
+function firstWord(name: string): string {
+  return name.trim().split(/\s+/)[0];
+}
 
 function Hub({
   notifPref,
@@ -557,17 +581,18 @@ function Hub({
   moodLog,
   gratitude,
   streak,
+  profileName,
   onOpen,
 }: HubProps) {
   // Weekly insights, derived from the parent's live state. The Hub stays
   // mounted underneath the slide-over sub-pages, so a one-shot storage read
   // here would go stale as soon as the user logs an entry.
-  // Mood averages over the past 5 days, trend against the 5 days before.
+  // Mood averages over the past 7 days, trend against the 7 days before.
   const weekly = useMemo(() => {
     const dayMs = 24 * 60 * 60 * 1000;
     const now = Date.now();
-    const recent = moodLog.filter(m => now - m.ts < 5 * dayMs);
-    const prev = moodLog.filter(m => now - m.ts >= 5 * dayMs && now - m.ts < 10 * dayMs);
+    const recent = moodLog.filter(m => now - m.ts < 7 * dayMs);
+    const prev = moodLog.filter(m => now - m.ts >= 7 * dayMs && now - m.ts < 14 * dayMs);
     const avg = (arr: MoodEntry[]) =>
       arr.length ? arr.reduce((s, e) => s + e.value, 0) / arr.length : null;
     const a = avg(recent);
@@ -578,10 +603,25 @@ function Hub({
       a - b <= -0.25 ? 'down' : 'flat';
     return {
       moodAvg: a,
+      // Distinct local days logged in the window; the average appears once
+      // three logged days support it.
+      moodDays: new Set(recent.map(m => new Date(m.ts).toDateString())).size,
       gratCount: gratitude.filter(g => now - g.ts < 7 * dayMs).length,
       moodTrend: trend,
     };
   }, [moodLog, gratitude]);
+
+  // Time-aware greeting, with the first name when the profile has one.
+  const hour = new Date().getHours();
+  const timeGreeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const trimmedName = profileName?.trim();
+  const greeting = trimmedName ? `${timeGreeting}, ${firstWord(trimmedName)}` : timeGreeting;
+
+  // Each chip earns its place. Zero values stay hidden, and the mood average
+  // waits for three logged days in the window.
+  const showStreakChip = streak > 0;
+  const showMoodChip = weekly.moodAvg !== null && weekly.moodDays >= 3;
+  const showGratChip = weekly.gratCount > 0;
 
   return (
     <View style={{ flex: 1 }}>
@@ -590,29 +630,35 @@ function Hub({
         <Text style={styles.title}>More</Text>
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />
-          <Text style={styles.subtitle}>Tools for the practice</Text>
+          <Text style={styles.subtitle}>{greeting}</Text>
           <View style={styles.dividerLine} />
         </View>
       </View>
 
       {/* Compact pulse row: streak plus recent numbers at a glance. */}
-      {streak > 0 || weekly.moodAvg !== null || weekly.gratCount > 0 ? (
+      {showStreakChip || showMoodChip || showGratChip ? (
         <View style={styles.pulseRow}>
-          <View style={styles.pulseChip}>
-            <Text style={[styles.pulseNum, { color: '#9DC7AC' }]}>{streak}</Text>
-            <Text style={styles.pulseCap}>DAY STREAK</Text>
-          </View>
-          <View style={styles.pulseChip}>
-            <Text style={[styles.pulseNum, { color: '#8FB8DE' }]}>
-              {weekly.moodAvg !== null ? weekly.moodAvg.toFixed(1) : '–'}
-              {weekly.moodTrend === 'up' ? ' ↑' : weekly.moodTrend === 'down' ? ' ↓' : ''}
-            </Text>
-            <Text style={styles.pulseCap}>AVG MOOD · 5D</Text>
-          </View>
-          <View style={styles.pulseChip}>
-            <Text style={[styles.pulseNum, { color: '#E0A470' }]}>{weekly.gratCount}</Text>
-            <Text style={styles.pulseCap}>GRATITUDES · 7D</Text>
-          </View>
+          {showStreakChip ? (
+            <View style={styles.pulseChip}>
+              <Text style={[styles.pulseNum, { color: '#9DC7AC' }]}>{streak}</Text>
+              <Text style={styles.pulseCap}>GRATITUDE STREAK</Text>
+            </View>
+          ) : null}
+          {showMoodChip && weekly.moodAvg !== null ? (
+            <View style={styles.pulseChip}>
+              <Text style={[styles.pulseNum, { color: '#8FB8DE' }]}>
+                {weekly.moodAvg.toFixed(1)}
+                {weekly.moodTrend === 'up' ? ' ↑' : weekly.moodTrend === 'down' ? ' ↓' : ''}
+              </Text>
+              <Text style={styles.pulseCap}>MOOD · 7D</Text>
+            </View>
+          ) : null}
+          {showGratChip ? (
+            <View style={styles.pulseChip}>
+              <Text style={[styles.pulseNum, { color: '#E0A470' }]}>{weekly.gratCount}</Text>
+              <Text style={styles.pulseCap}>GRATITUDE · 7D</Text>
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -623,7 +669,7 @@ function Hub({
         {/* Grouped by how often each tool is reached for: daily journaling
             first, one-time setup and app meta last. Tiles carry one accent
             per section instead of a color per item. */}
-        <Text style={styles.hubSection}>JOURNAL</Text>
+        <Text style={styles.hubSection}>REFLECT</Text>
         <View style={styles.tileGrid}>
           <HubTile
             Icon={Smiley}
@@ -631,10 +677,11 @@ function Hub({
             label="Mood Check-in"
             sub={
               moodToday
-                ? `Today: ${moodLabel(moodToday.value)} · keep the streak`
-                : 'See patterns in what lifts and drains you'
+                ? `Logged today: ${moodLabel(moodToday.value)}`
+                : 'How are you feeling right now?'
             }
-            badge={moodToday ? String(moodToday.value) : null}
+            badge={moodToday ? moodLabel(moodToday.value) : null}
+            badgeColor={moodToday ? moodColor(moodToday.value) : undefined}
             onPress={() => onOpen('mood')}
           />
           <HubTile
@@ -643,8 +690,8 @@ function Hub({
             label="Gratitude"
             sub={
               gratitude.length === 0
-                ? 'Rewire attention toward what works'
-                : `${gratitude.length} ${gratitude.length === 1 ? 'entry' : 'entries'} · positive psychology`
+                ? 'Notice one good thing from today'
+                : `${gratitude.length} ${gratitude.length === 1 ? 'entry' : 'entries'} and counting`
             }
             onPress={() => onOpen('gratitude')}
           />
@@ -654,6 +701,13 @@ function Hub({
             label="Rant"
             sub="Vent it out. Raw, private, unfiltered"
             onPress={() => onOpen('rant')}
+          />
+          <HubTile
+            glyph="⌖"
+            accent="#8FB8DE"
+            label="Grounding"
+            sub="Come back to your senses in five steps"
+            onPress={() => onOpen('grounding')}
           />
           <HubTile
             glyph="✷"
@@ -666,7 +720,7 @@ function Hub({
             glyph="⌬"
             accent="#8FB8DE"
             label="AI Insights"
-            sub="Reflections on your journal & tarot"
+            sub="Gentle reflections drawn from your entries"
             onPress={() => onOpen('insights')}
           />
         </View>
@@ -685,7 +739,7 @@ function Hub({
             glyph="⟁"
             accent="#9DC7AC"
             label="Routines"
-            sub="Chain presets into sessions"
+            sub="Guided recipes for longer sessions"
             onPress={() => onOpen('routines')}
           />
           <HubTile
@@ -694,13 +748,6 @@ function Hub({
             label="Soundscapes"
             sub="Rain · ocean · forest · white noise"
             onPress={() => onOpen('soundscapes')}
-          />
-          <HubTile
-            glyph="⌖"
-            accent="#9DC7AC"
-            label="Grounding"
-            sub="5-4-3-2-1 anxiety reset through the senses"
-            onPress={() => onOpen('grounding')}
           />
         </View>
 
@@ -717,14 +764,14 @@ function Hub({
             glyph="☌"
             accent="#B39BE0"
             label="Natal Chart"
-            sub="Western planetary positions"
+            sub="Your birth details and chart"
             onPress={() => onOpen('natal')}
           />
           <HubTile
             glyph="⚭"
             accent="#B39BE0"
             label="Compatibility"
-            sub="Match your sign with another"
+            sub="How two signs sit together"
             onPress={() => onOpen('compatibility')}
           />
         </View>
@@ -766,7 +813,7 @@ function Hub({
 }
 
 function HubTile({
-  glyph, Icon, accent, label, sub, badge, onPress,
+  glyph, Icon, accent, label, sub, badge, badgeColor, onPress,
 }: {
   // Either a unicode glyph (kept for spiritual symbols: ensō, flower, sparkle)
   // or a Phosphor icon component (used for utility items: Soundscapes, Bug, etc.)
@@ -776,6 +823,8 @@ function HubTile({
   label: string;
   sub: string;
   badge?: string | null;
+  // Optional tint for the badge text; falls back to the section accent.
+  badgeColor?: string;
   onPress: () => void;
 }) {
   return (
@@ -787,7 +836,7 @@ function HubTile({
       accessibilityLabel={`${label}. ${sub}`}
     >
       {badge ? (
-        <Text style={[styles.tileBadge, { color: accent }]}>{badge}</Text>
+        <Text style={[styles.tileBadge, { color: badgeColor ?? accent }]}>{badge}</Text>
       ) : null}
       <View style={styles.tileGlyphWrap}>
         {Icon ? (
@@ -875,12 +924,12 @@ function AffirmationsPage({
             onPress={onRefresh}
             style={styles.bigRefreshBtn}
             activeOpacity={0.85}
-            accessibilityLabel="Get another affirmation"
+            accessibilityLabel="Choose another affirmation"
             accessibilityRole="button"
           >
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <ArrowsClockwise size={14} color="#0B0B1F" weight="regular" />
-              <Text style={[styles.bigRefreshText, { marginLeft: 8 }]}>ANOTHER</Text>
+              <Text style={[styles.bigRefreshText, { marginLeft: 8 }]}>CHOOSE ANOTHER</Text>
             </View>
           </TouchableOpacity>
         </View>
@@ -916,7 +965,8 @@ function AffirmationsPage({
         ) : null}
         {notifBlocked ? (
           <Text style={styles.notifWarn}>
-            Notifications are blocked in system settings, so these will not fire.
+            Notifications are turned off for this app in system settings. Turn them on there
+            and these reminders will resume.
           </Text>
         ) : null}
         {isExpoGo ? (
@@ -1845,26 +1895,63 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
     { num: 2, color: '#9DC7AC', sense: 'smell' },
     { num: 1, color: '#8FB8DE', sense: 'taste' },
   ];
+  // Steps marked done this visit. Ephemeral by design: the state lives in
+  // this component, so leaving the page resets the walk.
+  const [done, setDone] = useState<Set<number>>(new Set());
+  function toggleDone(num: number) {
+    setDone(prev => {
+      const next = new Set(prev);
+      if (next.has(num)) next.delete(num);
+      else next.add(num);
+      return next;
+    });
+  }
+  const allDone = done.size === items.length;
+
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="5-4-3-2-1 Grounding" accent="#8F97DE" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>THE PRACTICE</Text>
         <Text style={styles.sectionSub}>
-          Five senses pull a looping mind back into the room, in about 60 to 90 seconds.
+          Five senses pull a looping mind back into the room, in a minute or two.
           Move slowly and breathe between each.
         </Text>
-        {items.map(it => (
-          <View key={it.num} style={styles.groundCard}>
-            <Text style={[styles.groundBigNum, { color: it.color }]}>{it.num}</Text>
-            <Text style={styles.groundCardText}>
-              things you can <Text style={styles.groundEm}>{it.sense}</Text>
-            </Text>
-          </View>
-        ))}
+        <Text style={[styles.notifHint, { marginTop: 0, marginBottom: 12 }]}>
+          A soundscape underneath can help. Soft Rain suits this well.
+        </Text>
+        {items.map(it => {
+          const isDone = done.has(it.num);
+          const noun = it.num === 1 ? 'thing' : 'things';
+          return (
+            <TouchableOpacity
+              key={it.num}
+              activeOpacity={0.85}
+              onPress={() => toggleDone(it.num)}
+              accessibilityRole="button"
+              accessibilityLabel={`${it.num} ${noun} you can ${it.sense}`}
+              accessibilityState={{ checked: isDone }}
+              style={[
+                styles.groundCard,
+                isDone && { borderColor: it.color, backgroundColor: it.color + '22' },
+              ]}
+            >
+              <Text style={[styles.groundBigNum, { color: it.color }, isDone && { opacity: 0.35 }]}>
+                {it.num}
+              </Text>
+              <Text style={styles.groundCardText}>
+                {noun} you can <Text style={styles.groundEm}>{it.sense}</Text>
+              </Text>
+              {isDone ? (
+                <Text style={[styles.groundCheck, { color: it.color }]}>✓</Text>
+              ) : null}
+            </TouchableOpacity>
+          );
+        })}
         <Text style={styles.groundOutro}>
-          Notice them slowly. Name them aloud or silently. Let each one anchor you a little more
-          firmly to the present.
+          {allDone
+            ? 'You are here. Take one more slow breath before you go.'
+            : 'Notice them slowly. Name them aloud or silently. Let each one anchor you a little more firmly to the present.'}
         </Text>
       </ScrollView>
     </View>
@@ -2723,7 +2810,7 @@ const SAMPLE_ROUTINES: Routine[] = [
   {
     id: 'morning-focus',
     name: 'Morning Focus',
-    description: '5 min Beta to wake the mind, 10 min Alpha to settle attention.',
+    description: 'Wake the mind, then settle it into focus.',
     color: '#E0A470',
     steps: [
       { label: 'Beta · 18 Hz',  minutes: 5  },
@@ -2733,7 +2820,7 @@ const SAMPLE_ROUTINES: Routine[] = [
   {
     id: 'evening-windown',
     name: 'Evening Wind-down',
-    description: '10 min Alpha to release the day, 15 min Theta to soften.',
+    description: 'Release the day, then soften toward rest.',
     color: '#A498E8',
     steps: [
       { label: 'Alpha · 10 Hz', minutes: 10 },
@@ -2743,7 +2830,7 @@ const SAMPLE_ROUTINES: Routine[] = [
   {
     id: 'deep-sleep',
     name: 'Deep Sleep',
-    description: '10 min Theta to drop in, 30 min Delta to rest.',
+    description: 'Drop in gently, then rest deeply.',
     color: '#8F97DE',
     steps: [
       { label: 'Theta · 6 Hz', minutes: 10 },
@@ -2758,17 +2845,22 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
     <View style={{ flex: 1 }}>
       <SubHeader title="Routines" accent="#9DC7AC" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
-        <Text style={styles.sectionLabel}>SAMPLE ROUTINES</Text>
+        <Text style={styles.sectionLabel}>SESSION GUIDES</Text>
         <Text style={styles.sectionSub}>
-          A routine chains preset frequencies into a longer session. Follow the steps from the
-          Frequencies tab while the auto-sequencer is in development.
+          Three ways to chain presets into a longer session. Run each step yourself from the
+          Frequencies tab. The sleep timer there can end a step for you.
         </Text>
         {SAMPLE_ROUTINES.map(r => (
           <View
             key={r.id}
             style={styles.routineCard}
           >
-            <Text style={[styles.routineName, { color: r.color }]}>{r.name}</Text>
+            <View style={styles.routineTitleRow}>
+              <Text style={[styles.routineName, { color: r.color }]}>{r.name}</Text>
+              <Text style={styles.routineTotal}>
+                {r.steps.reduce((sum, s) => sum + s.minutes, 0)} MIN TOTAL
+              </Text>
+            </View>
             <Text style={styles.routineDesc}>{r.description}</Text>
             {r.steps.map((s, i) => (
               <View key={i} style={styles.routineStep}>
@@ -2779,15 +2871,10 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
             ))}
           </View>
         ))}
-        <View style={styles.compatComingSoon}>
-          <Text style={[styles.compatComingTitle, { color: '#9DC7AC' }]}>
-            Custom routines & auto-sequencer. Coming soon
-          </Text>
-          <Text style={styles.compatComingText}>
-            You'll be able to build your own routines, save them, and have the app auto-transition
-            between steps with smooth fades.
-          </Text>
-        </View>
+        <Text style={styles.notifHint}>
+          Saved custom routines and automatic step changes are on the roadmap. See Support for
+          what is coming.
+        </Text>
       </ScrollView>
     </View>
   );
@@ -2819,14 +2906,48 @@ function SoundscapesPage({
     ? soundscapes.find(s => s.id === activeSoundscapeId)?.name ?? 'Ambient layer'
     : 'No layer selected';
 
+  // Two families, rendered under their own section labels.
+  const NATURE_IDS = ['rain', 'ocean', 'forest', 'stream', 'fire'];
+  const natureScapes = soundscapes.filter(s => NATURE_IDS.includes(s.id));
+  const noiseScapes = soundscapes.filter(s => !NATURE_IDS.includes(s.id));
+
+  const renderCard = (s: SoundscapeOption) => {
+    const active = activeSoundscapeId === s.id && isSoundscapePlaying;
+    return (
+      <TouchableOpacity
+        key={s.id}
+        activeOpacity={0.85}
+        onPress={() => onToggleSoundscape(s.id)}
+        style={[
+          styles.soundscapeCard,
+          active && {
+            borderColor: s.color,
+            backgroundColor: s.color + '18',
+          },
+        ]}
+      >
+        <View style={[styles.soundscapeGlyphBox, { backgroundColor: s.color + '22', borderColor: s.color }]}>
+          <s.Icon size={22} color={s.color} weight="duotone" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.soundscapeName}>{s.name}</Text>
+          <Text style={styles.soundscapeBlurb}>{s.blurb}</Text>
+        </View>
+        <Text style={[styles.soundscapeSoon, active && { color: s.color }]}>
+          {active ? 'STOP' : 'PLAY'}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Soundscapes" accent="#8FB8DE" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>NATURAL AMBIENCE</Text>
         <Text style={styles.sectionSub}>
-          Subtle generated ambience layered under your binaural tones. It stays local
-          and follows you through the app in the mini player.
+          A soft ambient layer under your binaural tones, generated on your device.
+          It follows you through the app in the mini player.
         </Text>
 
         <View style={styles.soundscapeControlCard}>
@@ -2835,9 +2956,24 @@ function SoundscapesPage({
               <Text style={styles.soundscapeActiveLabel}>CURRENT</Text>
               <Text style={styles.soundscapeActiveName}>{activeName}</Text>
               <Text style={styles.soundscapeActiveMeta}>
-                {isSoundscapePlaying ? 'Playing now' : 'Paused'}
+                {activeSoundscapeId
+                  ? isSoundscapePlaying ? 'Playing now' : 'Paused'
+                  : 'Pick a layer below to begin.'}
               </Text>
             </View>
+            {activeSoundscapeId ? (
+              <TouchableOpacity
+                onPress={() => onToggleSoundscape(activeSoundscapeId)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={isSoundscapePlaying ? 'Pause the soundscape' : 'Play the soundscape'}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.soundscapeSoon}>
+                  {isSoundscapePlaying ? 'PAUSE' : 'PLAY'}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
           {activeSoundscapeId ? (
             <View style={{ marginTop: 14 }}>
@@ -2851,39 +2987,23 @@ function SoundscapesPage({
                 maximumTrackTintColor="rgba(255,255,255,0.12)"
                 thumbTintColor="#8FB8DE"
                 onValueChange={onChangeSoundscapeVolume}
+                accessibilityLabel="Soundscape volume"
+                accessibilityValue={{
+                  min: 0,
+                  max: 100,
+                  now: Math.round(soundscapeVolume * 100),
+                  text: `${Math.round(soundscapeVolume * 100)}%`,
+                }}
               />
             </View>
           ) : null}
         </View>
 
-        {soundscapes.map(s => {
-          const active = activeSoundscapeId === s.id && isSoundscapePlaying;
-          return (
-          <TouchableOpacity
-            key={s.id}
-            activeOpacity={0.85}
-            onPress={() => onToggleSoundscape(s.id)}
-            style={[
-              styles.soundscapeCard,
-              active && {
-                borderColor: s.color,
-                backgroundColor: s.color + '18',
-              },
-            ]}
-          >
-            <View style={[styles.soundscapeGlyphBox, { backgroundColor: s.color + '22', borderColor: s.color }]}>
-              <s.Icon size={22} color={s.color} weight="duotone" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.soundscapeName}>{s.name}</Text>
-              <Text style={styles.soundscapeBlurb}>{s.blurb}</Text>
-            </View>
-            <Text style={[styles.soundscapeSoon, active && { color: s.color }]}>
-              {active ? 'STOP' : 'PLAY'}
-            </Text>
-          </TouchableOpacity>
-          );
-        })}
+        <Text style={styles.sectionLabel}>NATURE</Text>
+        {natureScapes.map(renderCard)}
+
+        <Text style={styles.sectionLabel}>STEADY NOISE</Text>
+        {noiseScapes.map(renderCard)}
       </ScrollView>
     </View>
   );
@@ -3585,6 +3705,7 @@ const styles = StyleSheet.create({
   groundBigNum: { fontSize: 36, fontWeight: '300', width: 60, textAlign: 'center' },
   groundCardText: { color: '#ffffffcc', fontSize: 16, flex: 1 },
   groundEm: { color: '#fff', fontWeight: '700' },
+  groundCheck: { fontSize: 16, fontWeight: '700', marginLeft: 10 },
   groundOutro: {
     color: '#ffffff88', fontSize: 12, lineHeight: 18,
     textAlign: 'center', marginTop: 14,
@@ -3636,7 +3757,16 @@ const styles = StyleSheet.create({
     borderRadius: 18, padding: 14, marginBottom: 10,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
   },
+  routineTitleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
   routineName: { fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  // Small caps microlabel, same pill idiom as soundscapeSoon.
+  routineTotal: {
+    color: '#ffffff66', fontSize: 9, letterSpacing: 1.5, fontWeight: '700',
+    paddingHorizontal: 8, paddingVertical: 3,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 999,
+  },
   routineDesc: { color: '#ffffffaa', fontSize: 12, marginTop: 4, lineHeight: 17, marginBottom: 10 },
   routineStep: {
     flexDirection: 'row', alignItems: 'center',
