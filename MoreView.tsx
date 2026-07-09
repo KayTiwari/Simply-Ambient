@@ -689,7 +689,7 @@ function Hub({
   const showGratChip = weekly.gratCount > 0;
 
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#8F97DE">
       <View style={styles.headerWrap}>
         <Text style={styles.ambience}>Simply Ambient</Text>
         <Text style={styles.title}>More</Text>
@@ -873,7 +873,7 @@ function Hub({
           />
         </View>
       </ScrollView>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -971,7 +971,7 @@ function AffirmationsPage({
   }, [notifPref, isExpoGo]);
 
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#9DC7AC">
       <SubHeader title="Daily Affirmation" accent="#9DC7AC" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>TODAY</Text>
@@ -979,7 +979,10 @@ function AffirmationsPage({
           One intention, repeated, becomes a frame for the day. Read it once, then carry on.
         </Text>
 
-        <View style={styles.bigAffirmCard}>
+        <GlowCard
+          accent="#9DC7AC"
+          style={{ padding: 22, alignItems: 'center', minHeight: 160, justifyContent: 'center' }}
+        >
           {loading ? (
             <ActivityIndicator color="#9DC7AC" />
           ) : (
@@ -997,7 +1000,7 @@ function AffirmationsPage({
               <Text style={[styles.bigRefreshText, { marginLeft: 8 }]}>CHOOSE ANOTHER</Text>
             </View>
           </TouchableOpacity>
-        </View>
+        </GlowCard>
 
         <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
         <Text style={styles.sectionSub}>How often should we send a gentle nudge?</Text>
@@ -1040,7 +1043,7 @@ function AffirmationsPage({
           </Text>
         ) : null}
       </ScrollView>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -1143,43 +1146,45 @@ function MoodPage({
   }, [moodLog]);
 
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#8FB8DE">
       <SubHeader title="Mood" accent="#8FB8DE" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>TODAY</Text>
-        <Text style={styles.sectionSub}>
-          A 5-second check-in. Tap again anytime today to change it.
-        </Text>
-        <View style={styles.moodRow}>
-          {[1, 2, 3, 4, 5].map(v => {
-            const active = moodToday?.value === v;
-            return (
-              <TouchableOpacity
-                key={v}
-                activeOpacity={0.85}
-                onPress={() => {
-                  onSaveMood(v);
-                  notify('Noted', `Logged as ${MOOD_LABELS[v - 1]} for today.`);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Mood ${v}, ${MOOD_LABELS[v - 1]}`}
-                accessibilityState={{ selected: active }}
-                style={[
-                  styles.moodBtn,
-                  {
-                    borderColor: active ? MOOD_COLORS[v - 1] : 'rgba(255,255,255,0.09)',
-                    backgroundColor: active ? MOOD_COLORS[v - 1] + '22' : 'rgba(255,255,255,0.045)',
-                  },
-                ]}
-              >
-                <Text style={[styles.moodValue, { color: MOOD_COLORS[v - 1] }]}>{v}</Text>
-                <Text style={[styles.moodLabel, { color: active ? MOOD_COLORS[v - 1] : '#ffffff88' }]}>
-                  {MOOD_LABELS[v - 1]}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <GlowCard accent="#8FB8DE" style={{ padding: 16, marginTop: 12 }}>
+          <Text style={[styles.sectionLabel, { marginTop: 0 }]}>TODAY</Text>
+          <Text style={styles.sectionSub}>
+            A 5-second check-in. Tap again anytime today to change it.
+          </Text>
+          <View style={styles.moodRow}>
+            {[1, 2, 3, 4, 5].map(v => {
+              const active = moodToday?.value === v;
+              return (
+                <TouchableOpacity
+                  key={v}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    onSaveMood(v);
+                    notify('Noted', `Logged as ${MOOD_LABELS[v - 1]} for today.`);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Mood ${v}, ${MOOD_LABELS[v - 1]}`}
+                  accessibilityState={{ selected: active }}
+                  style={[
+                    styles.moodBtn,
+                    {
+                      borderColor: active ? MOOD_COLORS[v - 1] : 'rgba(255,255,255,0.09)',
+                      backgroundColor: active ? MOOD_COLORS[v - 1] + '22' : 'rgba(255,255,255,0.045)',
+                    },
+                  ]}
+                >
+                  <Text style={[styles.moodValue, { color: MOOD_COLORS[v - 1] }]}>{v}</Text>
+                  <Text style={[styles.moodLabel, { color: active ? MOOD_COLORS[v - 1] : '#ffffff88' }]}>
+                    {MOOD_LABELS[v - 1]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </GlowCard>
 
         <Text style={styles.sectionLabel}>LAST 14 DAYS</Text>
         <MoodGraph buckets={dayBuckets} loggedDays={loggedDays} />
@@ -1254,7 +1259,12 @@ function MoodPage({
 
         <Text style={styles.sectionLabel}>HISTORY</Text>
         {historyDays.length === 0 ? (
-          <Text style={styles.emptyText}>No entries yet. Your first check-in starts the chart.</Text>
+          <EmptyStateCard
+            glyph="◦"
+            accent="#8FB8DE"
+            line="No days logged yet."
+            hint="Your first check-in starts the chart above."
+          />
         ) : (
           historyDays.slice(0, 30).map(d => (
             <View key={d.dayTs} style={styles.moodHistoryRow}>
@@ -1276,7 +1286,7 @@ function MoodPage({
           ))
         )}
       </ScrollView>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -1515,6 +1525,13 @@ const GRAT_PLACEHOLDERS = [
   'A moment you would happily relive…',
 ];
 
+// Starter prompts for a blank entry; tapping one begins the draft.
+const GRAT_PROMPTS = [
+  'Someone who helped…',
+  'A small comfort…',
+  'Something that went right…',
+];
+
 function GratitudePage({
   entries, onSave, onDelete, isExpoGo, onBack,
 }: {
@@ -1587,7 +1604,7 @@ function GratitudePage({
   }, [entries]);
 
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#E0A470">
       <SubHeader title="Gratitude" accent="#E0A470" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>TODAY</Text>
@@ -1596,26 +1613,32 @@ function GratitudePage({
             ? 'Saved for today. Add another if more comes to mind.'
             : "One thing you appreciate, named daily, shifts attention toward what's working. Saved only on this device."}
         </Text>
-        <TextInput
-          style={styles.gratInput}
-          placeholder={placeholder}
-          placeholderTextColor="#ffffff77"
-          value={text}
-          onChangeText={setText}
-          multiline
-          maxLength={500}
-        />
-        <TouchableOpacity
-          onPress={commit}
-          disabled={!canSave}
-          style={[styles.gratSaveBtn, !canSave && { opacity: 0.5 }]}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Save this gratitude"
-          accessibilityState={{ disabled: !canSave }}
-        >
-          <Text style={styles.gratSaveText}>SAVE</Text>
-        </TouchableOpacity>
+        <GlowCard accent="#E0A470" style={{ marginTop: 10 }}>
+          <TextInput
+            style={styles.rantInput}
+            placeholder={placeholder}
+            placeholderTextColor="#ffffff77"
+            value={text}
+            onChangeText={setText}
+            multiline
+            maxLength={500}
+          />
+        </GlowCard>
+        {!text.trim() ? (
+          <View style={styles.rantChipsRow}>
+            {GRAT_PROMPTS.map(p => (
+              <PromptChip key={p} label={p} accent="#E0A470" onPress={() => setText(p + ' ')} />
+            ))}
+          </View>
+        ) : null}
+        <View style={styles.rantActionsRow}>
+          <ActionPill
+            label="Save privately"
+            accent="#E0A470"
+            disabled={!canSave}
+            onPress={commit}
+          />
+        </View>
 
         <Text style={styles.sectionLabel}>EVENING REMINDER</Text>
         <Text style={styles.sectionSub}>
@@ -1661,7 +1684,12 @@ function GratitudePage({
 
         <Text style={styles.sectionLabel}>JOURNAL</Text>
         {entries.length === 0 ? (
-          <Text style={styles.emptyText}>Your first gratitude will appear here.</Text>
+          <EmptyStateCard
+            glyph="❀"
+            accent="#E0A470"
+            line="Nothing noted yet."
+            hint="One good thing from today is enough to begin."
+          />
         ) : (
           grouped.map(([dateKey, items]) => (
             <View key={dateKey} style={{ marginBottom: 8 }}>
@@ -1688,7 +1716,7 @@ function GratitudePage({
           ))
         )}
       </ScrollView>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -1874,25 +1902,32 @@ function ManifestationPage({
   const manifested = entries.filter(e => e.manifested);
 
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#B39BE0">
       <SubHeader title="Manifestation" accent="#B39BE0" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>NEW INTENTION</Text>
         <Text style={styles.sectionSub}>
           Writing what you're calling in clarifies it. Mark it manifested when it lands.
         </Text>
-        <TextInput
-          style={styles.gratInput}
-          placeholder="I am calling in…"
-          placeholderTextColor="#ffffff77"
-          value={text}
-          onChangeText={setText}
-          multiline
-          maxLength={500}
-        />
-        <TouchableOpacity onPress={commit} style={[styles.gratSaveBtn, { backgroundColor: '#B39BE0' }]} activeOpacity={0.85}>
-          <Text style={styles.gratSaveText}>ADD</Text>
-        </TouchableOpacity>
+        <GlowCard accent="#B39BE0" style={{ marginTop: 10 }}>
+          <TextInput
+            style={[styles.rantInput, { minHeight: 90 }]}
+            placeholder="I am calling in…"
+            placeholderTextColor="#ffffff77"
+            value={text}
+            onChangeText={setText}
+            multiline
+            maxLength={500}
+          />
+          <View style={[styles.rantActionsRow, { marginTop: 0, paddingHorizontal: 16, paddingBottom: 14 }]}>
+            <ActionPill
+              label="Call it in"
+              accent="#B39BE0"
+              disabled={!text.trim()}
+              onPress={commit}
+            />
+          </View>
+        </GlowCard>
 
         {manifested.length >= 2 ? (
           <Text style={[styles.sectionSub, { marginTop: 18, marginBottom: 0 }]}>
@@ -1902,7 +1937,12 @@ function ManifestationPage({
 
         <Text style={styles.sectionLabel}>CALLING IN</Text>
         {pending.length === 0 ? (
-          <Text style={styles.emptyText}>Nothing yet. Name what you're inviting.</Text>
+          <EmptyStateCard
+            glyph="✷"
+            accent="#B39BE0"
+            line="Nothing called in yet."
+            hint="Name what you are drawing toward. Mark it when it arrives."
+          />
         ) : (
           pending.map(m => (
             <ManifestRow key={m.ts} item={m} onToggle={onToggle} onDelete={onDelete} />
@@ -1918,7 +1958,7 @@ function ManifestationPage({
           </>
         ) : null}
       </ScrollView>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -2002,7 +2042,7 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
   const allDone = done.size === items.length;
 
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#8F97DE">
       <SubHeader title="5-4-3-2-1 Grounding" accent="#8F97DE" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>THE PRACTICE</Text>
@@ -2026,6 +2066,7 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
               accessibilityState={{ checked: isDone }}
               style={[
                 styles.groundCard,
+                { borderColor: it.color + '30', backgroundColor: it.color + '0D' },
                 isDone && { borderColor: it.color, backgroundColor: it.color + '22' },
               ]}
             >
@@ -2047,7 +2088,7 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
             : 'Notice them slowly. Name them aloud or silently. Let each one anchor you a little more firmly to the present.'}
         </Text>
       </ScrollView>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -3126,7 +3167,7 @@ const SAMPLE_ROUTINES: Routine[] = [
 function RoutinesPage({ onBack }: { onBack: () => void }) {
   const subBodyPad = useSubBodyPad();
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#9DC7AC">
       <SubHeader title="Routines" accent="#9DC7AC" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>SESSION GUIDES</Text>
@@ -3137,7 +3178,7 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
         {SAMPLE_ROUTINES.map(r => (
           <View
             key={r.id}
-            style={styles.routineCard}
+            style={[styles.routineCard, { borderColor: '#9DC7AC26' }]}
           >
             <View style={styles.routineTitleRow}>
               <Text style={[styles.routineName, { color: r.color }]}>{r.name}</Text>
@@ -3160,7 +3201,7 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
           what is coming.
         </Text>
       </ScrollView>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -3225,7 +3266,7 @@ function SoundscapesPage({
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#8FB8DE">
       <SubHeader title="Soundscapes" accent="#8FB8DE" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>NATURAL AMBIENCE</Text>
@@ -3234,7 +3275,7 @@ function SoundscapesPage({
           It follows you through the app in the mini player.
         </Text>
 
-        <View style={styles.soundscapeControlCard}>
+        <GlowCard accent="#8FB8DE" style={{ padding: 14, marginBottom: 12 }}>
           <View style={styles.soundscapeTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.soundscapeActiveLabel}>CURRENT</Text>
@@ -3281,7 +3322,7 @@ function SoundscapesPage({
               />
             </View>
           ) : null}
-        </View>
+        </GlowCard>
 
         <Text style={styles.sectionLabel}>NATURE</Text>
         {natureScapes.map(renderCard)}
@@ -3289,7 +3330,7 @@ function SoundscapesPage({
         <Text style={styles.sectionLabel}>STEADY NOISE</Text>
         {noiseScapes.map(renderCard)}
       </ScrollView>
-    </View>
+    </AmbientPageShell>
   );
 }
 
