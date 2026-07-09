@@ -335,3 +335,45 @@ Tablet/responsive polish (backlog priority 6).
 Play Store assets and ASO support doc (backlog priority 7).
 
 ---
+
+## Cycle 7: Play Store / ASO support doc
+
+- **Date:** 2026-07-08
+- **Goal:** Backlog priority 7. Everything the next store update needs, in
+  one document, with no store copy hardcoded into the app.
+
+### What was implemented
+
+- `docs/play-store-improvements.md`:
+  - Pre-update fixes: the 4+ vs 18+ age-rating contradiction between the
+    listing and the legal docs (recommendation included), the hosted privacy
+    policy republish, and a Data Safety re-confirmation note.
+  - Improved short description leading with ambient sound, sleep, focus,
+    and calm; an improved long-description opening plus a "Made to be
+    trusted" section that reflects the features shipped in cycles 1 to 6.
+  - Keyword themes grouped by search intent (ambient, sleep, focus,
+    meditation, binaural, wellness, spiritual).
+  - A 5-shot screenshot plan with captions (frequencies hero, soundscape
+    layering, breath mandala, the new privacy card, the walkthrough intent
+    step), tablet screenshot guidance, emotional notes (calm, clarity,
+    focus, trust), feature-graphic and release-notes guidance.
+
+### Files changed
+
+- `docs/play-store-improvements.md` (new).
+
+### Tests run
+
+- Docs only; `npm test` still 58/58 from Cycle 6.
+
+### Known risks
+
+- None in-app. The age-rating decision needs the developer's call before
+  the next submission.
+
+### Suggested next cycle
+
+Final review: adversarial multi-agent pass over the full working diff,
+then the wrap-up report.
+
+---
