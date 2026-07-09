@@ -17,7 +17,7 @@ implement, test, review, document.
 - `lib/rateGate.ts` (new): pure decision logic, no React Native imports so it
   runs under plain Node in jest (same pattern as `lib/binauralMath.ts`).
   The gate requires ALL of: 5+ app opens, 3+ days since first open, 1+
-  completed session, never prompted before. The prompt fires at most once ever.
+  completed session, and no earlier prompt. The prompt fires at most once ever.
 - `lib/rateApp.ts` (new): AsyncStorage persistence under
   `@simply_ambient_rate_v1` (covered by WIPE ALL DATA via prefix), the official
   `expo-store-review` in-app review call, and Play Store deep links
@@ -253,13 +253,13 @@ into lib/content/ modules with invariant tests and an adding-content guide.
   - `bands.ts`: the `BandKey` union (drives palettes and preset theming).
   - `chakras.ts`: `Chakra`/`CHAKRAS` and `Dosha`/`DOSHAS`.
   - `zodiac.ts`: `Zodiac`/`ZODIAC` (including year-ahead copy).
-  - `techniques.ts`: `Technique`/`TECHNIQUES` (all 17 breath techniques with
+  - `techniques.ts`: `Technique`/`TECHNIQUES` (all 18 breath techniques with
     phases, mudras, and their phosphor icons).
   - `index.ts`: single import surface.
 - `App.tsx` shrank by ~139 lines and `BreathworkView.tsx` by ~252;
   `ChakrasView`/`HoroscopesView` now import content types from the registry
   instead of from `App.tsx`.
-- `__tests__/content.test.ts` (19 tests): counts, unique ids, hex colors,
+- `__tests__/content.test.ts` (23 tests): counts, unique ids, hex colors,
   frequency ranges, valid phases, and the cross-references that used to be
   silent drift risks: every dosha `balanceTechnique` must exactly match a
   technique name, and the onboarding recommendation names are checked against
@@ -307,8 +307,9 @@ Tablet/responsive polish (backlog priority 6).
   walkthrough overlay is clamped identically. (`styles.webColumn` became
   `styles.contentColumn` plus a `useWindowDimensions` check.)
 - Chakras and Horoscopes ScrollViews switch from a hardcoded
-  `paddingBottom: 120` to safe-area-aware `insets.bottom + 96`, matching the
-  Breathwork tab, so the last card clears the tab bar on gesture-nav phones.
+  `paddingBottom: 120` to safe-area-aware `insets.bottom + 96`, the same
+  inset-aware approach the Breathwork tab uses (it adds 90), so the last
+  card clears the tab bar on gesture-nav phones.
 - New `docs/qa-checklist.md`: phone, tablet, gesture-nav, and web manual QA
   covering audio, walkthrough, rate/feedback, privacy, and regressions.
 
@@ -375,5 +376,57 @@ Play Store assets and ASO support doc (backlog priority 7).
 
 Final review: adversarial multi-agent pass over the full working diff,
 then the wrap-up report.
+
+---
+
+## Cycle 8: Review fixes
+
+- **Date:** 2026-07-09
+- **Goal:** Fix everything confirmed by the adversarial review of cycles
+  1 to 7 (26 agents, 10 confirmed findings, 1 refuted), plus one item from
+  the full tester report: the rate button belongs in Settings.
+
+### What was implemented
+
+- **Crash-report privacy hardening (the one substantive find).** Sentry's
+  default breadcrumbs record console lines and network URLs; the Gemini
+  call carried the user's API key in its URL and horoscope URLs embed the
+  sign, so a crash could have shipped both, contradicting the in-app
+  enumeration of what crash reports contain. Two fixes: `beforeBreadcrumb`
+  now drops all breadcrumbs, and the Gemini key moved from the URL query
+  string to the `x-goog-api-key` header.
+- Settings gains a RATE THE APP row (the tester report asks for Settings
+  placement specifically; the Support page row remains).
+- Feedback app-info line reports just `web` on the web build instead of
+  the meaningless `web 0.0.0` from react-native-web's hardcoded version.
+- Onboarding tips corrected to match the real UI: the sleep timer row is
+  labeled STILLNESS and sits lower on the page; exact-Hz typing lives
+  behind the per-ear tuning toggle.
+- Copy shape cleanup in the privacy facts, Safety text, onboarding data
+  section, and QA checklist; heading punctuation fix in the ASO doc.
+- Technique count corrected everywhere: the app ships 18 breathing
+  techniques (Ujjayi, Dirga, Wim Hof Style included). Fixed in the ASO
+  doc, store-listing short and long descriptions, README (count plus the
+  three missing table rows), and this log's Cycle 5 entry (which also
+  said 19 tests where the content suite has 23).
+
+### Files changed
+
+- `App.tsx`, `MoreView.tsx`, `OnboardingView.tsx`, `README.md`,
+  `docs/play-store-improvements.md`, `docs/store-listing.md`,
+  `docs/qa-checklist.md`, `docs/improvement-log.md`.
+
+### Tests run
+
+- `npx tsc --noEmit`: pass. `npm test`: 58/58 pass.
+- `npm run build:web`: exports cleanly.
+
+### Known risks
+
+- Dropping all Sentry breadcrumbs removes some debugging context from
+  crash reports; given the app's empty-catch style, breadcrumbs carried
+  little signal, and the privacy enumeration now holds exactly.
+- The live Play listing still says 16 techniques until the store text is
+  refreshed (flagged in the ASO doc's fix-first list).
 
 ---

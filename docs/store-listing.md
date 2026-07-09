@@ -16,7 +16,7 @@ Copy/paste-ready text for App Store Connect (iOS) and Google Play Console (Andro
 
 ## Promotional / short description (≤ 170 chars · Play Store short description)
 
-> Tune your vibration. Custom binaural frequencies, 16 breath techniques, chakras with bija mantras, daily horoscopes, mood, gratitude, and AI insights.
+> Tune your vibration. Custom binaural frequencies, 18 breath techniques, chakras with bija mantras, daily horoscopes, mood, gratitude, and AI insights.
 
 ## Long description / full description
 
@@ -32,7 +32,7 @@ Design your own personal binaural frequency, or explore the most practiced ones.
 • Sleep timer
 
 **Breath Work**
-• 16 techniques across calming and activating styles: Box, 4-7-8, Diaphragmatic, Pursed-Lip, Coherent (5·5), Bhramari (Bee), Nadi Shodhana, Sitali, Physiological Sigh, Holotropic, Shamanic, SOMA, Bhastrika, Lion's Breath, Kapalabhati
+• 18 techniques across calming and activating styles: Box, 4-7-8, Diaphragmatic, Pursed-Lip, Coherent (5·5), Bhramari (Bee), Nadi Shodhana, Sitali, Physiological Sigh, Ujjayi (Ocean), Dirga (Three-Part), Holotropic, Shamanic, SOMA, Bhastrika, Lion's Breath, Kapalabhati, Wim Hof Style
 • Two visualizations: a minimal breathing circle, or a polygonal mandala
 • Mudras (hand positions) paired with each technique
 • Mala counter to 108

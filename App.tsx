@@ -75,6 +75,13 @@ Sentry.init({
     if (event.contexts) delete event.contexts.state;
     return event;
   },
+  // The in-app privacy copy enumerates exactly what a crash report carries
+  // (device model, OS and app version, stack trace). Default breadcrumbs
+  // would add console lines and network URLs, and the horoscope URL embeds
+  // the user's sign, so drop breadcrumbs entirely to keep that list true.
+  beforeBreadcrumb() {
+    return null;
+  },
   // Crash reports only. The store listing promises no analytics, so keep
   // performance tracing off.
   tracesSampleRate: 0,

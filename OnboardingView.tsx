@@ -67,12 +67,12 @@ const TIPS: Array<{ label: string; body: string; color: string }> = [
   },
   {
     label: 'SLEEP TIMER',
-    body: 'On the Frequencies tab, just below Play. The audio fades out gently on its own, so you can drift off.',
+    body: 'Look for STILLNESS on the Frequencies tab. The audio fades out gently on its own, so you can drift off.',
     color: '#8F97DE',
   },
   {
     label: 'YOUR OWN MIX',
-    body: 'Tune each ear separately, or tap a displayed Hz to type an exact value. Save any combination as a preset with the save button.',
+    body: 'Turn on per-ear tuning to shape each ear separately and type exact Hz values. Save any combination as a preset.',
     color: '#9DC7AC',
   },
   {
@@ -215,7 +215,8 @@ export default function OnboardingView({
               <Text style={styles.safetyBody}>
                 Everything you enter (profile, mood, gratitude, rants, manifestations) is
                 stored only on this device. Horoscopes send only your sign; crash reports
-                carry only anonymous diagnostics, never journal content. Beyond that,
+                carry only anonymous diagnostics, and your journals stay out of them.
+                Beyond that,
                 nothing leaves the app unless you explicitly tap an analyse button on the
                 AI Insights page, which sends only the data sources you toggle on to
                 Google Gemini using your own API key.

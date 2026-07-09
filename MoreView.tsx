@@ -1742,7 +1742,7 @@ export function SafetyContent() {
         All journal data (mood, gratitude, rants, manifestations, profile) is stored
         only on this device. Fetching a horoscope sends only your sign and the period.
         If the app crashes, an anonymous diagnostic (device model, OS and app version,
-        stack trace) is sent so the bug can be fixed; journal content is never included.
+        stack trace) is sent so the bug can be fixed; your journals stay out of it.
         Beyond that, data leaves the device only when you explicitly tap an analyse
         button on the AI Insights page, in which case the sources you have toggled on
         are sent to Google Gemini using your own API key. You control which sources
@@ -1805,8 +1805,8 @@ function LinkConfirmModal({ url, onClose }: { url: string | null; onClose: () =>
 const PRIVACY_FACTS: string[] = [
   'Journals, mood, profile, and presets stay on this device.',
   'No account, no sign-in, no ads, no tracking across apps.',
-  'Horoscopes send only your sign and the period, nothing else.',
-  'Crash reports carry device model and app version, never journal content.',
+  'Horoscopes send only your sign and the period.',
+  'Crash reports hold device model, app version, and the stack trace. Your journals stay out of them.',
   'AI Insights shares only sources you toggle on, only when you tap analyse.',
 ];
 
@@ -1895,6 +1895,21 @@ function SettingsPage({
           accessibilityLabel="Replay the intro walkthrough"
         >
           <Text style={styles.settingLabel}>Replay the intro</Text>
+          <Text style={styles.settingRowChevron}>›</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.sectionLabel}>RATE THE APP</Text>
+        <Text style={styles.sectionSub}>
+          A Google Play rating helps other people find Simply Ambient.
+        </Text>
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => { openStoreListing().catch(() => {}); }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Rate Simply Ambient on Google Play"
+        >
+          <Text style={styles.settingLabel}>Rate Simply Ambient</Text>
           <Text style={styles.settingRowChevron}>›</Text>
         </TouchableOpacity>
 
@@ -2034,7 +2049,10 @@ const MESSAGE_KINDS: Array<{ id: MessageKind; label: string; fallbackSubject: st
 // No identifiers, no journal content; just enough to reproduce bugs.
 function buildAppInfoLine(): string {
   const version = Constants.expoConfig?.version ?? 'unknown version';
-  return `Simply Ambient ${version} · ${Platform.OS} ${Platform.Version}`;
+  // react-native-web hardcodes Platform.Version to '0.0.0', so the web build
+  // reports just the platform name.
+  const os = Platform.OS === 'web' ? 'web' : `${Platform.OS} ${Platform.Version}`;
+  return `Simply Ambient ${version} · ${os}`;
 }
 
 function BugReportPage({ onBack }: { onBack: () => void }) {
@@ -2822,7 +2840,9 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
           `Description: ${(card.desc ?? '').slice(0, 600)}`;
       }
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey.trim()}`;
+      // The key travels in a header instead of the URL so it can never leak
+      // through URL-based logging anywhere along the way.
+      const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
       // Time-boxed: a stalled connection would otherwise spin forever with
       // both analyse buttons disabled.
       const abort = new AbortController();
@@ -2832,7 +2852,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
         const res = await fetch(url, {
           method: 'POST',
           signal: abort.signal,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey.trim() },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
           }),

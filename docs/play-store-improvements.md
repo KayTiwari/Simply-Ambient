@@ -1,4 +1,4 @@
-# Play Store Improvements — ASO, Description, Screenshots
+# Play Store Improvements: ASO, Description, Screenshots
 
 Companion to `store-listing.md` (the copy/paste-ready kit). This file is the
 improvement plan from the July 2026 tester-report cycle: a sharper
@@ -21,6 +21,11 @@ features, and the fixes the listing needs before the next update.
    on-device; the review dialog is drawn by Google Play), so the existing
    answers stand. Re-confirm "no data shared" plus crash diagnostics
    disclosure matches the current form.
+4. **Technique count drift.** The app now ships 18 breathing techniques
+   (Ujjayi, Dirga, and Wim Hof Style joined the original list).
+   `store-listing.md` and the README still said 16 in places; both are
+   updated in the repo, and the live Play listing text should be refreshed
+   to say 18 at the next update.
 
 ## Suggested improved short description (<= 80 chars)
 
@@ -39,7 +44,7 @@ stay as they are in `store-listing.md`):
 > Simply Ambient is a calm, private space for sound and breath. Design your
 > own binaural frequency or start from the classic brainwave bands, layer in
 > rain, ocean, forest, or fireplace soundscapes, and let the sleep timer fade
-> everything out gently. When you want structure, sixteen guided breathing
+> everything out gently. When you want structure, eighteen guided breathing
 > techniques, chakra tones, and a small set of daily practices are one tap
 > away.
 
@@ -91,7 +96,7 @@ text over the app's own gradient, consistent position across all five.
    directly.
 
 3. **Breath session mid-inhale, mandala visualization**
-   Caption: "Sixteen guided breaths, one calm screen"
+   Caption: "Eighteen guided breaths, one calm screen"
    Shows: the polygonal mandala mid-bloom with the phase label. Choose Box
    Breathing or Coherent for a recognizable name on screen.
 

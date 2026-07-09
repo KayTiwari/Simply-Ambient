@@ -53,7 +53,7 @@ catches types and content invariants; everything below needs eyes and ears.
       gradient; nothing stretches edge to edge.
 - [ ] Walkthrough overlay is centered the same way.
 - [ ] Tab bar and mini player sit inside the column and stay tappable.
-- [ ] Breath session: circle and mandala visuals are centered, not clipped.
+- [ ] Breath session: circle and mandala visuals stay centered and fully visible.
 - [ ] Tarot spread (7 cards) fits without horizontal overflow.
 - [ ] Chakras and Horoscopes scroll to the very bottom without the last card
       hiding behind the tab bar (insets-aware padding).

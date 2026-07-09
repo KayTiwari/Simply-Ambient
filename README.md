@@ -20,7 +20,7 @@ The philosophy is rooted in **New Thought / manifestation**: tune your vibration
 | Tab | Glyph | Contents |
 |---|---|---|
 | **Frequencies** | ∿ | L/R sliders, brainwave & tuning presets, custom presets, background music, sleep timer |
-| **Breath** | ○ | Mala counter (108), 16 breath techniques, circle / polygonal-mandala visualizations, mudras |
+| **Breath** | ○ | Mala counter (108), 18 breath techniques, circle / polygonal-mandala visualizations, mudras |
 | **Chakras** | ✦ | 7 chakras with Devanagari bija glyphs, doshas (Vata/Pitta/Kapha) |
 | **Horoscopes** | ☽ | Daily / monthly / yearly horoscopes, zodiac picker, tarot card draw, lunar phase |
 | **More** | ⋯ | Daily affirmation + opt-in push, mood check-in, gratitude journal, 5-4-3-2-1 grounding, support, bug report |
@@ -55,7 +55,7 @@ Plus a small **lunar-phase chip** in the top-right corner of every screen.
 
 ### 🌬 Breath Work tab
 
-Sixteen techniques across two categories:
+Eighteen techniques across two categories:
 
 | Category | Technique | Pattern |
 |---|---|---|
@@ -68,12 +68,15 @@ Sixteen techniques across two categories:
 | Calming | Nadi Shodhana | 4 in · 2 hold · 4 out — alternate-nostril |
 | Calming | Sitali (Cooling) | 4 in (through tongue) · 6 out — pitta-cooling |
 | Calming | Physiological Sigh | 2 short in · long out — fastest stress reset |
+| Calming | Ujjayi (Ocean) | 4 in · 6 out, whispered ocean breath |
+| Calming | Dirga (Three-Part) | 6 in (belly · ribs · chest) · 6 out |
 | Activating | Holotropic | 1 in · 1 out (rapid) |
 | Activating | Shamanic | 2 in · 1 out |
 | Activating | SOMA | 3 in · 1 out · 2 hold |
 | Activating | Bhastrika (Bellows) | 1 in · 1 out forceful — energizes |
 | Activating | Lion's Breath | 4 in · 4 roar-out — releases facial/throat tension |
 | Activating | Kapalabhati | passive in · forceful out — skull-shining breath |
+| Activating | Wim Hof Style | 2 in · 1 out · 30 rounds |
 
 - **Two visual options**, switchable mid-session:
   - **Circle** — minimal scaling ring with phase label and per-second countdown
@@ -235,7 +238,7 @@ Then either:
 ```
 .
 ├── App.tsx                  # Tabs, state, audio, frequencies UI, animated background, zodiac/lunar data
-├── BreathworkView.tsx       # 16 breath techniques + circle and polygonal-mandala visuals + mudras
+├── BreathworkView.tsx       # 18 breath techniques + circle and polygonal-mandala visuals + mudras
 ├── ChakrasView.tsx          # 7 chakras (Devanagari bijas) + doshas
 ├── HoroscopesView.tsx       # Today widget, daily/monthly/yearly horoscopes (cached), zodiac picker, tarot
 ├── MoreView.tsx             # Hub: Profile (MBTI), Compatibility, AI Insights, Affirmations, Mood + graph,
