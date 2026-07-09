@@ -13,6 +13,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
 
 const STORAGE_PROFILE = '@simply_ambient_profile_v1';
+// The picked intent (sleep/focus/calm/energy) personalizes the More hub.
+const STORAGE_INTENT = '@simply_ambient_intent_v1';
 
 type Intent = 'sleep' | 'focus' | 'calm' | 'energy';
 
@@ -127,6 +129,7 @@ export default function OnboardingView({
     if (Object.keys(profile).length > 0) {
       AsyncStorage.setItem(STORAGE_PROFILE, JSON.stringify(profile)).catch(() => {});
     }
+    if (intent) AsyncStorage.setItem(STORAGE_INTENT, intent).catch(() => {});
     onDone();
   }
 

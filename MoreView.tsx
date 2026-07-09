@@ -96,7 +96,7 @@ export type NotifPref = 'off' | 'daily' | 'thrice';
 type MoodEntry = { ts: number; value: number };
 type GratEntry = { ts: number; text: string };
 type RantEntry = { ts: number; text: string };
-type ManifestEntry = { ts: number; text: string; manifested: boolean };
+type ManifestEntry = { ts: number; text: string; manifested: boolean; manifestedAt?: number };
 
 type Props = {
   notifPref: NotifPref;
@@ -175,6 +175,28 @@ function moodColor(value: number): string {
   return MOOD_COLORS[idx];
 }
 
+// True when two timestamps fall on the same local calendar day. Mood is
+// day-scoped: one entry per day, so saves and deletes work in day units.
+function sameLocalDay(a: number, b: number): boolean {
+  const da = new Date(a);
+  const db = new Date(b);
+  return (
+    da.getFullYear() === db.getFullYear() &&
+    da.getMonth() === db.getMonth() &&
+    da.getDate() === db.getDate()
+  );
+}
+
+// "Today" / "Yesterday" / "Jul 3" for day-level history rows.
+function friendlyDay(ts: number): string {
+  const d = new Date(ts);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return 'Today';
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 // Safely parse JSON from AsyncStorage. Returns fallback on any error so a
 // corrupted storage entry can't crash the app or poison subsequent reads.
 function safeParse<T>(raw: string | null, fallback: T): T {
@@ -236,19 +258,32 @@ export default function MoreView({
     getStreak().then(setStreak);
   }, []);
 
+  // Mood is day-scoped: saving replaces any earlier entry for that local
+  // day, so tapping a second mood simply updates today's entry.
   function saveMood(value: number) {
-    const next = [{ ts: Date.now(), value }, ...moodLog].slice(0, 365);
+    const now = Date.now();
+    const next = [{ ts: now, value }, ...moodLog.filter(m => !sameLocalDay(m.ts, now))]
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 365);
     setMoodLog(next);
     AsyncStorage.setItem(STORAGE_MOOD, JSON.stringify(next)).catch(() => {});
   }
 
-  // Retroactive mood logging from the 14-day graph. Keeps the log sorted
-  // newest-first so the History list and day buckets stay consistent.
+  // Retroactive mood logging from the calendar. Replaces any entries on the
+  // target day and keeps the log sorted newest-first so the History list and
+  // day buckets stay consistent.
   function saveMoodAt(ts: number, value: number) {
     if (ts > Date.now()) return; // Never log a future date.
-    const next = [{ ts, value }, ...moodLog]
+    const next = [{ ts, value }, ...moodLog.filter(m => !sameLocalDay(m.ts, ts))]
       .sort((a, b) => b.ts - a.ts)
       .slice(0, 365);
+    setMoodLog(next);
+    AsyncStorage.setItem(STORAGE_MOOD, JSON.stringify(next)).catch(() => {});
+  }
+
+  // Removes every mood entry on the given local day (History delete).
+  function deleteMoodDay(dayTs: number) {
+    const next = moodLog.filter(m => !sameLocalDay(m.ts, dayTs));
     setMoodLog(next);
     AsyncStorage.setItem(STORAGE_MOOD, JSON.stringify(next)).catch(() => {});
   }
@@ -285,9 +320,20 @@ export default function MoreView({
   }
 
   function toggleManifestation(ts: number) {
-    const next = manifestations.map(m => m.ts === ts ? { ...m, manifested: !m.manifested } : m);
+    let turnedOn = false;
+    const next = manifestations.map(m => {
+      if (m.ts !== ts) return m;
+      if (m.manifested) {
+        // Toggling off clears the arrival stamp. JSON.stringify drops the
+        // undefined field, so storage stays clean.
+        return { ...m, manifested: false, manifestedAt: undefined };
+      }
+      turnedOn = true;
+      return { ...m, manifested: true, manifestedAt: Date.now() };
+    });
     setManifestations(next);
     AsyncStorage.setItem(STORAGE_MANIFEST, JSON.stringify(next)).catch(() => {});
+    if (turnedOn) notify('It arrived', 'Marked as manifested.');
   }
 
   function deleteManifestation(ts: number) {
@@ -427,6 +473,7 @@ export default function MoreView({
               moodLog={moodLog}
               onSaveMood={saveMood}
               onSaveMoodAt={saveMoodAt}
+              onDeleteDay={deleteMoodDay}
               onBack={close}
             />
           )}
@@ -435,6 +482,7 @@ export default function MoreView({
               entries={gratitude}
               onSave={saveGratitude}
               onDelete={deleteGratitude}
+              isExpoGo={isExpoGo}
               onBack={close}
             />
           )}
@@ -443,6 +491,7 @@ export default function MoreView({
               entries={rants}
               onSave={saveRant}
               onDelete={deleteRant}
+              onOpenGrounding={() => open('grounding')}
               onBack={close}
             />
           )}
@@ -885,11 +934,12 @@ function AffirmationsPage({
 // ===========================================================================
 
 function MoodPage({
-  moodLog, onSaveMood, onSaveMoodAt, onBack,
+  moodLog, onSaveMood, onSaveMoodAt, onDeleteDay, onBack,
 }: {
   moodLog: MoodEntry[];
   onSaveMood: (v: number) => void;
   onSaveMoodAt: (ts: number, v: number) => void;
+  onDeleteDay: (dayTs: number) => void;
   onBack: () => void;
 }) {
   const subBodyPad = useSubBodyPad();
@@ -898,11 +948,24 @@ function MoodPage({
     m => new Date(m.ts).toDateString() === today.toDateString(),
   );
 
-  // Day selected on the calendar for retroactive logging.
+  // Day selected on the calendar for retroactive logging, behind a
+  // disclosure row so the page leads with today.
+  const [backfillOpen, setBackfillOpen] = useState(false);
   const [backfillDate, setBackfillDate] = useState<Date | null>(null);
 
+  function toggleBackfill() {
+    if (backfillOpen) setBackfillDate(null);
+    setBackfillOpen(!backfillOpen);
+  }
+
   function selectBackfillDay(date: Date) {
-    if (date.getTime() > Date.now()) return;
+    // Compare local day starts. Calendar cells sit at noon, so a raw
+    // Date.now() comparison would wrongly reject today before noon.
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    if (dayStart.getTime() > todayStart.getTime()) return; // Future days stay off limits.
     // Tapping the selected day again deselects it.
     setBackfillDate(prev =>
       prev && prev.toDateString() === date.toDateString() ? null : date,
@@ -936,13 +999,41 @@ function MoodPage({
     return out;
   }, [moodLog]);
 
+  // Distinct local days with at least one entry, for the graph's empty and
+  // sparse states.
+  const loggedDays = useMemo(() => {
+    const days = new Set<string>();
+    for (const m of moodLog) days.add(new Date(m.ts).toDateString());
+    return days.size;
+  }, [moodLog]);
+
+  // History shows one row per local day, newest first. Legacy days with
+  // multiple entries collapse to their rounded average.
+  const historyDays = useMemo(() => {
+    const map = new Map<string, { dayTs: number; sum: number; n: number }>();
+    for (const m of moodLog) {
+      const key = new Date(m.ts).toDateString();
+      const cur = map.get(key);
+      if (cur) {
+        cur.sum += m.value;
+        cur.n += 1;
+        cur.dayTs = Math.max(cur.dayTs, m.ts);
+      } else {
+        map.set(key, { dayTs: m.ts, sum: m.value, n: 1 });
+      }
+    }
+    return [...map.values()]
+      .map(d => ({ dayTs: d.dayTs, value: Math.round(d.sum / d.n) }))
+      .sort((a, b) => b.dayTs - a.dayTs);
+  }, [moodLog]);
+
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Mood" accent="#8FB8DE" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>RIGHT NOW</Text>
+        <Text style={styles.sectionLabel}>TODAY</Text>
         <Text style={styles.sectionSub}>
-          A 5-second check-in. Patterns in what lifts and drains you surface over weeks.
+          A 5-second check-in. Tap again anytime today to change it.
         </Text>
         <View style={styles.moodRow}>
           {[1, 2, 3, 4, 5].map(v => {
@@ -951,7 +1042,10 @@ function MoodPage({
               <TouchableOpacity
                 key={v}
                 activeOpacity={0.85}
-                onPress={() => onSaveMood(v)}
+                onPress={() => {
+                  onSaveMood(v);
+                  notify('Noted', `Logged as ${MOOD_LABELS[v - 1]} for today.`);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={`Mood ${v}, ${MOOD_LABELS[v - 1]}`}
                 accessibilityState={{ selected: active }}
@@ -973,17 +1067,36 @@ function MoodPage({
         </View>
 
         <Text style={styles.sectionLabel}>LAST 14 DAYS</Text>
-        <MoodGraph buckets={dayBuckets} />
+        <MoodGraph buckets={dayBuckets} loggedDays={loggedDays} />
 
-        <Text style={styles.sectionLabel}>LOG A PAST DAY</Text>
-        <Text style={styles.sectionSub}>Pick a day, then choose the mood it deserved.</Text>
-        <BackfillCalendar
-          moodLog={moodLog}
-          selected={backfillDate}
-          onSelectDay={selectBackfillDay}
-        />
+        <TouchableOpacity
+          style={[styles.settingRow, { marginTop: 24 }]}
+          onPress={toggleBackfill}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Missed a day? Log a past day"
+          accessibilityState={{ expanded: backfillOpen }}
+        >
+          <Text style={styles.settingLabel}>Missed a day?</Text>
+          <Text style={[styles.settingRowChevron, backfillOpen && { transform: [{ rotate: '90deg' }] }]}>
+            ›
+          </Text>
+        </TouchableOpacity>
 
-        {backfillDate ? (
+        {backfillOpen ? (
+          <>
+            <Text style={[styles.sectionSub, { marginTop: 12 }]}>
+              Pick a day, then choose the mood it deserved.
+            </Text>
+            <BackfillCalendar
+              moodLog={moodLog}
+              selected={backfillDate}
+              onSelectDay={selectBackfillDay}
+            />
+          </>
+        ) : null}
+
+        {backfillOpen && backfillDate ? (
           <View style={styles.backfillCard}>
             <View style={styles.backfillHeader}>
               <Text style={styles.backfillTitle}>
@@ -1025,20 +1138,25 @@ function MoodPage({
         ) : null}
 
         <Text style={styles.sectionLabel}>HISTORY</Text>
-        {moodLog.length === 0 ? (
+        {historyDays.length === 0 ? (
           <Text style={styles.emptyText}>No entries yet. Your first check-in starts the chart.</Text>
         ) : (
-          moodLog.slice(0, 30).map(m => (
-            <View key={m.ts} style={styles.moodHistoryRow}>
-              <Text style={[styles.moodHistoryDot, { backgroundColor: moodColor(m.value) }]} />
-              <Text style={styles.moodHistoryDate}>
-                {new Date(m.ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                {' · '}
-                {new Date(m.ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+          historyDays.slice(0, 30).map(d => (
+            <View key={d.dayTs} style={styles.moodHistoryRow}>
+              <Text style={[styles.moodHistoryDot, { backgroundColor: moodColor(d.value) }]} />
+              <Text style={styles.moodHistoryDate}>{friendlyDay(d.dayTs)}</Text>
+              <Text style={[styles.moodHistoryLabel, { color: moodColor(d.value) }]}>
+                {moodLabel(d.value)}
               </Text>
-              <Text style={[styles.moodHistoryLabel, { color: moodColor(m.value) }]}>
-                {moodLabel(m.value)}
-              </Text>
+              <TouchableOpacity
+                onPress={() => onDeleteDay(d.dayTs)}
+                style={[styles.gratDelBtn, { marginLeft: 10 }]}
+                accessibilityLabel={`Delete the mood logged for ${friendlyDay(d.dayTs)}`}
+                accessibilityRole="button"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <X size={14} color="#ffffff55" weight="thin" />
+              </TouchableOpacity>
             </View>
           ))
         )}
@@ -1048,9 +1166,11 @@ function MoodPage({
 }
 
 function MoodGraph({
-  buckets,
+  buckets, loggedDays,
 }: {
   buckets: Array<{ date: Date; avg: number | null }>;
+  // Distinct days ever logged; drives the empty and sparse states.
+  loggedDays: number;
 }) {
   const { width: screenW } = useWindowDimensions();
   // The app renders inside a centered max-width column on web, so the window
@@ -1083,6 +1203,18 @@ function MoodGraph({
     }
   });
   if (current) segments.push(current);
+
+  // Before the first check-in, keep the card but swap the chart for a
+  // welcoming line.
+  if (loggedDays === 0) {
+    return (
+      <View style={[styles.graphCard, { width: '100%', height: H, alignItems: 'center', justifyContent: 'center' }]}>
+        <Text style={[styles.emptyText, { textAlign: 'center', marginTop: 0 }]}>
+          Your first check-in starts this chart.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View
@@ -1132,6 +1264,11 @@ function MoodGraph({
         <Text style={styles.graphLabelText}>today</Text>
       </View>
     </View>
+    {loggedDays <= 2 ? (
+      <Text style={[styles.notifHint, { marginTop: 6 }]}>
+        A few more days and a shape appears.
+      </Text>
+    ) : null}
     </View>
   );
 }
@@ -1255,17 +1392,40 @@ function BackfillCalendar({
 const STORAGE_GRAT_REMINDER = '@simply_ambient_grat_reminder_v1';
 type GratReminderHour = 'off' | '21' | '22' | '23'; // 9pm / 10pm / 11pm
 
+// Prompt rotates with the calendar so the page feels alive on return visits.
+const GRAT_PLACEHOLDERS = [
+  'A small or large thing…',
+  'Someone who made today easier…',
+  'Something your body did for you…',
+  'A moment you would happily relive…',
+];
+
 function GratitudePage({
-  entries, onSave, onDelete, onBack,
+  entries, onSave, onDelete, isExpoGo, onBack,
 }: {
   entries: GratEntry[];
   onSave: (text: string) => void;
   onDelete: (ts: number) => void;
+  isExpoGo: boolean;
   onBack: () => void;
 }) {
   const subBodyPad = useSubBodyPad();
   const [text, setText] = useState('');
   const [reminder, setReminder] = useState<GratReminderHour>('off');
+
+  // Deterministic pick by day of year, so the prompt holds steady all day.
+  const placeholder = useMemo(() => {
+    const now = new Date();
+    const jan1 = new Date(now.getFullYear(), 0, 1);
+    const dayOfYear = Math.floor((now.getTime() - jan1.getTime()) / 86400000);
+    return GRAT_PLACEHOLDERS[dayOfYear % GRAT_PLACEHOLDERS.length];
+  }, []);
+
+  const canSave = text.trim().length > 0;
+  // Entries arrive newest-first, so the head tells us about today.
+  const savedToday =
+    entries.length > 0 &&
+    new Date(entries[0].ts).toDateString() === new Date().toDateString();
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_GRAT_REMINDER).then(v => {
@@ -1317,26 +1477,36 @@ function GratitudePage({
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>TODAY</Text>
         <Text style={styles.sectionSub}>
-          One thing you appreciate, named daily, shifts attention toward what's working. Saved only on this device.
+          {savedToday
+            ? 'Saved for today. Add another if more comes to mind.'
+            : "One thing you appreciate, named daily, shifts attention toward what's working. Saved only on this device."}
         </Text>
         <TextInput
           style={styles.gratInput}
-          placeholder="A small or large thing…"
+          placeholder={placeholder}
           placeholderTextColor="#ffffff77"
           value={text}
           onChangeText={setText}
           multiline
           maxLength={500}
         />
-        <TouchableOpacity onPress={commit} style={styles.gratSaveBtn} activeOpacity={0.85}>
+        <TouchableOpacity
+          onPress={commit}
+          disabled={!canSave}
+          style={[styles.gratSaveBtn, !canSave && { opacity: 0.5 }]}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Save this gratitude"
+          accessibilityState={{ disabled: !canSave }}
+        >
           <Text style={styles.gratSaveText}>SAVE</Text>
         </TouchableOpacity>
 
         <Text style={styles.sectionLabel}>EVENING REMINDER</Text>
         <Text style={styles.sectionSub}>
-          Gentle nudge if you haven't journaled by the chosen hour. Activates with a standalone build.
+          A gentle nudge each evening at the hour you choose.
         </Text>
-        <View style={styles.notifPills}>
+        <View style={[styles.notifPills, isExpoGo && { opacity: 0.4 }]}>
           {([
             { id: 'off', label: 'Off' },
             { id: '21',  label: '9 pm' },
@@ -1348,10 +1518,11 @@ function GratitudePage({
               <TouchableOpacity
                 key={o.id}
                 activeOpacity={0.85}
+                disabled={isExpoGo}
                 onPress={() => setReminderPref(o.id)}
                 accessibilityRole="button"
                 accessibilityLabel={`Evening reminder: ${o.label}`}
-                accessibilityState={{ selected: active }}
+                accessibilityState={{ selected: active, disabled: isExpoGo }}
                 style={[
                   styles.notifPill,
                   active && { borderColor: '#E0A470', backgroundColor: '#E0A47022' },
@@ -1362,6 +1533,11 @@ function GratitudePage({
             );
           })}
         </View>
+        {isExpoGo ? (
+          <Text style={styles.notifWarn}>
+            Reminders are unavailable in this preview build.
+          </Text>
+        ) : null}
         {notifBlocked ? (
           <Text style={styles.notifWarn}>
             Notifications are blocked in system settings, so these will not fire.
@@ -1406,20 +1582,42 @@ function GratitudePage({
 // ===========================================================================
 
 function RantPage({
-  entries, onSave, onDelete, onBack,
+  entries, onSave, onDelete, onOpenGrounding, onBack,
 }: {
   entries: RantEntry[];
   onSave: (text: string) => void;
   onDelete: (ts: number) => void;
+  onOpenGrounding?: () => void;
   onBack: () => void;
 }) {
   const subBodyPad = useSubBodyPad();
   const [text, setText] = useState('');
+  // True once a rant has been kept this visit; gates the grounding hint.
+  const [justKept, setJustKept] = useState(false);
+  // Timestamps of history items expanded past their two-line preview.
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   function commit() {
     if (!text.trim()) return;
     onSave(text);
     setText('');
+    setJustKept(true);
+  }
+
+  // The release path: the draft vanishes and nothing is stored.
+  function release() {
+    if (!text) return;
+    setText('');
+    notify('Released', 'Nothing was kept.');
+  }
+
+  function toggleExpanded(ts: number) {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(ts)) next.delete(ts);
+      else next.add(ts);
+      return next;
+    });
   }
 
   return (
@@ -1440,23 +1638,56 @@ function RantPage({
           maxLength={4000}
         />
         <TouchableOpacity onPress={commit} style={[styles.gratSaveBtn, { backgroundColor: '#D68097' }]} activeOpacity={0.85}>
-          <Text style={styles.gratSaveText}>SAVE</Text>
+          <Text style={styles.gratSaveText}>KEEP</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          onPress={release}
+          activeOpacity={0.7}
+          style={styles.rantLetGoBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Let it go. Clears what you wrote and keeps nothing."
+        >
+          <Text style={styles.rantLetGoText}>Let it go</Text>
+        </TouchableOpacity>
+        {justKept ? (
+          <TouchableOpacity
+            onPress={onOpenGrounding}
+            disabled={!onOpenGrounding}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Open the 5-4-3-2-1 grounding walk"
+          >
+            <Text style={[styles.notifHint, { textAlign: 'center' }]}>
+              Still buzzing? The 5-4-3-2-1 grounding walk can help.
+            </Text>
+          </TouchableOpacity>
+        ) : null}
 
-        <Text style={styles.sectionLabel}>HISTORY</Text>
+        <Text style={styles.sectionLabel}>PAST RANTS</Text>
         {entries.length === 0 ? (
           <Text style={styles.emptyText}>Your first rant will live here.</Text>
         ) : (
           entries.map(r => (
             <View key={r.ts} style={styles.gratItem}>
-              <View style={{ flex: 1 }}>
+              <TouchableOpacity
+                style={{ flex: 1 }}
+                onPress={() => toggleExpanded(r.ts)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={expanded.has(r.ts) ? 'Collapse this rant' : 'Expand this rant'}
+              >
                 <Text style={styles.rantDate}>
                   {new Date(r.ts).toLocaleString(undefined, {
                     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
                   })}
                 </Text>
-                <Text style={styles.gratItemText}>{r.text}</Text>
-              </View>
+                <Text
+                  style={styles.gratItemText}
+                  numberOfLines={expanded.has(r.ts) ? undefined : 2}
+                >
+                  {r.text}
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => onDelete(r.ts)}
                 style={styles.gratDelBtn}
@@ -1520,6 +1751,12 @@ function ManifestationPage({
           <Text style={styles.gratSaveText}>ADD</Text>
         </TouchableOpacity>
 
+        {manifested.length >= 2 ? (
+          <Text style={[styles.sectionSub, { marginTop: 18, marginBottom: 0 }]}>
+            {manifested.length} arrived so far.
+          </Text>
+        ) : null}
+
         <Text style={styles.sectionLabel}>CALLING IN</Text>
         {pending.length === 0 ? (
           <Text style={styles.emptyText}>Nothing yet. Name what you're inviting.</Text>
@@ -1531,7 +1768,7 @@ function ManifestationPage({
 
         {manifested.length > 0 ? (
           <>
-            <Text style={styles.sectionLabel}>MANIFESTED</Text>
+            <Text style={styles.sectionLabel}>ARRIVED</Text>
             {manifested.map(m => (
               <ManifestRow key={m.ts} item={m} onToggle={onToggle} onDelete={onDelete} />
             ))}
@@ -1549,6 +1786,8 @@ function ManifestRow({
   onToggle: (ts: number) => void;
   onDelete: (ts: number) => void;
 }) {
+  const fmtDay = (ts: number) =>
+    new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return (
     <View style={styles.gratItem}>
       <TouchableOpacity
@@ -1566,13 +1805,20 @@ function ManifestRow({
           {item.manifested ? <Text style={styles.manifestCheckMark}>✓</Text> : null}
         </View>
       </TouchableOpacity>
-      <Text style={[
-        styles.gratItemText,
-        item.manifested && { color: '#ffffff66', textDecorationLine: 'line-through' },
-        { flex: 1 },
-      ]}>
-        {item.text}
-      </Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.gratItemText}>{item.text}</Text>
+        {item.manifested ? (
+          item.manifestedAt ? (
+            <Text style={[styles.rantDate, { marginTop: 4, marginBottom: 0 }]}>
+              Arrived {fmtDay(item.manifestedAt)}
+            </Text>
+          ) : null
+        ) : (
+          <Text style={[styles.rantDate, { marginTop: 4, marginBottom: 0 }]}>
+            Since {fmtDay(item.ts)}
+          </Text>
+        )}
+      </View>
       <TouchableOpacity
         onPress={() => onDelete(item.ts)}
         style={styles.gratDelBtn}
@@ -3317,6 +3563,8 @@ const styles = StyleSheet.create({
   gratDelBtn: { paddingHorizontal: 6, paddingVertical: 2 },
 
   rantDate: { color: '#ffffff77', fontSize: 10, letterSpacing: 1.5, fontWeight: '700', marginBottom: 4 },
+  rantLetGoBtn: { alignSelf: 'center', marginTop: 12, paddingVertical: 6, paddingHorizontal: 12 },
+  rantLetGoText: { color: '#ffffff88', fontSize: 12, letterSpacing: 1 },
 
   manifestCheck: { paddingRight: 12, paddingTop: 1 },
   manifestCheckBox: {
