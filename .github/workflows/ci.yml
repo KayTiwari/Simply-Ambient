@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test -- --ci
+
+      # Smoke-tests the whole bundle: a broken import or syntax error in any
+      # view fails the export even though the unit suites never render UI.
+      # Sentry sourcemap upload silently skips when SENTRY_AUTH_TOKEN is
+      # absent, so no secret is needed here.
+      - name: Web export
+        run: npm run build:web
