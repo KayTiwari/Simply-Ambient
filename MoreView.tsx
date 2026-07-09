@@ -30,9 +30,10 @@ import {
   CloudLightning,
   Coffee,
   ShieldCheck,
-  Bug,
+  ChatCircleText,
   type IconProps,
 } from 'phosphor-react-native';
+import Constants from 'expo-constants';
 
 import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
 import { openStoreListing } from './lib/rateApp';
@@ -691,10 +692,10 @@ function Hub({
             onPress={() => onOpen('safety')}
           />
           <HubTile
-            Icon={Bug}
+            Icon={ChatCircleText}
             accent="#d9b35c"
-            label="Report a Bug"
-            sub="Something off? Let me know"
+            label="Feedback"
+            sub="Ideas, kind words, bug reports"
             onPress={() => onOpen('bug')}
           />
         </View>
@@ -1960,20 +1961,40 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
   );
 }
 
+type MessageKind = 'feedback' | 'idea' | 'bug';
+
+const MESSAGE_KINDS: Array<{ id: MessageKind; label: string; fallbackSubject: string }> = [
+  { id: 'feedback', label: 'Feedback', fallbackSubject: 'Feedback' },
+  { id: 'idea',     label: 'Idea',     fallbackSubject: 'Feature idea' },
+  { id: 'bug',      label: 'Bug',      fallbackSubject: 'Bug report' },
+];
+
+// One transparent line of context, shown verbatim in the form before sending.
+// No identifiers, no journal content; just enough to reproduce bugs.
+function buildAppInfoLine(): string {
+  const version = Constants.expoConfig?.version ?? 'unknown version';
+  return `Simply Ambient ${version} · ${Platform.OS} ${Platform.Version}`;
+}
+
 function BugReportPage({ onBack }: { onBack: () => void }) {
+  const [kind, setKind] = useState<MessageKind>('feedback');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const [includeAppInfo, setIncludeAppInfo] = useState(true);
   const [sending, setSending] = useState(false);
+  const appInfoLine = useMemo(buildAppInfoLine, []);
 
   async function submit() {
     if (!subject.trim() && !body.trim()) {
-      notify('Empty report', 'Add a subject or describe the issue first.');
+      notify('Empty message', 'Add a subject or write a few words first.');
       return;
     }
     setSending(true);
 
     const email = decodeReportEmail();
-    const fullSubject = `[Simply Ambient] ${subject || 'Bug report'}`;
+    const kindMeta = MESSAGE_KINDS.find(k => k.id === kind) ?? MESSAGE_KINDS[0];
+    const fullSubject = `[Simply Ambient] ${kindMeta.label}: ${subject || kindMeta.fallbackSubject}`;
+    const fullBody = [body.trim(), includeAppInfo ? appInfoLine : ''].filter(Boolean).join('\n\n');
 
     // 1) Try the silent FormSubmit AJAX endpoint first. Time-boxed: a stalled
     // mobile connection would otherwise leave SEND disabled indefinitely.
@@ -1996,7 +2017,7 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
             _captcha: 'false',
             _template: 'box',
             subject,
-            message: body,
+            message: fullBody,
           }),
         });
         if (res.ok) {
@@ -2021,12 +2042,12 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
     const mailto =
       `mailto:${email}` +
       `?subject=${encodeURIComponent(fullSubject)}` +
-      `&body=${encodeURIComponent(body || '')}`;
+      `&body=${encodeURIComponent(fullBody)}`;
     try {
       await Linking.openURL(mailto);
       notify(
         'One more tap',
-        'Your mail app is opening with the report pre-filled. Tap Send there to complete.',
+        'Your mail app is opening with the message pre-filled. Tap Send there to complete.',
       );
       setSubject('');
       setBody('');
@@ -2038,10 +2059,30 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <SubHeader title="Report a Bug" accent="#D68097" onBack={onBack} />
+      <SubHeader title="Feedback" accent="#D68097" onBack={onBack} />
       <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>WHAT WENT WRONG?</Text>
-        <Text style={styles.sectionSub}>This goes straight to the developer's inbox.</Text>
+        <Text style={styles.sectionLabel}>WHAT KIND OF MESSAGE?</Text>
+        <View style={styles.notifPills}>
+          {MESSAGE_KINDS.map(k => (
+            <TouchableOpacity
+              key={k.id}
+              onPress={() => setKind(k.id)}
+              style={[
+                styles.notifPill,
+                kind === k.id && { borderColor: '#D68097', backgroundColor: '#D6809722' },
+              ]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: kind === k.id }}
+            >
+              <Text style={[styles.notifPillText, kind === k.id && { color: '#fff' }]}>
+                {k.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.sectionLabel}>YOUR MESSAGE</Text>
+        <Text style={styles.sectionSub}>Goes straight to the developer's inbox.</Text>
         <TextInput
           style={styles.bugInput}
           placeholder="Subject"
@@ -2052,13 +2093,37 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
         />
         <TextInput
           style={[styles.bugInput, { minHeight: 140, textAlignVertical: 'top' }]}
-          placeholder="Describe what happened, what you expected, and what device you're on…"
+          placeholder={
+            kind === 'bug'
+              ? 'Describe what happened, what you expected, and what device you’re on…'
+              : 'What’s on your mind? Anything helps, from a single line to an essay…'
+          }
           placeholderTextColor="#ffffff77"
           value={body}
           onChangeText={setBody}
           multiline
           maxLength={2000}
         />
+
+        <TouchableOpacity
+          onPress={() => setIncludeAppInfo(v => !v)}
+          style={[styles.settingRow, { marginTop: 16 }]}
+          activeOpacity={0.85}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: includeAppInfo }}
+        >
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={styles.settingLabel}>Attach app info</Text>
+            <Text style={styles.bugAppInfoPreview}>{appInfoLine}</Text>
+          </View>
+          <View style={[styles.settingToggle, includeAppInfo && { borderColor: '#D68097', backgroundColor: '#D6809722' }]}>
+            <Text style={styles.settingToggleText}>{includeAppInfo ? 'ON' : 'OFF'}</Text>
+          </View>
+        </TouchableOpacity>
+        <Text style={styles.bugAppInfoHint}>
+          Just the line above. Nothing from your journals or profile is ever attached.
+        </Text>
+
         <TouchableOpacity
           onPress={submit}
           disabled={sending}
@@ -2068,7 +2133,7 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
           {sending ? (
             <ActivityIndicator color="#0B0B1F" />
           ) : (
-            <Text style={styles.bugSendText}>SEND REPORT</Text>
+            <Text style={styles.bugSendText}>SEND</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -3293,6 +3358,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#D68097', alignItems: 'center',
   },
   bugSendText: { color: '#0B0B1F', fontWeight: '700', letterSpacing: 2, fontSize: 14 },
+  bugAppInfoPreview: { color: '#ffffff77', fontSize: 11, marginTop: 3 },
+  bugAppInfoHint: { color: '#ffffff66', fontSize: 11, lineHeight: 16, marginTop: 8 },
 
   fieldLabel: { color: '#ffffff80', fontSize: 11, letterSpacing: 1, fontWeight: '600', marginTop: 12, marginBottom: 6 },
   fieldInput: {

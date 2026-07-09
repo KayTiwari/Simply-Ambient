@@ -79,3 +79,55 @@ pipeline (formsubmit + mailto fallback) into Feedback & Bug Report with a
 message-type choice and opt-in app/device info line.
 
 ---
+
+## Cycle 2: Send Feedback
+
+- **Date:** 2026-07-08
+- **Goal:** Backlog priority 2. A calm, general feedback channel that reuses
+  the proven bug-report pipeline instead of adding a new service.
+
+### What was implemented
+
+- The "Report a Bug" sub-page in More is now "Feedback": a message-kind
+  chip row (Feedback / Idea / Bug) that adapts the email subject line and the
+  placeholder copy, on top of the existing FormSubmit AJAX + mailto fallback.
+- "Attach app info" toggle (default on) that appends exactly one line, shown
+  verbatim in the UI before sending: app version (from `expo-constants`,
+  already bundled with Expo, no new dependency) plus platform and OS version.
+  A hint under the toggle states that journals and profile data are never
+  attached. Turning it off sends nothing extra.
+- Hub tile renamed to "Feedback" with a chat icon (phosphor `ChatCircleText`
+  replacing `Bug`); sub-line invites ideas and kind words as well as reports.
+
+### Files changed
+
+- `MoreView.tsx` only.
+
+### Tests run
+
+- `npx tsc --noEmit`: pass. `npm test`: 35/35 pass.
+
+### Manual QA instructions
+
+1. More > Feedback. Switch between Feedback / Idea / Bug chips; the body
+   placeholder changes for Bug.
+2. Send with a subject only; on a device with mail configured the silent
+   FormSubmit path fires first, then mailto fallback. Confirm the subject
+   arrives as "[Simply Ambient] Feedback: ..." (or Idea/Bug).
+3. Toggle "Attach app info" off and confirm the sent body has no version line.
+4. Empty subject AND body shows the "Empty message" toast and sends nothing.
+
+### Known risks
+
+- FormSubmit remains a third-party relay (unchanged from before); the
+  fallback path keeps working if it ever lapses.
+- `docs/privacy-policy.md` wording says "bug reports"; it should say
+  "feedback and bug reports". Scheduled for the privacy cycle.
+
+### Suggested next cycle
+
+Onboarding walkthrough (backlog priority 3): add the missing teaching beats
+(soundscapes, sleep timer, settings), step indicator dots, and a replay
+entry point in Settings.
+
+---
