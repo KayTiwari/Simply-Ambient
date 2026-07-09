@@ -39,6 +39,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
 import { openStoreListing } from './lib/rateApp';
 
+// The store the current platform rates on. The app ships on Google Play
+// today; a future iOS build gets truthful copy for free.
+const STORE_NAME = Platform.OS === 'ios' ? 'the App Store' : 'Google Play';
+
 // Every AsyncStorage key this app writes starts with one of these, so the
 // wipe below stays correct as new keys are added.
 const STORAGE_PREFIXES = ['@simply_ambient_', '@binaural_'];
@@ -537,6 +541,8 @@ export default function MoreView({
               singleColor={singleColor}
               onChangeSingleColor={onChangeSingleColor}
               onReplayOnboarding={onReplayOnboarding}
+              notifPref={notifPref}
+              onOpenAffirmations={() => open('affirmations')}
             />
           )}
           {page === 'bug' && (
@@ -1958,18 +1964,26 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
   );
 }
 
-const ROADMAP: Array<{ phase: string; items: Array<{ title: string; blurb: string }> }> = [
+// dotOpacity signals confidence: solid for NEXT UP, fainter as plans get
+// softer. Groups with shipped: true render a green check instead of a dot.
+const ROADMAP: Array<{
+  phase: string;
+  dotOpacity?: number;
+  shipped?: boolean;
+  items: Array<{ title: string; blurb: string }>;
+}> = [
   {
     phase: 'NEXT UP',
+    dotOpacity: 1,
     items: [
       { title: 'Custom routines & auto-sequencer', blurb: 'Build your own preset chains with smooth fades between steps.' },
-      { title: 'Built-in soundscapes',              blurb: 'Rain, ocean, forest, fireplace, brown noise. Bundled and offline.' },
       { title: 'In-app natal chart',                blurb: 'Planet positions, houses, and aspects without leaving the app.' },
       { title: 'Bija mantra audio',                 blurb: 'Short loops of LAM / VAM / RAM / OM for chakra meditation.' },
     ],
   },
   {
     phase: 'AFTER THAT',
+    dotOpacity: 0.6,
     items: [
       { title: 'Apple Health & Google Fit',         blurb: 'Log breath sessions as mindfulness minutes; mood as wellbeing data.' },
       { title: 'Synastry compatibility',            blurb: 'Full natal-chart matching between two people once the chart pipeline ships.' },
@@ -1979,12 +1993,21 @@ const ROADMAP: Array<{ phase: string; items: Array<{ title: string; blurb: strin
   },
   {
     phase: 'CONSIDERING',
+    dotOpacity: 0.35,
     items: [
       { title: 'Light theme',           blurb: 'Alternate palette for daytime use.' },
       { title: 'Sleep mode',            blurb: 'Dimmed screen, gentle fade-out, optional white/brown-noise overlay for falling asleep.' },
       { title: 'Sacred geometry visualizer', blurb: 'Frequency-reactive cymatic patterns behind the play screen.' },
       { title: 'Shareable preset cards',   blurb: 'Render a beautiful image of a saved preset to share.' },
       { title: 'Yoga Nidra',              blurb: 'Guided body-scan audio or text.' },
+    ],
+  },
+  {
+    phase: 'SHIPPED',
+    shipped: true,
+    items: [
+      { title: 'Built-in soundscapes', blurb: 'Rain, ocean, forest, fireplace, brown noise. Bundled and offline.' },
+      { title: 'Settings page with a still background option', blurb: 'Pin the backdrop to one calm color any time.' },
     ],
   },
 ];
@@ -1997,7 +2020,7 @@ function SupportPage({ onBack }: { onBack: () => void }) {
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <View style={styles.supportHero}>
           <Text style={styles.supportEmoji}>☕</Text>
-          <Text style={styles.supportHeadline}>Support the developer</Text>
+          <Text style={styles.supportHeadline}>Built by one person</Text>
           <Text style={styles.supportText}>
             Simply Ambient is built and maintained by one person. If it's brought you peace and
             you'd like to see more, a small donation directly funds the features below.
@@ -2011,27 +2034,16 @@ function SupportPage({ onBack }: { onBack: () => void }) {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionLabel}>LEAVE A REVIEW</Text>
-        <Text style={styles.sectionSub}>
-          A rating on Google Play helps other people find the app. It costs nothing and means a lot.
-        </Text>
-        <TouchableOpacity
-          style={styles.settingRow}
-          onPress={() => { openStoreListing().catch(() => {}); }}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Rate Simply Ambient on Google Play"
-        >
-          <Text style={styles.settingLabel}>Rate Simply Ambient</Text>
-          <Text style={styles.settingRowChevron}>›</Text>
-        </TouchableOpacity>
-
         {ROADMAP.map(group => (
           <View key={group.phase}>
             <Text style={styles.sectionLabel}>{group.phase}</Text>
             {group.items.map(item => (
               <View key={item.title} style={styles.roadmapItem}>
-                <View style={styles.roadmapDot} />
+                {group.shipped ? (
+                  <Text style={[styles.privacyCheck, { marginRight: 12, marginTop: 2 }]}>✓</Text>
+                ) : (
+                  <View style={[styles.roadmapDot, { opacity: group.dotOpacity ?? 1 }]} />
+                )}
                 <View style={{ flex: 1 }}>
                   <Text style={styles.roadmapTitle}>{item.title}</Text>
                   <Text style={styles.roadmapBlurb}>{item.blurb}</Text>
@@ -2040,6 +2052,21 @@ function SupportPage({ onBack }: { onBack: () => void }) {
             ))}
           </View>
         ))}
+
+        <Text style={styles.sectionLabel}>ANOTHER WAY TO HELP</Text>
+        <Text style={styles.sectionSub}>
+          A rating on {STORE_NAME} helps other people find the app. It costs nothing and means a lot.
+        </Text>
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => { openStoreListing().catch(() => {}); }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Rate Simply Ambient on ${STORE_NAME}`}
+        >
+          <Text style={styles.settingLabel}>Rate Simply Ambient</Text>
+          <Text style={styles.settingRowChevron}>›</Text>
+        </TouchableOpacity>
 
         <Text style={styles.supportFootnote}>
           Donations are entirely optional. Thank you for being here either way.
@@ -2076,13 +2103,41 @@ export function SafetyContent() {
 
       <Text style={styles.sectionLabel}>WHEN NOT TO USE</Text>
       <Text style={styles.safetyBody}>
-        Do not use this app while driving, operating machinery, or in any context where
-        focused attention is required. Consult a qualified physician before using
-        binaural beats or breathwork if you are pregnant, have a pacemaker, history
-        of seizures or epilepsy, a heart condition, are prone to dissociation, or are
-        taking medication that affects the nervous system. Discontinue immediately and
-        seek care if you experience dizziness, nausea, headache, ringing in the ears,
-        chest pain, panic, or any unusual symptom.
+        Talk with a physician first if any of these apply:
+      </Text>
+      {[
+        'Pregnancy',
+        'A pacemaker',
+        'A history of seizures or epilepsy',
+        'A heart condition',
+        'Proneness to dissociation',
+        'Medication that affects the nervous system',
+      ].map(item => (
+        <View key={item} style={styles.privacyRow}>
+          <Text style={[styles.privacyCheck, { color: '#9aa0b4' }]}>•</Text>
+          <Text style={styles.privacyText}>{item}</Text>
+        </View>
+      ))}
+      <Text style={[styles.safetyBody, { marginTop: 10 }]}>
+        Stop and seek care if you notice:
+      </Text>
+      {[
+        'Dizziness',
+        'Nausea',
+        'Headache',
+        'Ringing in the ears',
+        'Chest pain',
+        'Panic',
+        'Any other unusual symptom',
+      ].map(item => (
+        <View key={item} style={styles.privacyRow}>
+          <Text style={[styles.privacyCheck, { color: '#9aa0b4' }]}>•</Text>
+          <Text style={styles.privacyText}>{item}</Text>
+        </View>
+      ))}
+      <Text style={[styles.safetyBody, { marginTop: 10 }]}>
+        Do not use this app while driving, operating machinery, or in any context
+        where focused attention is required.
       </Text>
 
       <Text style={styles.sectionLabel}>YOUR DATA</Text>
@@ -2094,7 +2149,8 @@ export function SafetyContent() {
         Beyond that, data leaves the device only when you explicitly tap an analyse
         button on the AI Insights page, in which case the sources you have toggled on
         are sent to Google Gemini using your own API key. You control which sources
-        are shared.
+        are shared. Messages you send from the Feedback page travel through a mail
+        relay (formsubmit.co) to reach the developer.
       </Text>
 
       <Text style={styles.sectionLabel}>NO WARRANTY</Text>
@@ -2104,6 +2160,10 @@ export function SafetyContent() {
         developer is not liable for any direct or indirect harm, including hearing
         damage, that may arise from use of the app. If you do not agree, do not use
         the app.
+      </Text>
+
+      <Text style={[styles.sectionSub, { marginTop: 18 }]}>
+        This app should always feel gentle. If it ever does not, pause and rest.
       </Text>
     </>
   );
@@ -2156,6 +2216,7 @@ const PRIVACY_FACTS: string[] = [
   'Horoscopes send only your sign and the period.',
   'Crash reports hold device model, app version, and the stack trace. Your journals stay out of them.',
   'AI Insights shares only sources you toggle on, only when you tap analyse.',
+  'Feedback messages reach the developer through a simple mail relay. Journals never ride along.',
 ];
 
 // ===========================================================================
@@ -2172,12 +2233,14 @@ const SINGLE_COLOR_CHOICES = [
 ];
 
 function SettingsPage({
-  onBack, singleColor, onChangeSingleColor, onReplayOnboarding,
+  onBack, singleColor, onChangeSingleColor, onReplayOnboarding, notifPref, onOpenAffirmations,
 }: {
   onBack: () => void;
   singleColor: string | null;
   onChangeSingleColor: (c: string | null) => void;
   onReplayOnboarding: () => void;
+  notifPref: NotifPref;
+  onOpenAffirmations: () => void;
 }) {
   const subBodyPad = useSubBodyPad();
   const on = singleColor != null;
@@ -2192,13 +2255,13 @@ function SettingsPage({
           Pin it to a single color if you prefer stillness.
         </Text>
         <View style={styles.settingRow}>
-          <Text style={styles.settingLabel}>Single app color</Text>
+          <Text style={styles.settingLabel}>Still background</Text>
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={() => onChangeSingleColor(on ? null : SINGLE_COLOR_CHOICES[0].hex)}
             accessibilityRole="switch"
             accessibilityState={{ checked: on }}
-            accessibilityLabel="Single app color"
+            accessibilityLabel="Still background"
             style={[styles.settingToggle, on && { borderColor: '#d9b35c', backgroundColor: '#d9b35c22' }]}
           >
             <Text style={[styles.settingToggleText, on && { color: '#d9b35c' }]}>
@@ -2207,28 +2270,33 @@ function SettingsPage({
           </TouchableOpacity>
         </View>
         {on ? (
-          <View style={styles.swatchRow}>
-            {SINGLE_COLOR_CHOICES.map(c => {
-              const active = singleColor === c.hex;
-              return (
-                <TouchableOpacity
-                  key={c.hex}
-                  activeOpacity={0.85}
-                  onPress={() => onChangeSingleColor(c.hex)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Background color ${c.name}`}
-                  accessibilityState={{ selected: active }}
-                  style={[
-                    styles.swatch,
-                    { backgroundColor: c.hex },
-                    active && { borderColor: '#d9b35c' },
-                  ]}
-                >
-                  {active ? <Text style={styles.swatchCheck}>✓</Text> : null}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <>
+            <View style={styles.swatchRow}>
+              {SINGLE_COLOR_CHOICES.map(c => {
+                const active = singleColor === c.hex;
+                return (
+                  <TouchableOpacity
+                    key={c.hex}
+                    activeOpacity={0.85}
+                    onPress={() => onChangeSingleColor(c.hex)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Background color ${c.name}`}
+                    accessibilityState={{ selected: active }}
+                    style={[
+                      styles.swatch,
+                      { backgroundColor: c.hex },
+                      active && { borderColor: '#d9b35c' },
+                    ]}
+                  >
+                    {active ? <Text style={styles.swatchCheck}>✓</Text> : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={styles.bugAppInfoHint}>
+              {SINGLE_COLOR_CHOICES.find(c => c.hex === singleColor)?.name ?? 'Custom color'}
+            </Text>
+          </>
         ) : null}
 
         <Text style={styles.sectionLabel}>WALKTHROUGH</Text>
@@ -2247,19 +2315,26 @@ function SettingsPage({
           <Text style={styles.settingRowChevron}>›</Text>
         </TouchableOpacity>
 
-        <Text style={styles.sectionLabel}>RATE THE APP</Text>
+        <Text style={styles.sectionLabel}>REMINDERS</Text>
         <Text style={styles.sectionSub}>
-          A Google Play rating helps other people find Simply Ambient.
+          Affirmation and gratitude nudges live with their pages.
         </Text>
         <TouchableOpacity
           style={styles.settingRow}
-          onPress={() => { openStoreListing().catch(() => {}); }}
+          onPress={onOpenAffirmations}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Rate Simply Ambient on Google Play"
+          accessibilityLabel={`Affirmation reminders, currently ${
+            notifPref === 'off' ? 'off' : notifPref === 'daily' ? '1x per day' : '3x per day'
+          }`}
         >
-          <Text style={styles.settingLabel}>Rate Simply Ambient</Text>
-          <Text style={styles.settingRowChevron}>›</Text>
+          <Text style={styles.settingLabel}>Affirmation reminders</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={[styles.bugAppInfoPreview, { marginTop: 0, marginRight: 8 }]}>
+              {notifPref === 'off' ? 'Off' : notifPref === 'daily' ? '1x per day' : '3x per day'}
+            </Text>
+            <Text style={styles.settingRowChevron}>›</Text>
+          </View>
         </TouchableOpacity>
 
         <Text style={styles.sectionLabel}>YOUR PRIVACY</Text>
@@ -2284,6 +2359,21 @@ function SettingsPage({
         <Text style={styles.bugAppInfoHint}>
           Delete everything the app stores any time under More → Safety → Wipe all data.
         </Text>
+
+        <Text style={styles.sectionLabel}>RATE THE APP</Text>
+        <Text style={styles.sectionSub}>
+          A rating on {STORE_NAME} helps other people find Simply Ambient.
+        </Text>
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => { openStoreListing().catch(() => {}); }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Rate Simply Ambient on ${STORE_NAME}`}
+        >
+          <Text style={styles.settingLabel}>Rate Simply Ambient</Text>
+          <Text style={styles.settingRowChevron}>›</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       <LinkConfirmModal url={pendingOpenUrl} onClose={() => setPendingOpenUrl(null)} />
@@ -2303,7 +2393,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
     setConfirmWipe(false);
     notify(
       'Data wiped',
-      'All journal data, profile, presets, and settings have been deleted from this device. Restart the app to see a fresh state.',
+      'Everything the app stored on this device has been deleted, including journals, profile, presets, settings, and your saved AI key. Restarting the app gives you a clean start.',
     );
   }
 
@@ -2316,7 +2406,11 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
         <Text style={styles.sectionLabel}>PRIVACY POLICY</Text>
         <Text style={styles.safetyBody}>
           The full privacy policy is published at{' '}
-          <Text style={styles.linkText} onPress={() => setPendingOpenUrl(PRIVACY_POLICY_URL)}>
+          <Text
+            style={styles.linkText}
+            onPress={() => setPendingOpenUrl(PRIVACY_POLICY_URL)}
+            accessibilityRole="link"
+          >
             kaytiwari.github.io/Simply-Ambient
           </Text>
           . It explains exactly what data the app handles and what it does not.
@@ -2324,18 +2418,23 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
 
         <Text style={styles.sectionLabel}>TERMS OF SERVICE</Text>
         <Text style={styles.safetyBody}>
-          The full Terms of Service are published{' '}
-          <Text style={styles.linkText} onPress={() => setPendingOpenUrl(TERMS_OF_SERVICE_URL)}>
-            here
+          The full Terms of Service are published at{' '}
+          <Text
+            style={styles.linkText}
+            onPress={() => setPendingOpenUrl(TERMS_OF_SERVICE_URL)}
+            accessibilityRole="link"
+          >
+            kaytiwari.github.io/Simply-Ambient
           </Text>
           . By using Simply Ambient you accept them. They include hearing-safety,
           medical-disclaimer, liability, and dispute-resolution terms.
         </Text>
 
-        <Text style={styles.sectionLabel}>RESET</Text>
+        <Text style={styles.sectionLabel}>WIPE ALL DATA</Text>
         <Text style={styles.safetyBody}>
-          Permanently delete every entry stored on this device: profile, mood log,
-          gratitude, rants, manifestations, presets, settings, AI key. Cannot be undone.
+          Permanently delete everything the app stores on this device: journals
+          (mood, gratitude, rants, manifestations), profile, presets, settings,
+          and your saved AI key. Cannot be undone.
         </Text>
         <TouchableOpacity
           activeOpacity={0.85}
@@ -2359,8 +2458,9 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
           <View style={styles.linkConfirmCard}>
             <Text style={styles.linkConfirmTitle}>Wipe all data?</Text>
             <Text style={styles.linkConfirmHint}>
-              This permanently deletes every journal entry, your profile, all presets,
-              and settings stored on this device. There is no undo.
+              This permanently deletes your journals (mood, gratitude, rants,
+              manifestations), profile, presets, settings, and your saved AI key
+              from this device. There is no undo.
             </Text>
             <View style={styles.linkConfirmActions}>
               <TouchableOpacity
@@ -2412,6 +2512,9 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
   const [body, setBody] = useState('');
   const [includeAppInfo, setIncludeAppInfo] = useState(true);
   const [sending, setSending] = useState(false);
+  // Shows an inline confirmation under SEND after a silent send lands.
+  // Cleared as soon as the user starts a new message.
+  const [sentInline, setSentInline] = useState(false);
   const appInfoLine = useMemo(buildAppInfoLine, []);
 
   async function submit() {
@@ -2463,12 +2566,15 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
       notify('Sent', 'Thank you. The developer will see it soon.');
       setSubject('');
       setBody('');
+      setSentInline(true);
       setSending(false);
       return;
     }
 
     // 2) Fallback: open the user's mail app pre-filled. Reliable on every
     // device and doesn't depend on a third-party service activating an email.
+    // The draft stays in the form; the user may cancel the mail compose and
+    // come back to it.
     const mailto =
       `mailto:${email}` +
       `?subject=${encodeURIComponent(fullSubject)}` +
@@ -2479,8 +2585,6 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
         'One more tap',
         'Your mail app is opening with the message pre-filled. Tap Send there to complete.',
       );
-      setSubject('');
-      setBody('');
     } catch {
       notify('Could not send', 'No mail app available on this device.');
     }
@@ -2491,7 +2595,7 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
     <View style={{ flex: 1 }}>
       <SubHeader title="Feedback" accent="#D68097" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>WHAT KIND OF MESSAGE?</Text>
+        <Text style={styles.sectionLabel}>MESSAGE TYPE</Text>
         <View style={styles.notifPills}>
           {MESSAGE_KINDS.map(k => (
             <TouchableOpacity
@@ -2512,13 +2616,16 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
         </View>
 
         <Text style={styles.sectionLabel}>YOUR MESSAGE</Text>
-        <Text style={styles.sectionSub}>Goes straight to the developer's inbox.</Text>
+        <Text style={styles.sectionSub}>
+          Delivered to the developer through a simple mail relay. If that fails,
+          your mail app opens with everything pre-filled.
+        </Text>
         <TextInput
           style={styles.bugInput}
           placeholder="Subject"
           placeholderTextColor="#ffffff77"
           value={subject}
-          onChangeText={setSubject}
+          onChangeText={t => { setSubject(t); setSentInline(false); }}
           maxLength={120}
         />
         <TextInput
@@ -2530,10 +2637,13 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
           }
           placeholderTextColor="#ffffff77"
           value={body}
-          onChangeText={setBody}
+          onChangeText={t => { setBody(t); setSentInline(false); }}
           multiline
           maxLength={2000}
         />
+        {body.length >= 1800 ? (
+          <Text style={styles.bugAppInfoPreview}>{body.length} / 2000</Text>
+        ) : null}
 
         <TouchableOpacity
           onPress={() => setIncludeAppInfo(v => !v)}
@@ -2547,7 +2657,9 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
             <Text style={styles.bugAppInfoPreview}>{appInfoLine}</Text>
           </View>
           <View style={[styles.settingToggle, includeAppInfo && { borderColor: '#D68097', backgroundColor: '#D6809722' }]}>
-            <Text style={styles.settingToggleText}>{includeAppInfo ? 'ON' : 'OFF'}</Text>
+            <Text style={[styles.settingToggleText, includeAppInfo && { color: '#D68097' }]}>
+              {includeAppInfo ? 'ON' : 'OFF'}
+            </Text>
           </View>
         </TouchableOpacity>
         <Text style={styles.bugAppInfoHint}>
@@ -2566,6 +2678,11 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
             <Text style={styles.bugSendText}>SEND</Text>
           )}
         </TouchableOpacity>
+        {sentInline ? (
+          <Text style={styles.notifHint}>
+            Sent. Thank you, the developer will see it soon.
+          </Text>
+        ) : null}
       </ScrollView>
     </View>
   );
