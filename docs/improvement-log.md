@@ -430,3 +430,48 @@ then the wrap-up report.
   refreshed (flagged in the ASO doc's fix-first list).
 
 ---
+
+## Cycles 9 to 12: CI, responsive leftovers, cache hygiene, screenshots
+
+- **Date:** 2026-07-09
+- **Goal:** The follow-up loop: automate the checks, close the two known
+  responsive/storage leftovers, and produce draft store screenshots.
+
+### What was implemented
+
+- **Cycle 9, CI:** `.github/workflows/ci.yml` runs typecheck, the jest
+  suite, and the web export on every push and pull request. The export
+  step is the bundle smoke test; Sentry sourcemap upload skips itself
+  when no token is present.
+- **Cycle 10, More tab padding:** all 16 sub-page ScrollViews now append
+  an insets-aware bottom pad from a shared `useSubBodyPad` hook; the
+  hardcoded `paddingBottom: 120` is gone.
+- **Cycle 11, cache hygiene:** HoroscopesView sweeps stale dated daily
+  cache keys on mount, ending the one-key-per-sign-per-day accumulation.
+- **Cycle 12, screenshots:** `scripts/capture-screenshots.mjs` serves the
+  exported web build, drives the real app with Playwright through system
+  Chrome (walkthrough, tone session, soundscape layering, Settings,
+  breath mandala), and captures the five planned shots at 1080x2400 into
+  `docs/screenshots/`. The run doubles as an end-to-end check: every
+  feature from cycles 1 to 8 rendered and responded correctly.
+
+### Files changed
+
+- New: `.github/workflows/ci.yml`, `scripts/capture-screenshots.mjs`,
+  `docs/screenshots/` (5 PNGs + README).
+- Modified: `MoreView.tsx`, `HoroscopesView.tsx`.
+
+### Tests run
+
+- `npx tsc --noEmit`: pass. `npm test`: 58/58 pass.
+- `npm run build:web`: exports cleanly; the capture run exercised the
+  built app in Chrome end to end.
+
+### Known risks
+
+- CI has never executed on GitHub yet; the first push will prove the
+  workflow (watch the web-export step, it is the slowest).
+- Draft screenshots come from the web build; recapture on Android before
+  uploading to the Play Console (note in docs/screenshots/README.md).
+
+---
