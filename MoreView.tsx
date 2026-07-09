@@ -34,6 +34,7 @@ import {
   type IconProps,
 } from 'phosphor-react-native';
 import Constants from 'expo-constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
 import { openStoreListing } from './lib/rateApp';
@@ -184,6 +185,13 @@ function safeParse<T>(raw: string | null, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+// Sub-page scroll bodies clear the tab bar on gesture-nav devices. 120 was
+// close on classic nav bars and short on tall insets.
+function useSubBodyPad() {
+  const insets = useSafeAreaInsets();
+  return { paddingBottom: insets.bottom + 96 };
 }
 
 export default function MoreView({
@@ -783,6 +791,7 @@ function AffirmationsPage({
   isExpoGo: boolean;
   onBack: () => void;
 }) {
+  const subBodyPad = useSubBodyPad();
   // Warn when a reminder is chosen but the OS has notifications turned off.
   // Skipped on web and in Expo Go, where local notifications don't apply.
   const [notifBlocked, setNotifBlocked] = useState(false);
@@ -801,7 +810,7 @@ function AffirmationsPage({
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Daily Affirmation" accent="#9DC7AC" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>TODAY</Text>
         <Text style={styles.sectionSub}>
           One intention, repeated, becomes a frame for the day. Read it once, then carry on.
@@ -883,6 +892,7 @@ function MoodPage({
   onSaveMoodAt: (ts: number, v: number) => void;
   onBack: () => void;
 }) {
+  const subBodyPad = useSubBodyPad();
   const today = new Date();
   const moodToday = moodLog.find(
     m => new Date(m.ts).toDateString() === today.toDateString(),
@@ -929,7 +939,7 @@ function MoodPage({
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Mood" accent="#8FB8DE" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>RIGHT NOW</Text>
         <Text style={styles.sectionSub}>
           A 5-second check-in. Patterns in what lifts and drains you surface over weeks.
@@ -1253,6 +1263,7 @@ function GratitudePage({
   onDelete: (ts: number) => void;
   onBack: () => void;
 }) {
+  const subBodyPad = useSubBodyPad();
   const [text, setText] = useState('');
   const [reminder, setReminder] = useState<GratReminderHour>('off');
 
@@ -1303,7 +1314,7 @@ function GratitudePage({
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Gratitude" accent="#E0A470" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>TODAY</Text>
         <Text style={styles.sectionSub}>
           One thing you appreciate, named daily, shifts attention toward what's working. Saved only on this device.
@@ -1402,6 +1413,7 @@ function RantPage({
   onDelete: (ts: number) => void;
   onBack: () => void;
 }) {
+  const subBodyPad = useSubBodyPad();
   const [text, setText] = useState('');
 
   function commit() {
@@ -1413,7 +1425,7 @@ function RantPage({
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Rant" accent="#D68097" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>WHAT'S ON YOUR MIND</Text>
         <Text style={styles.sectionSub}>
           Name the noise to quiet it. Stored only on this device; shared with AI Insights only if you opt in there.
@@ -1475,6 +1487,7 @@ function ManifestationPage({
   onDelete: (ts: number) => void;
   onBack: () => void;
 }) {
+  const subBodyPad = useSubBodyPad();
   const [text, setText] = useState('');
 
   function commit() {
@@ -1489,7 +1502,7 @@ function ManifestationPage({
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Manifestation" accent="#B39BE0" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>NEW INTENTION</Text>
         <Text style={styles.sectionSub}>
           Writing what you're calling in clarifies it. Mark it manifested when it lands.
@@ -1578,6 +1591,7 @@ function ManifestRow({
 // ===========================================================================
 
 function GroundingPage({ onBack }: { onBack: () => void }) {
+  const subBodyPad = useSubBodyPad();
   const items = [
     { num: 5, color: '#E07A66', sense: 'see' },
     { num: 4, color: '#E0A470', sense: 'touch' },
@@ -1588,7 +1602,7 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="5-4-3-2-1 Grounding" accent="#8F97DE" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>THE PRACTICE</Text>
         <Text style={styles.sectionSub}>
           Five senses pull a looping mind back into the room, in about 60 to 90 seconds.
@@ -1643,10 +1657,11 @@ const ROADMAP: Array<{ phase: string; items: Array<{ title: string; blurb: strin
 ];
 
 function SupportPage({ onBack }: { onBack: () => void }) {
+  const subBodyPad = useSubBodyPad();
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Support" accent="#d9b35c" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <View style={styles.supportHero}>
           <Text style={styles.supportEmoji}>☕</Text>
           <Text style={styles.supportHeadline}>Support the developer</Text>
@@ -1831,12 +1846,13 @@ function SettingsPage({
   onChangeSingleColor: (c: string | null) => void;
   onReplayOnboarding: () => void;
 }) {
+  const subBodyPad = useSubBodyPad();
   const on = singleColor != null;
   const [pendingOpenUrl, setPendingOpenUrl] = useState<string | null>(null);
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Settings" accent="#d9b35c" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>BACKGROUND</Text>
         <Text style={styles.sectionSub}>
           The backdrop normally shifts color with the active frequency band.
@@ -1943,6 +1959,7 @@ function SettingsPage({
 }
 
 function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Promise<void> }) {
+  const subBodyPad = useSubBodyPad();
   // Holds the URL to confirm-open, or null. Used by both the Privacy Policy
   // and Terms of Service links so we have one confirm modal, two triggers.
   const [pendingOpenUrl, setPendingOpenUrl] = useState<string | null>(null);
@@ -1960,7 +1977,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Safety & Disclaimer" accent="#9aa0b4" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <SafetyContent />
 
         <Text style={styles.sectionLabel}>PRIVACY POLICY</Text>
@@ -2056,6 +2073,7 @@ function buildAppInfoLine(): string {
 }
 
 function BugReportPage({ onBack }: { onBack: () => void }) {
+  const subBodyPad = useSubBodyPad();
   const [kind, setKind] = useState<MessageKind>('feedback');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -2139,7 +2157,7 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Feedback" accent="#D68097" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>WHAT KIND OF MESSAGE?</Text>
         <View style={styles.notifPills}>
           {MESSAGE_KINDS.map(k => (
@@ -2249,6 +2267,7 @@ function mbtiGroupFor(type: string) {
 }
 
 function ProfilePage({ onBack }: { onBack: () => void }) {
+  const subBodyPad = useSubBodyPad();
   const [profile, setProfile] = useState<Profile>({});
   const [answers, setAnswers] = useState<Array<0 | 1 | null>>([null, null, null, null]);
 
@@ -2280,7 +2299,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Profile" accent="#B39BE0" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>YOU</Text>
         <Text style={styles.sectionSub}>Stored only on this device.</Text>
 
@@ -2370,6 +2389,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
 // ===========================================================================
 
 function NatalChartPage({ onBack }: { onBack: () => void }) {
+  const subBodyPad = useSubBodyPad();
   const [profile, setProfile] = useState<Profile>({});
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_PROFILE).then(v => {
@@ -2389,7 +2409,7 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Natal Chart" accent="#8F97DE" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>YOUR BIRTH DETAILS</Text>
         {profile.name || profile.birthDate ? (
           <View style={styles.compatCard}>
@@ -2487,10 +2507,11 @@ const SAMPLE_ROUTINES: Routine[] = [
 ];
 
 function RoutinesPage({ onBack }: { onBack: () => void }) {
+  const subBodyPad = useSubBodyPad();
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Routines" accent="#9DC7AC" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>SAMPLE ROUTINES</Text>
         <Text style={styles.sectionSub}>
           A routine chains preset frequencies into a longer session. Follow the steps from the
@@ -2547,6 +2568,7 @@ function SoundscapesPage({
   onToggleSoundscape: (id: string) => void;
   onChangeSoundscapeVolume: (v: number) => void;
 }) {
+  const subBodyPad = useSubBodyPad();
   const activeName = activeSoundscapeId
     ? soundscapes.find(s => s.id === activeSoundscapeId)?.name ?? 'Ambient layer'
     : 'No layer selected';
@@ -2554,7 +2576,7 @@ function SoundscapesPage({
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Soundscapes" accent="#8FB8DE" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>NATURAL AMBIENCE</Text>
         <Text style={styles.sectionSub}>
           Subtle generated ambience layered under your binaural tones. It stays local
@@ -2626,6 +2648,7 @@ function SoundscapesPage({
 // ===========================================================================
 
 function CompatibilityPage({ onBack }: { onBack: () => void }) {
+  const subBodyPad = useSubBodyPad();
   const [self, setSelf] = useState<Profile>({});
   const [partner, setPartner] = useState<Profile>({});
 
@@ -2649,7 +2672,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="Compatibility" accent="#D8A0B0" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>YOUR PROFILE</Text>
         {self.name || self.birthDate ? (
           <View style={styles.compatCard}>
@@ -2726,6 +2749,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
 const GEMINI_KEY_URL = 'https://aistudio.google.com/apikey';
 
 function InsightsPage({ onBack }: { onBack: () => void }) {
+  const subBodyPad = useSubBodyPad();
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
@@ -2880,7 +2904,7 @@ function InsightsPage({ onBack }: { onBack: () => void }) {
   return (
     <View style={{ flex: 1 }}>
       <SubHeader title="AI Insights" accent="#8FB8DE" onBack={onBack} />
-      <ScrollView contentContainerStyle={styles.subBody} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>GEMINI API KEY</Text>
         <Text style={styles.sectionSub}>
           Free at{' '}
@@ -3102,7 +3126,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textAlign: 'center',
   },
-  subBody: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 120 },
+  subBody: { paddingHorizontal: 20, paddingTop: 4 },
 
   // Section rhythm: every section starts with this label; the baked-in
   // margins keep spacing consistent without inline overrides.
