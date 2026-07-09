@@ -34,6 +34,8 @@ import {
   type IconProps,
 } from 'phosphor-react-native';
 import Constants from 'expo-constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { AmbientPageShell, GlowCard, EmptyStateCard, ActionPill, PromptChip } from './MoreUI';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
@@ -494,6 +496,14 @@ export default function MoreView({
             { transform: [{ translateX: subTranslateX }], backgroundColor: '#0B0B1F' },
           ]}
         >
+          {/* Moonlit base so sub-pages sit on layered depth instead of one
+              flat navy field; each page adds its own accent wash on top. */}
+          <LinearGradient
+            colors={['#141530', '#0B0B1F', '#0d0e26']}
+            locations={[0, 0.55, 1]}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
           {page === 'profile' && (
             <ProfilePage onBack={close} />
           )}
@@ -754,7 +764,7 @@ function Hub({
             Icon={CloudLightning}
             accent="#8FB8DE"
             label="Rant"
-            sub="Vent it out. Raw, private, unfiltered"
+            sub="Pour it out. Keep it or release it"
             onPress={() => onOpen('rant')}
           />
           <HubTile
@@ -1686,6 +1696,14 @@ function GratitudePage({
 //   Rant
 // ===========================================================================
 
+// Starter prompts for a stuck mind; tapping one begins the draft.
+const RANT_PROMPTS = [
+  'I’m frustrated because…',
+  'I keep replaying…',
+  'What I wish I could say is…',
+  'I can let go of…',
+];
+
 function RantPage({
   entries, onSave, onDelete, onOpenGrounding, onBack,
 }: {
@@ -1726,34 +1744,49 @@ function RantPage({
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <SubHeader title="Rant" accent="#D68097" onBack={onBack} />
+    <AmbientPageShell accent="#D68097">
+      <SubHeader title="Release the Noise" accent="#D68097" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>WHAT'S ON YOUR MIND</Text>
+        <Text style={styles.sectionLabel}>A PRIVATE PLACE</Text>
         <Text style={styles.sectionSub}>
-          Name the noise to quiet it. Stored only on this device; shared with AI Insights only if you opt in there.
+          Pour out what is heavy. Keep it only if it helps.
         </Text>
-        <TextInput
-          style={[styles.gratInput, { minHeight: 140 }]}
-          placeholder="Let it out…"
-          placeholderTextColor="#ffffff77"
-          value={text}
-          onChangeText={setText}
-          multiline
-          maxLength={4000}
-        />
-        <TouchableOpacity onPress={commit} style={[styles.gratSaveBtn, { backgroundColor: '#D68097' }]} activeOpacity={0.85}>
-          <Text style={styles.gratSaveText}>KEEP</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={release}
-          activeOpacity={0.7}
-          style={styles.rantLetGoBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Let it go. Clears what you wrote and keeps nothing."
-        >
-          <Text style={styles.rantLetGoText}>Let it go</Text>
-        </TouchableOpacity>
+        <GlowCard accent="#D68097" style={{ marginTop: 10 }}>
+          <TextInput
+            style={styles.rantInput}
+            placeholder="Let it out…"
+            placeholderTextColor="#ffffff66"
+            value={text}
+            onChangeText={setText}
+            multiline
+            maxLength={4000}
+          />
+        </GlowCard>
+        {!text.trim() ? (
+          <View style={styles.rantChipsRow}>
+            {RANT_PROMPTS.map(p => (
+              <PromptChip key={p} label={p} accent="#D68097" onPress={() => setText(p + ' ')} />
+            ))}
+          </View>
+        ) : null}
+        <View style={styles.rantActionsRow}>
+          <ActionPill
+            label="Release it"
+            accent="#D68097"
+            kind="ghost"
+            disabled={!text.trim()}
+            onPress={release}
+          />
+          <ActionPill
+            label="Keep privately"
+            accent="#D68097"
+            disabled={!text.trim()}
+            onPress={commit}
+          />
+        </View>
+        <Text style={styles.bugAppInfoHint}>
+          Stays on this device. Shared with AI Insights only if you opt in there.
+        </Text>
         {justKept ? (
           <TouchableOpacity
             onPress={onOpenGrounding}
@@ -1768,9 +1801,14 @@ function RantPage({
           </TouchableOpacity>
         ) : null}
 
-        <Text style={styles.sectionLabel}>PAST RANTS</Text>
+        <Text style={styles.sectionLabel}>KEPT REFLECTIONS</Text>
         {entries.length === 0 ? (
-          <Text style={styles.emptyText}>Your first rant will live here.</Text>
+          <EmptyStateCard
+            glyph="☁"
+            accent="#D68097"
+            line="Your mind is clear here for now."
+            hint="When a thought feels worth keeping, it will rest here privately."
+          />
         ) : (
           entries.map(r => (
             <View key={r.ts} style={styles.gratItem}>
@@ -1806,7 +1844,7 @@ function RantPage({
           ))
         )}
       </ScrollView>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -4160,6 +4198,16 @@ const styles = StyleSheet.create({
 
   rantDate: { color: '#ffffff77', fontSize: 10, letterSpacing: 1.5, fontWeight: '700', marginBottom: 4 },
   rantLetGoBtn: { alignSelf: 'center', marginTop: 12, paddingVertical: 6, paddingHorizontal: 12 },
+  rantInput: {
+    color: '#fff', fontSize: 14.5, lineHeight: 22,
+    minHeight: 150, textAlignVertical: 'top',
+    paddingHorizontal: 16, paddingVertical: 14,
+  },
+  rantChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  rantActionsRow: {
+    flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center',
+    gap: 10, marginTop: 16,
+  },
   rantLetGoText: { color: '#ffffff88', fontSize: 12, letterSpacing: 1 },
 
   manifestCheck: { paddingRight: 12, paddingTop: 1 },
