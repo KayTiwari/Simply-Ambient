@@ -203,6 +203,25 @@ export default function HoroscopesView({
     return () => { mountedRef.current = false; };
   }, []);
 
+  // Daily cache keys embed the date, so without a sweep yesterday's entries
+  // would pile up forever (one per sign per day). Remove any daily key that
+  // is stamped with a different local day; monthly keys carry no date and
+  // stay bounded at one per sign.
+  useEffect(() => {
+    (async () => {
+      try {
+        const keys = await AsyncStorage.getAllKeys();
+        const today = localDayStamp();
+        const stale = keys.filter(k =>
+          k.startsWith('@simply_ambient_horo_') &&
+          /_daily_\d{4}-\d{2}-\d{2}_v1$/.test(k) &&
+          !k.endsWith(`_daily_${today}_v1`),
+        );
+        if (stale.length) await AsyncStorage.multiRemove(stale);
+      } catch {}
+    })();
+  }, []);
+
   async function drawSpread(n: SpreadSize) {
     setSpreadSize(n);
     setSpread(null);
