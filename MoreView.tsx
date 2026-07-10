@@ -2019,27 +2019,22 @@ function ManifestRow({
 //   Grounding / Support / Bug Report
 // ===========================================================================
 
+// One sense at a time, so the app holds the tempo for an anxious mind.
+const GROUND_STEPS = [
+  { num: 5, color: '#E07A66', sense: 'see',   guide: 'Look around. Name them one at a time, slowly.' },
+  { num: 4, color: '#E0A470', sense: 'touch', guide: 'Your clothes, the chair, the air on your skin.' },
+  { num: 3, color: '#D9BE7A', sense: 'hear',  guide: 'Near or far. Let each sound arrive on its own.' },
+  { num: 2, color: '#9DC7AC', sense: 'smell', guide: 'Lean into them, even if they are faint.' },
+  { num: 1, color: '#8FB8DE', sense: 'taste', guide: 'Even just the inside of your mouth counts.' },
+];
+
 function GroundingPage({ onBack }: { onBack: () => void }) {
   const subBodyPad = useSubBodyPad();
-  const items = [
-    { num: 5, color: '#E07A66', sense: 'see' },
-    { num: 4, color: '#E0A470', sense: 'touch' },
-    { num: 3, color: '#D9BE7A', sense: 'hear' },
-    { num: 2, color: '#9DC7AC', sense: 'smell' },
-    { num: 1, color: '#8FB8DE', sense: 'taste' },
-  ];
-  // Steps marked done this visit. Ephemeral by design: the state lives in
-  // this component, so leaving the page resets the walk.
-  const [done, setDone] = useState<Set<number>>(new Set());
-  function toggleDone(num: number) {
-    setDone(prev => {
-      const next = new Set(prev);
-      if (next.has(num)) next.delete(num);
-      else next.add(num);
-      return next;
-    });
-  }
-  const allDone = done.size === items.length;
+  // Position in the walk this visit. Ephemeral by design: the state lives
+  // in this component, so leaving the page resets the ritual.
+  const [step, setStep] = useState(0);
+  const finished = step >= GROUND_STEPS.length;
+  const current = finished ? null : GROUND_STEPS[step];
 
   return (
     <AmbientPageShell accent="#8F97DE">
@@ -2053,40 +2048,68 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
         <Text style={[styles.notifHint, { marginTop: 0, marginBottom: 12 }]}>
           A soundscape underneath can help. Soft Rain suits this well.
         </Text>
-        {items.map(it => {
-          const isDone = done.has(it.num);
-          const noun = it.num === 1 ? 'thing' : 'things';
-          return (
-            <TouchableOpacity
-              key={it.num}
-              activeOpacity={0.85}
-              onPress={() => toggleDone(it.num)}
-              accessibilityRole="button"
-              accessibilityLabel={`${it.num} ${noun} you can ${it.sense}`}
-              accessibilityState={{ checked: isDone }}
+
+        {current ? (
+          <GlowCard
+            accent={current.color}
+            style={styles.groundStepCard}
+          >
+            <Text style={styles.groundStepLabel}>STEP {step + 1} OF {GROUND_STEPS.length}</Text>
+            <Text style={[styles.groundBigNum, styles.groundStepNum, { color: current.color }]}>
+              {current.num}
+            </Text>
+            <Text style={styles.groundStepText}>
+              {current.num === 1 ? 'thing' : 'things'} you can{' '}
+              <Text style={styles.groundEm}>{current.sense}</Text>
+            </Text>
+            <Text style={styles.groundGuide}>{current.guide}</Text>
+          </GlowCard>
+        ) : (
+          <GlowCard accent="#8F97DE" style={styles.groundStepCard}>
+            <Text style={styles.groundStepLabel}>COMPLETE</Text>
+            <Text style={styles.groundGuide}>
+              You are here. Take one more slow breath before you go.
+            </Text>
+          </GlowCard>
+        )}
+
+        <View style={styles.groundDotsRow} accessibilityLabel={`Step ${Math.min(step + 1, 5)} of 5`}>
+          {GROUND_STEPS.map((s, i) => (
+            <View
+              key={s.num}
               style={[
-                styles.groundCard,
-                { borderColor: it.color + '30', backgroundColor: it.color + '0D' },
-                isDone && { borderColor: it.color, backgroundColor: it.color + '22' },
+                styles.groundDot,
+                i < step && { backgroundColor: s.color },
+                i === step && !finished && { backgroundColor: 'rgba(255,255,255,0.85)' },
               ]}
-            >
-              <Text style={[styles.groundBigNum, { color: it.color }, isDone && { opacity: 0.35 }]}>
-                {it.num}
-              </Text>
-              <Text style={styles.groundCardText}>
-                {noun} you can <Text style={styles.groundEm}>{it.sense}</Text>
-              </Text>
-              {isDone ? (
-                <Text style={[styles.groundCheck, { color: it.color }]}>✓</Text>
-              ) : null}
-            </TouchableOpacity>
-          );
-        })}
-        <Text style={styles.groundOutro}>
-          {allDone
-            ? 'You are here. Take one more slow breath before you go.'
-            : 'Notice them slowly. Name them aloud or silently. Let each one anchor you a little more firmly to the present.'}
-        </Text>
+            />
+          ))}
+        </View>
+
+        <View style={styles.rantActionsRow}>
+          {step > 0 ? (
+            <ActionPill
+              label="Begin again"
+              accent="#8F97DE"
+              kind="ghost"
+              onPress={() => setStep(0)}
+            />
+          ) : null}
+          {!finished ? (
+            <ActionPill
+              label={step === GROUND_STEPS.length - 1 ? 'Finish' : 'Done, next'}
+              accent={current?.color ?? '#8F97DE'}
+              onPress={() => setStep(s => s + 1)}
+            />
+          ) : null}
+        </View>
+
+        {!finished ? (
+          <Text style={styles.groundOutro}>
+            Notice them slowly. Name them aloud or silently. Let each one anchor
+            you a little more firmly to the present.
+          </Text>
+        ) : null}
       </ScrollView>
     </AmbientPageShell>
   );
@@ -3764,6 +3787,11 @@ function InsightsPage({
               </Text>
             </GlowCard>
             <View style={styles.dreamPage}>
+              <LinearGradient
+                colors={['#d9b35c14', 'transparent']}
+                style={styles.dreamGlow}
+                pointerEvents="none"
+              />
               <Text style={styles.dreamDate}>A week, read gently</Text>
               <View style={styles.dreamRule} />
               <Text style={styles.dreamBody}>{EXAMPLE_REFLECTION}</Text>
@@ -3901,6 +3929,11 @@ function InsightsPage({
 
         {(loading || reflection) ? (
           <View style={styles.dreamPage}>
+            <LinearGradient
+              colors={['#d9b35c14', 'transparent']}
+              style={styles.dreamGlow}
+              pointerEvents="none"
+            />
             <Text style={styles.dreamDate}>
               {loading || !reflection
                 ? today
@@ -4263,20 +4296,30 @@ const styles = StyleSheet.create({
   },
   manifestCheckMark: { color: '#fff', fontSize: 13, fontWeight: '800', lineHeight: 14 },
 
-  // Grounding
-  groundCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.045)',
-    borderRadius: 14, padding: 16, marginBottom: 8,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-  },
+  // Grounding (one step at a time inside a GlowCard)
   groundBigNum: { fontSize: 36, fontWeight: '300', width: 60, textAlign: 'center' },
-  groundCardText: { color: '#ffffffcc', fontSize: 16, flex: 1 },
   groundEm: { color: '#fff', fontWeight: '700' },
-  groundCheck: { fontSize: 16, fontWeight: '700', marginLeft: 10 },
   groundOutro: {
     color: '#ffffff88', fontSize: 12, lineHeight: 18,
     textAlign: 'center', marginTop: 14,
+  },
+  groundStepCard: { alignItems: 'center', paddingVertical: 26, paddingHorizontal: 20 },
+  groundStepLabel: {
+    color: '#ffffff66', fontSize: 10, letterSpacing: 2, fontWeight: '700',
+    marginBottom: 8,
+  },
+  groundStepNum: { fontSize: 52, width: undefined },
+  groundStepText: { color: '#ffffffcc', fontSize: 16, marginTop: 2 },
+  groundGuide: {
+    color: '#ffffffB0', fontSize: 13.5, lineHeight: 20,
+    textAlign: 'center', marginTop: 10,
+  },
+  groundDotsRow: {
+    flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 16,
+  },
+  groundDot: {
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
 
   // Support (the hero surface itself is a GlowCard now)
@@ -4527,7 +4570,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1, borderColor: 'rgba(217,179,92,0.28)',
     shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    overflow: 'hidden',
   },
+  // Faint candle glow inside the dream page, top-lit like a reading lamp.
+  dreamGlow: { position: 'absolute', top: 0, left: 0, right: 0, height: 120 },
   dreamDate: {
     color: '#d9b35c',
     fontFamily: 'CormorantGaramond_500Medium',

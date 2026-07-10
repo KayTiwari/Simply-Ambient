@@ -77,13 +77,20 @@ Every batch: `npx tsc --noEmit` exit 0, `npm test` 58/58. Web export
 clean after each batch; Playwright drove the built app and captured the
 redesigned pages (Rant, Feedback, Insights, Support verified by eye).
 
+## Follow-up pass (shipped)
+
+- AmbientPageShell washes now fade in over 600ms when a page opens; a
+  transition rather than ambient motion, so the stillness rule holds.
+- Grounding became the one-card-at-a-time stepper: STEP n OF 5 in a
+  sense-tinted GlowCard with a per-sense guidance line, colored progress
+  dots, "Done, next" in the sense color, "Begin again" as the ghost, and
+  the completion breath at the end. State stays ephemeral.
+- The dream reflection card keeps its candlelit paper shape and gains a
+  faint top-lit gold glow inside its own frame (both the example and the
+  live reflection).
+
 ## Remaining ideas
 
-- Motion: a slow fade-in on the accent wash when a page opens (the app
-  already freezes ambient motion when no tone plays; any motion here
-  should respect that).
-- The dream reflection card could pick up a faint gold GlowCard treatment
-  without losing its candlelit identity.
-- Grounding one-card-at-a-time stepper remains the ideal ritual form.
 - Recapture all store screenshots on Android; the More set is web-draft
-  quality.
+  quality. No Android tooling exists on this machine (no adb), so this
+  needs a device or emulator.

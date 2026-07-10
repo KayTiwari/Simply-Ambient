@@ -11,8 +11,8 @@
 //                   together in one row.
 // PromptChip        a small starter-prompt pill for writing surfaces.
 
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View, type ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 export function AmbientPageShell({
@@ -22,19 +22,32 @@ export function AmbientPageShell({
   accent: string;
   children: React.ReactNode;
 }) {
+  // One gentle fade-in when the page opens, then stillness. This is a page
+  // transition rather than ambient motion, so it respects the app's rule
+  // that backgrounds hold still while no tone is playing.
+  const washOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(washOpacity, {
+      toValue: 1,
+      duration: 600,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [washOpacity]);
+
   return (
     <View style={{ flex: 1 }}>
-      <LinearGradient
-        colors={[accent + '1C', accent + '08', 'transparent']}
-        locations={[0, 0.45, 1]}
-        style={styles.topWash}
-        pointerEvents="none"
-      />
-      <LinearGradient
-        colors={['transparent', '#181236']}
-        style={styles.bottomDepth}
-        pointerEvents="none"
-      />
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: washOpacity }]} pointerEvents="none">
+        <LinearGradient
+          colors={[accent + '1C', accent + '08', 'transparent']}
+          locations={[0, 0.45, 1]}
+          style={styles.topWash}
+        />
+        <LinearGradient
+          colors={['transparent', '#181236']}
+          style={styles.bottomDepth}
+        />
+      </Animated.View>
       {children}
     </View>
   );
