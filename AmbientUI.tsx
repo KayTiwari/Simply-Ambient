@@ -193,17 +193,19 @@ export function EditorialHeader({
   subtitle,
   accent,
   compact = false,
+  centerBrand = false,
 }: {
   mode: string;
   title: string;
   subtitle?: string;
   accent: string;
   compact?: boolean;
+  centerBrand?: boolean;
 }) {
   return (
     <View style={[shared.header, compact && shared.headerCompact]}>
-      <View style={shared.brandRow}>
-        <Text style={shared.brand}>Simply Ambient</Text>
+      <View style={[shared.brandRow, centerBrand && shared.brandRowCentered]}>
+        <Text style={[shared.brand, centerBrand && shared.brandCentered]}>Simply Ambient</Text>
       </View>
       <Text accessibilityRole="header" style={[shared.pageTitle, compact && shared.pageTitleCompact]}>{title}</Text>
       {subtitle ? (
@@ -376,12 +378,14 @@ const shared = StyleSheet.create({
   header: { paddingTop: 14, paddingHorizontal: 22, paddingBottom: 18 },
   headerCompact: { paddingTop: 8, paddingBottom: 12 },
   brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  brandRowCentered: { justifyContent: 'center' },
   brand: {
     color: '#FAF8FF',
     fontFamily: 'CormorantGaramond_500Medium',
     fontSize: 20,
     letterSpacing: 1.2,
   },
+  brandCentered: { textAlign: 'center' },
   pageTitle: {
     color: '#FFFDFE',
     fontFamily: 'CormorantGaramond_500Medium',

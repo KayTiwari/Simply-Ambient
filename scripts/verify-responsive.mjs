@@ -82,8 +82,9 @@ const exerciseRooms = async width => {
   await page.getByText('BEGIN PRACTICE', { exact: true }).waitFor({ state: 'visible' });
   await assertNoRootOverflow(`${width} breath practice`);
   const phaseTones = page.getByLabel('Eyes-closed phase tones', { exact: true });
-  await phaseTones.click();
-  await phaseTones.getByText('ON', { exact: true }).waitFor({ state: 'visible' });
+  const phaseTonesOn = phaseTones.getByText('ON', { exact: true });
+  if (!(await phaseTonesOn.isVisible().catch(() => false))) await phaseTones.click();
+  await phaseTonesOn.waitFor({ state: 'visible' });
   await page.getByLabel('Begin breathing practice', { exact: true }).click();
   await page.getByLabel('End breathing practice', { exact: true }).waitFor({ state: 'visible' });
   await page.getByLabel('End breathing practice', { exact: true }).click();

@@ -2666,11 +2666,27 @@ function MiniPlayer({
 
   return (
     <Animated.View
-      style={{
-        opacity: barOpacity,
-        transform: [{ translateY: barOffset }],
-      }}
+      style={[
+        styles.miniPlayerDock,
+        {
+          opacity: barOpacity,
+          transform: [{ translateY: barOffset }],
+        },
+      ]}
     >
+      <LinearGradient
+        colors={[
+          'rgba(6,8,22,0.56)',
+          'rgba(16,19,38,0.43)',
+          'rgba(5,7,20,0.60)',
+        ]}
+        locations={[0, 0.48, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View style={styles.miniPlayerDockSheen} pointerEvents="none" />
       <View
         style={[styles.miniPlayer, { borderColor: accent + '66' }]}
       >
@@ -2954,16 +2970,14 @@ function FrequenciesView(props: FreqViewProps) {
         showsVerticalScrollIndicator={false}
       >
       <View style={styles.freqEnsoWrap} pointerEvents="none">
-        <View style={styles.freqEnsoMark}>
-          <View style={styles.freqEnsoArc} />
-          <View style={styles.freqEnsoDot} />
-        </View>
+        <View style={styles.enso} />
       </View>
       <View style={styles.freqEditorialHeader}>
         <EditorialHeader
           mode={isTonePlaying ? 'LIVE SESSION' : 'CREATE'}
           title="Shape the signal"
           accent={beatColor}
+          centerBrand
         />
       </View>
 
@@ -3624,16 +3638,6 @@ const styles = StyleSheet.create({
   },
   freqEditorialHeader: { marginHorizontal: -20, paddingTop: 8 },
   freqEnsoWrap: { alignItems: 'center', paddingTop: 12, marginBottom: -2 },
-  freqEnsoMark: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
-  freqEnsoArc: {
-    position: 'absolute', width: 46, height: 46, borderRadius: 23,
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.64)',
-    borderTopColor: 'transparent', transform: [{ rotate: '-24deg' }],
-  },
-  freqEnsoDot: {
-    position: 'absolute', width: 5, height: 5, borderRadius: 3,
-    top: 5, right: 12, backgroundColor: 'rgba(255,255,255,0.78)',
-  },
   freqAffirmationCard: {
     marginBottom: 14, paddingHorizontal: 17, paddingVertical: 14, minHeight: 92,
   },
@@ -3985,6 +3989,29 @@ const styles = StyleSheet.create({
   },
 
 
+  miniPlayerDock: {
+    paddingTop: 7,
+    backgroundColor: 'rgba(7,8,24,0.38)',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.09)',
+    shadowColor: '#000',
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: -5 },
+    elevation: 7,
+    ...(Platform.OS === 'web'
+      ? ({ backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' } as any)
+      : {}),
+  },
+  miniPlayerDockSheen: {
+    position: 'absolute',
+    top: 0,
+    left: 16,
+    right: 16,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
   miniPlayer: {
     flexDirection: 'row',
     alignItems: 'center',
