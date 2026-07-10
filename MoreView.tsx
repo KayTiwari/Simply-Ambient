@@ -2143,10 +2143,10 @@ const ROADMAP: Array<{
 function SupportPage({ onBack }: { onBack: () => void }) {
   const subBodyPad = useSubBodyPad();
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#d9b35c">
       <SubHeader title="Support" accent="#d9b35c" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
-        <View style={styles.supportHero}>
+        <GlowCard accent="#d9b35c" style={{ padding: 22, marginTop: 8, alignItems: 'center' }}>
           <Text style={styles.supportEmoji}>☕</Text>
           <Text style={styles.supportHeadline}>Built by one person</Text>
           <Text style={styles.supportText}>
@@ -2160,7 +2160,7 @@ function SupportPage({ onBack }: { onBack: () => void }) {
           >
             <Text style={styles.supportBtnText}>BUY A COFFEE</Text>
           </TouchableOpacity>
-        </View>
+        </GlowCard>
 
         {ROADMAP.map(group => (
           <View key={group.phase}>
@@ -2200,7 +2200,7 @@ function SupportPage({ onBack }: { onBack: () => void }) {
           Donations are entirely optional. Thank you for being here either way.
         </Text>
       </ScrollView>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -2374,7 +2374,7 @@ function SettingsPage({
   const on = singleColor != null;
   const [pendingOpenUrl, setPendingOpenUrl] = useState<string | null>(null);
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#d9b35c">
       <SubHeader title="Settings" accent="#d9b35c" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>BACKGROUND</Text>
@@ -2505,7 +2505,7 @@ function SettingsPage({
       </ScrollView>
 
       <LinkConfirmModal url={pendingOpenUrl} onClose={() => setPendingOpenUrl(null)} />
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -2526,7 +2526,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#9aa0b4">
       <SubHeader title="Safety & Disclaimer" accent="#9aa0b4" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <SafetyContent />
@@ -2611,7 +2611,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
           </View>
         </View>
       </Modal>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -2720,7 +2720,7 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#D68097">
       <SubHeader title="Feedback" accent="#D68097" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>MESSAGE TYPE</Text>
@@ -2748,27 +2748,30 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
           Delivered to the developer through a simple mail relay. If that fails,
           your mail app opens with everything pre-filled.
         </Text>
-        <TextInput
-          style={styles.bugInput}
-          placeholder="Subject"
-          placeholderTextColor="#ffffff77"
-          value={subject}
-          onChangeText={t => { setSubject(t); setSentInline(false); }}
-          maxLength={120}
-        />
-        <TextInput
-          style={[styles.bugInput, { minHeight: 140, textAlignVertical: 'top' }]}
-          placeholder={
-            kind === 'bug'
-              ? 'Describe what happened, what you expected, and what device you’re on…'
-              : 'What’s on your mind? Anything helps, from a single line to an essay…'
-          }
-          placeholderTextColor="#ffffff77"
-          value={body}
-          onChangeText={t => { setBody(t); setSentInline(false); }}
-          multiline
-          maxLength={2000}
-        />
+        <GlowCard accent="#D68097" style={{ marginTop: 10 }}>
+          <TextInput
+            style={styles.bugSubjectInput}
+            placeholder="Subject"
+            placeholderTextColor="#ffffff77"
+            value={subject}
+            onChangeText={t => { setSubject(t); setSentInline(false); }}
+            maxLength={120}
+          />
+          <View style={styles.bugInputDivider} />
+          <TextInput
+            style={[styles.rantInput, { minHeight: 140 }]}
+            placeholder={
+              kind === 'bug'
+                ? 'Describe what happened, what you expected, and what device you’re on…'
+                : 'What’s on your mind? Anything helps, from a single line to an essay…'
+            }
+            placeholderTextColor="#ffffff77"
+            value={body}
+            onChangeText={t => { setBody(t); setSentInline(false); }}
+            multiline
+            maxLength={2000}
+          />
+        </GlowCard>
         {body.length >= 1800 ? (
           <Text style={styles.bugAppInfoPreview}>{body.length} / 2000</Text>
         ) : null}
@@ -2812,7 +2815,7 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
           </Text>
         ) : null}
       </ScrollView>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -2854,7 +2857,7 @@ function SunSignCard({
   showIntention?: boolean;
 }) {
   return (
-    <View style={[styles.compatCard, styles.sunSignCard]}>
+    <GlowCard accent="#B39BE0" style={[styles.sunSignCard, { padding: 14 }]}>
       <Text style={[styles.sunSignGlyph, { color: sign.color }]}>{sign.glyph}</Text>
       <View style={{ flex: 1 }}>
         <Text style={styles.compatName}>{sign.name}</Text>
@@ -2864,7 +2867,7 @@ function SunSignCard({
         ) : null}
         <Text style={styles.sunSignCaption}>{caption}</Text>
       </View>
-    </View>
+    </GlowCard>
   );
 }
 
@@ -2919,7 +2922,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
   const sunSign = sunSignFromBirthDate(profile.birthDate);
 
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#B39BE0">
       <SubHeader title="Profile" accent="#B39BE0" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>YOU</Text>
@@ -3002,7 +3005,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
 
         {profile.mbti ? (
           <>
-            <View style={styles.mbtiResult}>
+            <GlowCard accent="#B39BE0" style={{ marginTop: 18, padding: 18, alignItems: 'center' }}>
               <Text style={styles.mbtiResultType}>{profile.mbti}</Text>
               {mbtiGroup ? (
                 <>
@@ -3010,7 +3013,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
                   <Text style={styles.mbtiResultBlurb}>{mbtiGroup.blurb}</Text>
                 </>
               ) : null}
-            </View>
+            </GlowCard>
             <TouchableOpacity
               onPress={retakeQuiz}
               style={styles.rantLetGoBtn}
@@ -3023,7 +3026,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
           </>
         ) : null}
       </ScrollView>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -3049,7 +3052,7 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
   const ready = sunSign !== null;
 
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#B39BE0">
       <SubHeader title="Natal Chart" accent="#B39BE0" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         {sunSign ? (
@@ -3120,7 +3123,7 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
       </ScrollView>
 
       <LinkConfirmModal url={pendingOpenUrl} onClose={() => setPendingOpenUrl(null)} />
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -3408,7 +3411,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
   );
 
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#D8A0B0">
       <SubHeader title="Compatibility" accent="#D8A0B0" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>YOUR PROFILE</Text>
@@ -3481,7 +3484,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
         {selfSign && partnerSign ? (
           <>
             <Text style={styles.sectionLabel}>HOW YOUR SIGNS MEET</Text>
-            <View style={styles.compatCard}>
+            <GlowCard accent="#D8A0B0" style={{ padding: 14 }}>
               <View style={styles.compatSignsRow}>
                 <View style={styles.compatSignCol}>
                   <Text style={[styles.compatPairGlyph, { color: selfSign.color }]}>
@@ -3505,7 +3508,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
               <Text style={styles.sunSignCaption}>
                 A traditional astrology lens on how your elements meet. Take what resonates.
               </Text>
-            </View>
+            </GlowCard>
           </>
         ) : null}
 
@@ -3516,7 +3519,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
           </Text>
         </View>
       </ScrollView>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -3747,19 +3750,19 @@ function InsightsPage({
   });
 
   return (
-    <View style={{ flex: 1 }}>
+    <AmbientPageShell accent="#8FB8DE">
       <SubHeader title="AI Insights" accent="#8FB8DE" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         {!hasKey ? (
           <>
-            <View style={[styles.supportHero, { marginTop: 16 }]}>
+            <GlowCard accent="#8FB8DE" style={{ marginTop: 16, padding: 22, alignItems: 'center' }}>
               <Text style={styles.supportHeadline}>A quiet reader for your journal</Text>
               <Text style={[styles.supportText, { marginBottom: 0 }]}>
                 Your mood, gratitude, and manifestations already hold patterns. With a free
                 Gemini key, this page writes you a short reflection in the style of a dream
                 journal. Everything stays on this device until you choose to share it.
               </Text>
-            </View>
+            </GlowCard>
             <View style={styles.dreamPage}>
               <Text style={styles.dreamDate}>A week, read gently</Text>
               <View style={styles.dreamRule} />
@@ -3961,7 +3964,7 @@ function InsightsPage({
           </View>
         </View>
       </Modal>
-    </View>
+    </AmbientPageShell>
   );
 }
 
@@ -4276,13 +4279,7 @@ const styles = StyleSheet.create({
     textAlign: 'center', marginTop: 14,
   },
 
-  // Support
-  supportHero: {
-    backgroundColor: 'rgba(255,255,255,0.045)',
-    borderRadius: 18, padding: 22, marginTop: 8,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    alignItems: 'center',
-  },
+  // Support (the hero surface itself is a GlowCard now)
   supportEmoji: { fontSize: 44, marginBottom: 8 },
   supportHeadline: {
     color: '#fff',
@@ -4394,12 +4391,15 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 999,
   },
 
-  // Bug
-  bugInput: {
-    color: '#fff', fontSize: 13,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10,
-    marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+  // Bug: borderless inputs that live inside one GlowCard. The subject is a
+  // single-line variant of the rantInput idiom; a hairline keeps them apart.
+  bugSubjectInput: {
+    color: '#fff', fontSize: 14.5,
+    paddingHorizontal: 16, paddingVertical: 14,
+  },
+  bugInputDivider: {
+    height: 1, marginHorizontal: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   bugSendBtn: {
     paddingVertical: 13, borderRadius: 999, marginTop: 16,
@@ -4440,12 +4440,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   mbtiOptionText: { color: '#ffffffcc', fontSize: 13 },
-  mbtiResult: {
-    marginTop: 18,
-    backgroundColor: '#B39BE022',
-    borderWidth: 1, borderColor: '#B39BE0',
-    borderRadius: 14, padding: 18, alignItems: 'center',
-  },
   // Kept quiet on purpose: the temperament group carries the emphasis.
   mbtiResultType: {
     color: '#fff',
