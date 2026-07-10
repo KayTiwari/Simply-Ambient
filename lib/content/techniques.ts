@@ -48,7 +48,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: 'box', name: 'Box Breathing', category: 'calming',
     blurb: '4 · 4 · 4 · 4',
-    description: 'Equal inhale, hold, exhale, hold. Used by Navy SEALs to steady the nervous system.',
+    description: 'Equal inhale, hold, exhale, hold. A structured count that gives attention one steady anchor.',
     phases: [
       { name: 'Inhale', seconds: 4 },
       { name: 'Hold',   seconds: 4 },
@@ -61,7 +61,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: '478', name: '4-7-8', category: 'calming',
     blurb: '4 in · 7 hold · 8 out',
-    description: 'Dr. Andrew Weil’s relaxation breath. Drops you toward sleep.',
+    description: 'A popular relaxation rhythm with a long exhale, often chosen as a gentle wind-down practice.',
     phases: [
       { name: 'Inhale', seconds: 4 },
       { name: 'Hold',   seconds: 7 },
@@ -73,7 +73,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: 'diaphragmatic', name: 'Diaphragmatic', category: 'calming',
     blurb: '4 in · 6 out',
-    description: 'Deep belly breathing. Engages the diaphragm; activates rest-and-digest.',
+    description: 'Let the belly expand on the inhale, then soften through a slightly longer, comfortable exhale.',
     phases: [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 6 },
@@ -84,7 +84,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: 'pursed', name: 'Pursed-Lip', category: 'calming',
     blurb: '2 in · 4 out',
-    description: 'Inhale through the nose, exhale slowly through pursed lips. Eases breathlessness.',
+    description: 'Inhale through the nose, then exhale slowly through pursed lips for a more measured release.',
     phases: [
       { name: 'Inhale', seconds: 2 },
       { name: 'Exhale', seconds: 4 },
@@ -93,9 +93,9 @@ export const TECHNIQUES: Technique[] = [
     mudra: { name: 'Vayu Mudra', instruction: 'Curl the index finger to the base of the thumb; thumb covers the index. Rest other fingers extended.' },
   },
   {
-    id: 'holotropic', name: 'Holotropic', category: 'activating',
+    id: 'holotropic', name: 'Circular Breath', category: 'activating',
     blurb: '2 in · 2 out · circular',
-    description: 'Deep continuous circular breathing. No pause between in and out. Originated by Stanislav Grof. Brief sessions only. Can induce altered states.',
+    description: 'A simplified continuous rhythm with no pause between in and out. This is not facilitated holotropic breathwork. Keep it brief and stop if light-headed.',
     phases: [
       { name: 'Inhale', seconds: 2 },
       { name: 'Exhale', seconds: 2 },
@@ -104,9 +104,9 @@ export const TECHNIQUES: Technique[] = [
     mudra: { name: 'Open palms', instruction: 'Lay hands palms-up on knees, fingers softly extended. Receiving and surrender.' },
   },
   {
-    id: 'shamanic', name: 'Shamanic', category: 'activating',
+    id: 'shamanic', name: 'Rhythmic Breath', category: 'activating',
     blurb: '2 in · 1 out',
-    description: 'Rhythmic active breath, rooted in indigenous traditions. Energizes and opens awareness.',
+    description: 'A quick active rhythm for an alert practice. Stay seated, keep the breath comfortable, and stop if dizzy.',
     phases: [
       { name: 'Inhale', seconds: 2 },
       { name: 'Exhale', seconds: 1 },
@@ -115,9 +115,9 @@ export const TECHNIQUES: Technique[] = [
     mudra: { name: 'Power fists', instruction: 'Loose fists at the solar plexus, knuckles facing each other. Gathering inner fire.' },
   },
   {
-    id: 'soma', name: 'SOMA', category: 'activating',
+    id: 'soma', name: 'Power Rhythm', category: 'activating',
     blurb: '3 in · 1 out · 2 hold',
-    description: 'SOMA Breath: pranayama-inspired power breath. Heat, focus, vitality.',
+    description: 'A pranayama-inspired three-part rhythm with a brief hold. Keep the effort moderate and the session short.',
     phases: [
       { name: 'Inhale', seconds: 3 },
       { name: 'Exhale', seconds: 1 },
@@ -129,7 +129,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: 'coherent', name: 'Coherent (5·5)', category: 'calming',
     blurb: '5 in · 5 out',
-    description: 'Resonant breathing at ~6 breaths/min. Optimizes heart-rate variability and vagal tone.',
+    description: 'An even rhythm at roughly six breaths per minute, offering a gentle and predictable point of focus.',
     phases: [
       { name: 'Inhale', seconds: 5 },
       { name: 'Exhale', seconds: 5 },
@@ -140,7 +140,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: 'bhramari', name: 'Bhramari (Bee)', category: 'calming',
     blurb: '4 in · 8 hum-out',
-    description: 'Inhale slowly, then hum like a bee on the long exhale. Said to stimulate the vagus nerve. Often used to settle a racing mind before sleep.',
+    description: 'A traditional humming breath: inhale slowly, then hum like a bee through the long exhale and notice the vibration.',
     phases: [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 8 },
@@ -151,7 +151,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: 'nadi', name: 'Nadi Shodhana', category: 'calming',
     blurb: '4 in · 2 hold · 4 out',
-    description: 'Alternate-nostril breathing. Inhale through one nostril, hold, exhale through the other, then reverse. Balances the nervous system and the brain hemispheres.',
+    description: 'A traditional alternate-nostril pattern. Inhale through one side, hold, exhale through the other, then reverse gently.',
     phases: [
       { name: 'Inhale', seconds: 4 },
       { name: 'Hold',   seconds: 2 },
@@ -163,7 +163,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: 'sitali', name: 'Sitali (Cooling)', category: 'calming',
     blurb: '4 in · 6 out',
-    description: 'Curl your tongue (or purse your lips). Inhale through the tongue/mouth, exhale through the nose. Cools the body, soothes pitta heat.',
+    description: 'A traditional cooling breath: inhale through a curled tongue or pursed lips, then exhale softly through the nose.',
     phases: [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 6 },
@@ -174,7 +174,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: 'sigh', name: 'Physiological Sigh', category: 'calming',
     blurb: '2 short in · long out',
-    description: 'Two short inhales through the nose, then one long exhale through the mouth. The fastest known way to down-regulate stress in the moment.',
+    description: 'Two short inhales through the nose, then one long exhale through the mouth. Use it as a brief, comfortable reset.',
     phases: [
       { name: 'Inhale', seconds: 1, target: 0.6 },
       { name: 'Inhale', seconds: 1, target: 1.0 },
@@ -186,7 +186,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: 'bhastrika', name: 'Bhastrika (Bellows)', category: 'activating',
     blurb: '1 in · 1 out · forceful',
-    description: 'Forceful, equal inhale and exhale through the nose using the diaphragm like a bellows. Builds heat, oxygenates, energizes. Keep sessions short.',
+    description: 'A forceful traditional bellows rhythm through the nose. Practice seated, keep sessions short, and stop if light-headed.',
     phases: [
       { name: 'Inhale', seconds: 1 },
       { name: 'Exhale', seconds: 1 },
@@ -197,7 +197,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: 'lions', name: "Lion's Breath", category: 'activating',
     blurb: '4 in · 4 roar-out',
-    description: 'Inhale deeply through the nose. Exhale forcefully through the mouth with tongue out, eyes wide, making a "ha" sound. Releases facial and throat tension.',
+    description: 'Inhale through the nose, then exhale with the tongue out and a voiced “ha.” Keep the face and throat comfortable.',
     phases: [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 4 },
@@ -208,7 +208,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: 'kapalabhati', name: 'Kapalabhati', category: 'activating',
     blurb: '1 in · 1 out · sharp pulse',
-    description: '"Skull-shining breath." Passive inhale, sharp forceful exhale through the nose, repeated rapidly. Faster cadence than holotropic. Cleanses the lungs and energizes the mind.',
+    description: 'A simplified timer for the traditional “skull-shining” breath: passive inhale, sharp nasal exhale. Keep it brief and stop if dizzy.',
     phases: [
       { name: 'Inhale', seconds: 1 },
       { name: 'Exhale', seconds: 1 },
@@ -219,7 +219,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: 'ujjayi', name: 'Ujjayi (Ocean)', category: 'calming',
     blurb: '4 in · 6 out · whispered',
-    description: 'Slight constriction at the back of the throat creates a soft ocean-wave sound on inhale and exhale. Slows the breath, focuses the mind, warms the body. The breath of yoga and pranayama.',
+    description: 'A slight throat constriction creates a soft ocean sound on inhale and exhale. Keep it quiet, smooth, and unforced.',
     phases: [
       { name: 'Inhale', seconds: 4 },
       { name: 'Exhale', seconds: 6 },
@@ -230,7 +230,7 @@ export const TECHNIQUES: Technique[] = [
   {
     id: 'dirga', name: 'Dirga (Three-Part)', category: 'calming',
     blurb: '6 in (belly · ribs · chest) · 6 out',
-    description: 'Layered three-part inhale. First fill the belly, then the ribs, then the upper chest. Exhale in reverse. Maximizes lung capacity and quiets the nervous system.',
+    description: 'A layered three-part inhale through belly, ribs, then upper chest, followed by an easy reverse-order exhale.',
     phases: [
       { name: 'Inhale', seconds: 6 },
       { name: 'Exhale', seconds: 6 },
@@ -239,9 +239,9 @@ export const TECHNIQUES: Technique[] = [
     mudra: { name: 'Padma Mudra', instruction: 'Heels of palms and pinkies touch; thumbs touch; other fingers spread like lotus petals at the heart.' },
   },
   {
-    id: 'wimhof', name: 'Wim Hof Style', category: 'activating',
-    blurb: '2 in · 1 out · 30 rounds',
-    description: 'Deep active inhale, passive exhale, repeated ~30 times before a long retention. Floods the body with oxygen, raises adrenaline, builds cold tolerance and immune resilience.',
+    id: 'wimhof', name: 'Active 2 · 1', category: 'activating',
+    blurb: '2 in · 1 out',
+    description: 'A simplified active inhale and passive exhale rhythm. It is not the Wim Hof Method and includes no retention. Stay seated and stop if light-headed.',
     phases: [
       { name: 'Inhale', seconds: 2 },
       { name: 'Exhale', seconds: 1 },

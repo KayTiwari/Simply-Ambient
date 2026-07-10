@@ -133,6 +133,9 @@ type Props = {
   onRequestedPageHandled?: () => void;
   // "Single app color" setting: null = animated band transitions.
   singleColor: string | null;
+  // Live accent from the root ambient canvas. The More hub keeps its own
+  // editorial colors while allowing the current listening palette through.
+  ambientAccent: string;
   onChangeSingleColor: (c: string | null) => void;
   // Re-show the first-run walkthrough (replay mode skips legal + profile).
   onReplayOnboarding: () => void;
@@ -289,6 +292,7 @@ export default function MoreView({
   requestedPage,
   onRequestedPageHandled,
   singleColor,
+  ambientAccent,
   onChangeSingleColor,
   onReplayOnboarding,
 }: Props) {
@@ -502,9 +506,12 @@ export default function MoreView({
   // Live dimensions, so browser resizes and rotations keep the slide-over
   // offset correct (a module-level Dimensions.get snapshot would go stale).
   const { width: screenW } = useWindowDimensions();
-  const subTranslateX = slide.interpolate({ inputRange: [0, 1], outputRange: [screenW, 0] });
+  const slideDistance = Math.min(screenW, 600);
+  const subTranslateX = slide.interpolate({ inputRange: [0, 1], outputRange: [slideDistance, 0] });
   const hubScale = slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0.97] });
-  const hubOpacity = slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0.5] });
+  // The slide-over is translucent so the global ambient field remains alive.
+  // Fade the hub fully to avoid its cards ghosting through the page veil.
+  const hubOpacity = slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
 
   const today = new Date();
   const moodToday = moodLog.find(
@@ -513,7 +520,12 @@ export default function MoreView({
 
   return (
     <View style={{ flex: 1 }}>
-      <Animated.View style={{ flex: 1, transform: [{ scale: hubScale }], opacity: hubOpacity }}>
+      <Animated.View
+        pointerEvents={page === null ? 'auto' : 'none'}
+        accessibilityElementsHidden={page !== null}
+        importantForAccessibility={page === null ? 'auto' : 'no-hide-descendants'}
+        style={{ flex: 1, transform: [{ scale: hubScale }], opacity: hubOpacity }}
+      >
         <Hub
           notifPref={notifPref}
           affirmationPreview={affirmation}
@@ -523,6 +535,7 @@ export default function MoreView({
           streak={streak}
           profileName={profileName}
           intent={intent}
+          ambientAccent={ambientAccent}
           onOpen={open}
         />
       </Animated.View>
@@ -531,13 +544,17 @@ export default function MoreView({
         <Animated.View
           style={[
             StyleSheet.absoluteFill,
-            { transform: [{ translateX: subTranslateX }], backgroundColor: '#0B0B1F' },
+            { transform: [{ translateX: subTranslateX }], backgroundColor: 'transparent' },
           ]}
         >
           {/* Moonlit base so sub-pages sit on layered depth instead of one
               flat navy field; each page adds its own accent wash on top. */}
           <LinearGradient
-            colors={['#141530', '#0B0B1F', '#0d0e26']}
+            colors={[
+              'rgba(20,21,48,0.08)',
+              'rgba(11,11,31,0.12)',
+              'rgba(10,11,34,0.20)',
+            ]}
             locations={[0, 0.55, 1]}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"
@@ -673,6 +690,7 @@ type HubProps = {
   streak: number;
   profileName: string | null;
   intent: Intent | null;
+  ambientAccent: string;
   onOpen: (p: Exclude<SubPage, null>) => void;
 };
 
@@ -690,6 +708,7 @@ function Hub({
   streak,
   profileName,
   intent,
+  ambientAccent,
   onOpen,
 }: HubProps) {
   // Weekly insights, derived from the parent's live state. The Hub stays
@@ -747,7 +766,7 @@ function Hub({
       : 'Start with a five-second check-in, then choose only what feels useful.';
 
   return (
-    <AmbientPageShell accent="#8F97DE">
+    <AmbientPageShell accent={ambientAccent}>
       <View style={styles.headerWrap}>
         <View style={styles.hubBrandRow}>
           <Text style={styles.ambience}>Simply Ambient</Text>

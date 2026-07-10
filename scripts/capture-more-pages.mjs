@@ -61,13 +61,13 @@ await tap('BEGIN', { exact: true });
 await tap('I AGREE & CONTINUE');
 await tap('Calm', { exact: true });
 await tap('CONTINUE', { exact: true });
-await page.getByText('A little about you').first().waitFor({ state: 'visible' });
+await page.getByText('Make the space yours').first().waitFor({ state: 'visible' });
 await page.getByPlaceholder('What should we call you?').fill('River');
 await tap('CONTINUE', { exact: true });
 await page.getByText('FREQUENCY', { exact: true }).first().waitFor({ state: 'visible' });
 await tap('CONTINUE', { exact: true });
-await page.getByText('Good to know').first().waitFor({ state: 'visible' });
-await tap('ENTER', { exact: true });
+await page.getByText('GOOD TO KNOW', { exact: true }).first().waitFor({ state: 'visible' });
+await tap('ENTER SIMPLY AMBIENT', { exact: true });
 await page.waitForTimeout(1200);
 
 // 1. Personalized editorial hub.

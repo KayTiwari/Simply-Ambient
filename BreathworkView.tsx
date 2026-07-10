@@ -19,6 +19,13 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { buildCueWav } from './lib/binauralMath';
 import { maybeRequestReview, recordSessionCompleted } from './lib/rateApp';
 import { TECHNIQUES, type Technique } from './lib/content';
+import {
+  AmbientSurface,
+  AmbientVeil,
+  EditorialHeader,
+  EditorialSection,
+  StatusStrip,
+} from './AmbientUI';
 
 const STORAGE_HAPTIC = '@simply_ambient_mala_haptic_v1';
 const STORAGE_MALA_COUNT = '@simply_ambient_mala_count_v1';
@@ -44,35 +51,37 @@ type Props = {
 export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandColor }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const technique = TECHNIQUES.find(t => t.id === activeId) ?? null;
+  const accent = technique?.color ?? bandColor;
 
   return (
-    <View style={[{ flex: 1 }, styles.tabScrim]}>
-      <View style={styles.headerWrap}>
-        <Text style={styles.ambience}>Simply Ambient</Text>
-        <Text style={styles.title}>Breath Work Visualizer</Text>
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.subtitle}>Breath is the bridge</Text>
-          <View style={styles.dividerLine} />
-        </View>
-      </View>
+    <AmbientVeil accent={accent} strength={technique ? 'deep' : 'standard'}>
+      <EditorialHeader
+        mode="RESTORE"
+        title="Follow the breath"
+        subtitle={technique
+          ? 'Let the form recede. Follow one phase, then the next.'
+          : 'Choose a rhythm for the moment you are in.'}
+        accent={accent}
+        compact={Boolean(technique)}
+      />
 
       {toneIsPlaying ? (
-        <View style={styles.toneStrip}>
-          <View style={[styles.toneDot, { backgroundColor: bandColor }]} />
-          <Text style={styles.toneText}>
-            <Text style={{ color: bandColor, fontWeight: '700' }}>{bandName}</Text>
-            <Text style={{ color: '#ffffff99' }}> · {beatHz} Hz binaural still playing</Text>
-          </Text>
+        <View style={styles.toneStripWrap}>
+          <StatusStrip
+            accent={bandColor}
+            label={`${bandName.toUpperCase()} TONE`}
+            detail={`${beatHz} Hz continues underneath`}
+            active
+          />
         </View>
       ) : null}
 
       {technique ? (
         <BreathSession technique={technique} onBack={() => setActiveId(null)} />
       ) : (
-        <TechniqueList onPick={t => setActiveId(t.id)} />
+        <TechniqueList accent={accent} onPick={t => setActiveId(t.id)} />
       )}
-    </View>
+    </AmbientVeil>
   );
 }
 
@@ -101,7 +110,7 @@ function malaCompleteBuzz(level: HapticLevel): ReturnType<typeof setTimeout>[] {
   ];
 }
 
-function MalaCounter() {
+function MalaCounter({ accent }: { accent: string }) {
   const [count, setCount] = useState(0);
   const [haptic, setHaptic] = useState<HapticLevel>('low');
   const buzzTimeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -161,13 +170,20 @@ function MalaCounter() {
   }
 
   return (
-    <View style={styles.malaCard}>
+    <AmbientSurface accent={accent} quiet style={styles.malaCard}>
       <View style={styles.malaTopRow}>
-        <Text style={styles.cardName}>Mala Counter</Text>
-        <Text style={styles.malaCountText}>{count} / {target}</Text>
+        <View style={styles.malaTitleGroup}>
+          <Text style={[styles.malaEyebrow, { color: accent }]}>QUIET RITUAL</Text>
+          <Text style={styles.malaTitle}>One bead at a time</Text>
+        </View>
+        <View style={[styles.malaCountSeal, { borderColor: accent + '55', backgroundColor: accent + '10' }]}>
+          <Text style={[styles.malaCountText, { color: accent }]}>{count}</Text>
+          <Text style={styles.malaTargetText}>/ {target}</Text>
+        </View>
       </View>
+      <Text style={styles.malaIntro}>Keep a tactile count through breath, mantra, or meditation.</Text>
       <View style={styles.malaBar}>
-        <View style={[styles.malaBarFill, { width: `${ratio * 100}%` }]} />
+        <View style={[styles.malaBarFill, { width: `${ratio * 100}%`, backgroundColor: accent }]} />
       </View>
       <View style={styles.malaActions}>
         <TouchableOpacity
@@ -184,9 +200,9 @@ function MalaCounter() {
           onPress={tap}
           accessibilityRole="button"
           accessibilityLabel={count >= target ? 'Mala complete' : `Count one bead, ${count} of ${target}`}
-          style={styles.malaCountBtn}
+          style={[styles.malaCountBtn, { backgroundColor: accent }]}
         >
-          <Text style={styles.malaCountBtnText}>{count >= target ? '✓ Complete' : 'TAP'}</Text>
+          <Text style={styles.malaCountBtnText}>{count >= target ? '✓ COMPLETE' : 'COUNT A BEAD'}</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.malaHapticRow}>
@@ -204,10 +220,10 @@ function MalaCounter() {
                 accessibilityState={{ selected: active }}
                 style={[
                   styles.malaHapticPill,
-                  active && { borderColor: '#d9b35c', backgroundColor: '#d9b35c22' },
+                  active && { borderColor: accent, backgroundColor: accent + '18' },
                 ]}
               >
-                <Text style={[styles.malaHapticText, active && { color: '#d9b35c' }]}>
+                <Text style={[styles.malaHapticText, active && { color: accent }]}>
                   {p === 'off' ? 'Off' : p === 'low' ? 'Low' : 'High'}
                 </Text>
               </TouchableOpacity>
@@ -215,12 +231,11 @@ function MalaCounter() {
           })}
         </View>
       </View>
-      <Text style={styles.malaHint}>Tap on each breath, mantra, or bead.</Text>
-    </View>
+    </AmbientSurface>
   );
 }
 
-function TechniqueList({ onPick }: { onPick: (t: Technique) => void }) {
+function TechniqueList({ accent, onPick }: { accent: string; onPick: (t: Technique) => void }) {
   const insets = useSafeAreaInsets();
   const calming = TECHNIQUES.filter(t => t.category === 'calming');
   const activating = TECHNIQUES.filter(t => t.category === 'activating');
@@ -231,45 +246,81 @@ function TechniqueList({ onPick }: { onPick: (t: Technique) => void }) {
       contentContainerStyle={{ paddingBottom: insets.bottom + 90, paddingHorizontal: 20 }}
       showsVerticalScrollIndicator={false}
     >
-      <MalaCounter />
+      <EditorialSection
+        index="01"
+        eyebrow="RITUAL"
+        title="Mark the moment"
+        subtitle="A quiet counter for practices that do not need a timer."
+        accent={accent}
+      />
+      <MalaCounter accent="#D9B86C" />
 
-      <Text style={styles.sectionLabel}>CALMING</Text>
-      <Text style={styles.sectionSub}>Slow the body. Soften the mind.</Text>
-      {calming.map(t => (
-        <TechniqueCard key={t.id} technique={t} onPress={() => onPick(t)} />
+      <EditorialSection
+        index="02"
+        eyebrow="SETTLE"
+        title="Return to stillness"
+        subtitle="Measured rhythms to soften the body and quiet the mind."
+        accent={accent}
+      />
+      {calming.map((t, index) => (
+        <TechniqueCard key={t.id} index={index + 1} technique={t} onPress={() => onPick(t)} />
       ))}
 
-      <Text style={styles.sectionLabel}>ACTIVATING</Text>
-      <Text style={styles.sectionSub}>Build energy. Open awareness.</Text>
-      {activating.map(t => (
-        <TechniqueCard key={t.id} technique={t} onPress={() => onPick(t)} />
+      <EditorialSection
+        index="03"
+        eyebrow="AWAKEN"
+        title="Gather your energy"
+        subtitle="Brighter cadences for presence, focus, and momentum."
+        accent={accent}
+      />
+      {activating.map((t, index) => (
+        <TechniqueCard key={t.id} index={index + 1} technique={t} onPress={() => onPick(t)} />
       ))}
     </ScrollView>
   );
 }
 
-function TechniqueCard({ technique, onPress }: { technique: Technique; onPress: () => void }) {
+function TechniqueCard({
+  technique,
+  index,
+  onPress,
+}: {
+  technique: Technique;
+  index: number;
+  onPress: () => void;
+}) {
   const Icon = technique.Icon;
+  const cadence = technique.phases.map(phase => `${phase.name} ${phase.seconds}s`).join('  ·  ');
   return (
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${technique.name}, ${technique.blurb}. Open breathing session.`}
-      style={styles.card}
+      style={styles.cardTouch}
     >
-      <View style={styles.cardRow}>
-        <View style={styles.cardIconSlot}>
-          <Icon size={24} weight="duotone" color={technique.color} />
+      <AmbientSurface accent={technique.color} style={styles.card}>
+        <View style={styles.cardTopRow}>
+          <Text style={[styles.cardIndex, { color: technique.color }]}>PRACTICE {String(index).padStart(2, '0')}</Text>
+          <View style={[styles.cardArrow, { borderColor: technique.color + '3D' }]}>
+            <Text style={[styles.cardChevron, { color: technique.color }]}>↗</Text>
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardName}>{technique.name}</Text>
-          <Text style={[styles.cardBlurb, { color: technique.color }]}>{technique.blurb}</Text>
+        <View style={styles.cardRow}>
+          <View style={[styles.cardIconSlot, { borderColor: technique.color + '42', backgroundColor: technique.color + '12' }]}>
+            <Icon size={28} weight="duotone" color={technique.color} />
+          </View>
+          <View style={styles.cardCopy}>
+            <Text style={styles.cardName}>{technique.name}</Text>
+            <Text style={[styles.cardBlurb, { color: technique.color }]}>{technique.blurb}</Text>
+          </View>
         </View>
-        <Text style={styles.cardChevron}>›</Text>
-      </View>
-      <Text style={styles.cardDescription}>{technique.description}</Text>
-      <Text style={[styles.cardMudra, { color: technique.color }]}>mudra · {technique.mudra.name}</Text>
+        <Text style={styles.cardDescription}>{technique.description}</Text>
+        <View style={styles.cardMetaRow}>
+          <Text style={styles.cardCadence}>{cadence}</Text>
+          <Text style={[styles.cardMudra, { color: technique.color }]}>{technique.mudra.name}</Text>
+        </View>
+      </AmbientSurface>
     </TouchableOpacity>
   );
 }
@@ -297,7 +348,8 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
   const [secondsLeft, setSecondsLeft] = useState(technique.phases[0].seconds);
   const [cycle, setCycle] = useState(0);
   const [visual, setVisual] = useState<Visual>('circle');
-  const [targetCycles, setTargetCycles] = useState<number | null>(null);
+  const activating = technique.category === 'activating';
+  const [targetCycles, setTargetCycles] = useState<number | null>(activating ? 5 : null);
   const [complete, setComplete] = useState(false);
 
   // Audio cues for eyes-closed practice: a soft blip on each phase change,
@@ -554,6 +606,8 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
   const circleOpacity = visualFade.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
   const mandalaOpacity = visualFade;
   const phaseLabel = complete ? 'Complete' : playing ? phase.name : 'Ready';
+  const targetLabel = targetCycles == null ? 'Endless practice' : `${targetCycles} cycle practice`;
+  const cycleChoices = activating ? [5, 10] : CYCLE_CHOICES;
 
   return (
     <ScrollView
@@ -568,138 +622,200 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
         accessibilityLabel="Back to technique list"
         style={styles.backBtn}
       >
-        <Text style={styles.backText}>‹  Techniques</Text>
+        <Text style={styles.backText}>‹  ALL PRACTICES</Text>
       </TouchableOpacity>
 
+      <Text style={[styles.sessionEyebrow, { color: technique.color }]}>GUIDED PRACTICE</Text>
       <Text style={styles.sessionName}>{technique.name}</Text>
       <Text style={[styles.sessionBlurb, { color: technique.color }]}>{technique.blurb}</Text>
+      <View style={styles.sessionStatus} accessibilityLiveRegion="polite">
+        <StatusStrip
+          accent={technique.color}
+          label={phaseLabel.toUpperCase()}
+          detail={playing ? `${secondsLeft}s · cycle ${cycle}` : targetLabel}
+          active={playing || complete}
+        />
+      </View>
+      {activating ? (
+        <View style={[styles.activatingNotice, { borderColor: technique.color + '45' }]}>
+          <Text style={[styles.activatingNoticeLabel, { color: technique.color }]}>ACTIVE RHYTHM</Text>
+          <Text style={styles.activatingNoticeText}>Stay seated · keep it brief · stop if light-headed</Text>
+        </View>
+      ) : null}
 
-      <View style={styles.visualToggle}>
+      <AmbientSurface accent={technique.color} quiet style={styles.controlDeck}>
+        <View style={styles.controlHeadingRow}>
+          <Text style={styles.controlEyebrow}>SESSION SHAPE</Text>
+          <Text style={[styles.controlValue, { color: technique.color }]}>{targetLabel}</Text>
+        </View>
+        <View style={styles.visualToggle}>
+          <TouchableOpacity
+            onPress={() => setVisual('circle')}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Circle visual"
+            accessibilityState={{ selected: visual === 'circle' }}
+            style={[
+              styles.toggleBtn,
+              visual === 'circle' && {
+                backgroundColor: technique.color + '22',
+                borderColor: technique.color,
+              },
+            ]}
+          >
+            <Text style={[styles.toggleText, visual === 'circle' && { color: technique.color }]}>○ Circle</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setVisual('mandala')}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Mandala visual"
+            accessibilityState={{ selected: visual === 'mandala' }}
+            style={[
+              styles.toggleBtn,
+              visual === 'mandala' && {
+                backgroundColor: technique.color + '22',
+                borderColor: technique.color,
+              },
+            ]}
+          >
+            <Text style={[styles.toggleText, visual === 'mandala' && { color: technique.color }]}>✦ Mandala</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.lengthRow}>
+          {cycleChoices.map(c => {
+            const active = c === targetCycles;
+            const label = c == null ? 'Endless' : `${c} cycles`;
+            return (
+              <TouchableOpacity
+                key={c ?? 'endless'}
+                activeOpacity={0.85}
+                onPress={() => { setTargetCycles(c); setComplete(false); }}
+                accessibilityRole="button"
+                accessibilityLabel={c == null ? 'Endless session' : `End after ${c} cycles`}
+                accessibilityState={{ selected: active }}
+                style={[
+                  styles.lengthPill,
+                  active && {
+                    backgroundColor: technique.color + '22',
+                    borderColor: technique.color,
+                  },
+                ]}
+              >
+                <Text style={[styles.lengthText, active && { color: technique.color }]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => setCuesPref(!cuesOn)}
+            accessibilityRole="button"
+            accessibilityLabel={cuesOn ? 'Turn off audio cues' : 'Turn on audio cues, a soft tone on each phase change'}
+            accessibilityState={{ selected: cuesOn }}
+            style={[
+              styles.lengthPill,
+              cuesOn && {
+                backgroundColor: technique.color + '22',
+                borderColor: technique.color,
+              },
+            ]}
+          >
+            <Text style={[styles.lengthText, cuesOn && { color: technique.color }]}>♪ Cues</Text>
+          </TouchableOpacity>
+        </View>
+      </AmbientSurface>
+
+      <AmbientSurface accent={technique.color} style={styles.breathChamber}>
+        <View style={styles.chamberTopRow}>
+          <View>
+            <Text style={[styles.chamberEyebrow, { color: technique.color }]}>BREATHING CHAMBER</Text>
+            <Text style={styles.chamberInstruction}>{playing ? 'Stay with the current phase' : 'Begin when your body feels ready'}</Text>
+          </View>
+          <View style={[styles.chamberLiveDot, { borderColor: technique.color + '55' }]}>
+            <View style={[styles.chamberLiveDotCore, { backgroundColor: technique.color, opacity: playing ? 1 : 0.35 }]} />
+          </View>
+        </View>
+
+        <View style={styles.visualStack}>
+          <Animated.View
+            style={[styles.visualLayer, { opacity: circleOpacity }]}
+            pointerEvents={visual === 'circle' ? 'auto' : 'none'}
+          >
+            <BreathCircle
+              breath={breath}
+              color={technique.color}
+              phaseLabel={phaseLabel}
+              phaseCount={playing ? secondsLeft : 0}
+              cycle={playing ? cycle : 0}
+              active={playing || complete}
+            />
+          </Animated.View>
+          <Animated.View
+            style={[styles.visualLayer, { opacity: mandalaOpacity }]}
+            pointerEvents={visual === 'mandala' ? 'auto' : 'none'}
+          >
+            <BreathMandala
+              breath={breath}
+              orbit={orbit}
+              centerSpin={centerSpin}
+              color={technique.color}
+              phaseLabel={phaseLabel}
+              phaseCount={playing ? secondsLeft : 0}
+              cycle={playing ? cycle : 0}
+              active={playing || complete}
+            />
+          </Animated.View>
+        </View>
+
+        <View style={styles.phasePath} accessibilityLiveRegion="polite">
+          {technique.phases.map((item, index) => {
+            const current = playing && index === phaseIdx;
+            return (
+              <View key={`${item.name}-${index}`} style={styles.phasePathItem}>
+                <View style={[
+                  styles.phasePathRule,
+                  { backgroundColor: current ? technique.color : 'rgba(255,255,255,0.10)' },
+                ]} />
+                <Text style={[styles.phasePathName, current && { color: technique.color }]}>{item.name}</Text>
+                <Text style={styles.phasePathTime}>{item.seconds}s</Text>
+              </View>
+            );
+          })}
+        </View>
+
         <TouchableOpacity
-          onPress={() => setVisual('circle')}
           activeOpacity={0.85}
+          onPress={() => { setComplete(false); setPlaying(p => !p); }}
           accessibilityRole="button"
-          accessibilityLabel="Circle visual"
-          accessibilityState={{ selected: visual === 'circle' }}
+          accessibilityLabel={playing ? 'Stop breathing session' : 'Start breathing session'}
           style={[
-            styles.toggleBtn,
-            visual === 'circle' && {
-              backgroundColor: technique.color + '22',
-              borderColor: technique.color,
+            styles.playBtn,
+            {
+              backgroundColor: playing ? 'rgba(255,255,255,0.94)' : technique.color,
+              shadowColor: technique.color,
             },
           ]}
         >
-          <Text style={[styles.toggleText, visual === 'circle' && { color: technique.color }]}>○ Circle</Text>
+          <Text style={styles.playBtnText}>{playing ? 'END PRACTICE' : 'BEGIN PRACTICE'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setVisual('mandala')}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Mandala visual"
-          accessibilityState={{ selected: visual === 'mandala' }}
-          style={[
-            styles.toggleBtn,
-            visual === 'mandala' && {
-              backgroundColor: technique.color + '22',
-              borderColor: technique.color,
-            },
-          ]}
-        >
-          <Text style={[styles.toggleText, visual === 'mandala' && { color: technique.color }]}>✦ Mandala</Text>
-        </TouchableOpacity>
-      </View>
+      </AmbientSurface>
 
-      <View style={styles.lengthRow}>
-        {CYCLE_CHOICES.map(c => {
-          const active = c === targetCycles;
-          const label = c == null ? 'Endless' : `${c} cycles`;
-          return (
-            <TouchableOpacity
-              key={c ?? 'endless'}
-              activeOpacity={0.85}
-              onPress={() => { setTargetCycles(c); setComplete(false); }}
-              accessibilityRole="button"
-              accessibilityLabel={c == null ? 'Endless session' : `End after ${c} cycles`}
-              accessibilityState={{ selected: active }}
-              style={[
-                styles.lengthPill,
-                active && {
-                  backgroundColor: technique.color + '22',
-                  borderColor: technique.color,
-                },
-              ]}
-            >
-              <Text style={[styles.lengthText, active && { color: technique.color }]}>{label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={() => setCuesPref(!cuesOn)}
-          accessibilityRole="button"
-          accessibilityLabel={cuesOn ? 'Turn off audio cues' : 'Turn on audio cues, a soft tone on each phase change'}
-          accessibilityState={{ selected: cuesOn }}
-          style={[
-            styles.lengthPill,
-            cuesOn && {
-              backgroundColor: technique.color + '22',
-              borderColor: technique.color,
-            },
-          ]}
-        >
-          <Text style={[styles.lengthText, cuesOn && { color: technique.color }]}>♪ Cues</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.visualStack}>
-        <Animated.View
-          style={[styles.visualLayer, { opacity: circleOpacity }]}
-          pointerEvents={visual === 'circle' ? 'auto' : 'none'}
-        >
-          <BreathCircle
-            breath={breath}
-            color={technique.color}
-            phaseLabel={phaseLabel}
-            phaseCount={playing ? secondsLeft : 0}
-            cycle={playing ? cycle : 0}
-            active={playing || complete}
-          />
-        </Animated.View>
-        <Animated.View
-          style={[styles.visualLayer, { opacity: mandalaOpacity }]}
-          pointerEvents={visual === 'mandala' ? 'auto' : 'none'}
-        >
-          <BreathMandala
-            breath={breath}
-            orbit={orbit}
-            centerSpin={centerSpin}
-            color={technique.color}
-            phaseLabel={phaseLabel}
-            phaseCount={playing ? secondsLeft : 0}
-            cycle={playing ? cycle : 0}
-            active={playing || complete}
-          />
-        </Animated.View>
-      </View>
-
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => { setComplete(false); setPlaying(p => !p); }}
-        accessibilityRole="button"
-        accessibilityLabel={playing ? 'Stop breathing session' : 'Start breathing session'}
-        style={[styles.playBtn, { backgroundColor: playing ? '#fff' : technique.color }]}
-      >
-        <Text style={styles.playBtnText}>{playing ? 'STOP' : 'PLAY'}</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.sessionDescription}>{technique.description}</Text>
-
-      <View style={styles.mudraBlock}>
+      <EditorialSection
+        index="02"
+        eyebrow="FORM"
+        title="A little guidance"
+        subtitle="Use the visual as a suggestion; your breath sets the pace."
+        accent={technique.color}
+      />
+      <AmbientSurface accent={technique.color} quiet style={styles.guidanceBlock}>
+        <Text style={styles.sessionDescription}>{technique.description}</Text>
+        <View style={styles.guidanceRule} />
         <Text style={[styles.mudraLabel, { color: technique.color }]}>
           MUDRA · {technique.mudra.name.toUpperCase()}
         </Text>
         <Text style={styles.mudraText}>{technique.mudra.instruction}</Text>
-      </View>
+      </AmbientSurface>
     </ScrollView>
   );
 }
@@ -940,149 +1056,175 @@ function BreathMandala({
 // ===========================================================================
 
 const styles = StyleSheet.create({
-  // Dark scrim so the technique's vivid color stays readable regardless of
-  // whatever global band/tuning palette is active behind the tab.
-  tabScrim: { backgroundColor: 'rgba(0,0,0,0.32)' },
+  toneStripWrap: { paddingHorizontal: 20, marginTop: -4, marginBottom: 3 },
 
-  headerWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 8 },
-  ambience: {
-    color: '#fff',
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 38,
-    letterSpacing: 2.5,
-    textAlign: 'center',
-    lineHeight: 44,
-  },
-  title: {
-    color: '#ffffff99', fontSize: 10, fontWeight: '400',
-    letterSpacing: 4, textTransform: 'uppercase',
-    marginTop: 2,
-  },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  dividerLine: { width: 28, height: 1, backgroundColor: 'rgba(255,255,255,0.35)' },
-  subtitle: {
-    color: '#ffffffaa', fontSize: 10, letterSpacing: 4,
-    marginHorizontal: 14, fontStyle: 'italic',
-  },
-
-  toneStrip: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.045)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    marginHorizontal: 20, marginTop: 2,
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14,
-  },
-  toneDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
-  toneText: { fontSize: 12, letterSpacing: 0.5 },
-
-  sectionLabel: {
-    color: '#ffffff77', fontSize: 10, letterSpacing: 2, fontWeight: '700',
-    marginTop: 24, marginBottom: 4, paddingHorizontal: 4,
-  },
-  sectionSub: {
-    color: '#ffffffB0', fontSize: 12, lineHeight: 18,
-    marginBottom: 10, paddingHorizontal: 4,
-  },
+  // Practice library — each card reads as a small editorial object rather
+  // than a row in a settings list.
+  cardTouch: { marginBottom: 12, borderRadius: 26 },
   card: {
-    backgroundColor: 'rgba(255,255,255,0.045)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    borderRadius: 18, padding: 14, marginBottom: 8,
+    padding: 18,
+    minHeight: 190,
   },
+  cardTopRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 13,
+  },
+  cardIndex: { fontSize: 8.5, fontWeight: '800', letterSpacing: 2.2 },
+  cardArrow: {
+    width: 30, height: 30, borderRadius: 15, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.035)',
+  },
+  cardChevron: { fontSize: 15, marginTop: -1 },
   cardRow: { flexDirection: 'row', alignItems: 'center' },
   cardIconSlot: {
-    width: 34, marginRight: 10,
+    width: 54, height: 54, borderRadius: 18, marginRight: 13, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
   },
-  cardName: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  cardBlurb: { fontSize: 11, marginTop: 2, letterSpacing: 1 },
-  cardChevron: { color: '#ffffff44', fontSize: 20 },
-  cardDescription: { color: '#ffffffB0', fontSize: 12, marginTop: 8, lineHeight: 17 },
+  cardCopy: { flex: 1 },
+  cardName: {
+    color: '#FFFDFE', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 25, lineHeight: 27, letterSpacing: 0.2,
+  },
+  cardBlurb: { fontSize: 10, marginTop: 3, letterSpacing: 1.7, fontWeight: '700' },
+  cardDescription: { color: '#B9B6C6', fontSize: 12, marginTop: 14, lineHeight: 18 },
+  cardMetaRow: {
+    flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between',
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.075)',
+    marginTop: 14, paddingTop: 11, gap: 12,
+  },
+  cardCadence: { color: '#8E8C9D', fontSize: 8.5, lineHeight: 13, letterSpacing: 0.5, flex: 1 },
   cardMudra: {
-    fontSize: 10, marginTop: 6, letterSpacing: 1.5,
-    fontWeight: '600', textTransform: 'uppercase',
+    fontSize: 8.5, letterSpacing: 1.3,
+    fontWeight: '800', textTransform: 'uppercase', textAlign: 'right',
   },
 
+  // Mala is intentionally quieter and more tactile than the guided library.
   malaCard: {
-    backgroundColor: 'rgba(255,255,255,0.045)',
-    borderRadius: 18, padding: 14, marginTop: 10, marginBottom: 0,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    padding: 18,
   },
   malaTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  malaCountText: { color: '#d9b35c', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
+  malaTitleGroup: { flex: 1, paddingRight: 12 },
+  malaEyebrow: { fontSize: 8.5, fontWeight: '800', letterSpacing: 2.2, marginBottom: 5 },
+  malaTitle: {
+    color: '#FAF8FF', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 24, lineHeight: 26,
+  },
+  malaCountSeal: {
+    minWidth: 68, height: 52, borderRadius: 18, borderWidth: 1,
+    paddingHorizontal: 10, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center',
+  },
+  malaCountText: {
+    fontFamily: 'CormorantGaramond_500Medium', fontSize: 27, lineHeight: 31,
+  },
+  malaTargetText: { color: '#8F8D9B', fontSize: 10, marginLeft: 3 },
+  malaIntro: { color: '#A8A5B5', fontSize: 11.5, lineHeight: 17, marginTop: 11, maxWidth: 280 },
   malaBar: {
-    height: 4, marginTop: 10,
+    height: 3, marginTop: 15,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 2, overflow: 'hidden',
   },
-  malaBarFill: { height: '100%', backgroundColor: '#d9b35c' },
-  malaActions: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
+  malaBarFill: { height: '100%' },
+  malaActions: { flexDirection: 'row', alignItems: 'center', marginTop: 14, gap: 8 },
   malaResetBtn: {
-    paddingHorizontal: 16, paddingVertical: 11,
+    minHeight: 46, paddingHorizontal: 16,
     borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    backgroundColor: 'rgba(255,255,255,0.045)',
+    backgroundColor: 'rgba(255,255,255,0.035)', alignItems: 'center', justifyContent: 'center',
   },
-  malaResetText: { color: '#ffffffB0', fontSize: 12, fontWeight: '600', letterSpacing: 1 },
+  malaResetText: { color: '#B4B1C0', fontSize: 10, fontWeight: '700', letterSpacing: 1.2 },
   malaCountBtn: {
-    flex: 1, paddingVertical: 13, borderRadius: 999,
-    backgroundColor: '#d9b35c', alignItems: 'center',
+    flex: 1, minHeight: 46, borderRadius: 999,
+    alignItems: 'center', justifyContent: 'center',
   },
-  malaCountBtnText: { color: '#0B0B1F', fontSize: 14, fontWeight: '800', letterSpacing: 4 },
-  malaHint: { color: '#ffffff77', fontSize: 11, marginTop: 10, textAlign: 'center' },
+  malaCountBtnText: { color: '#0B0B1F', fontSize: 10.5, fontWeight: '900', letterSpacing: 2.2 },
   malaHapticRow: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 12, paddingTop: 10,
+    marginTop: 14, paddingTop: 12, gap: 8,
     borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.07)',
   },
-  malaHapticLabel: { color: '#ffffff77', fontSize: 10, letterSpacing: 2, fontWeight: '700' },
+  malaHapticLabel: { color: '#838191', fontSize: 8.5, letterSpacing: 1.9, fontWeight: '800' },
   malaHapticPills: { flexDirection: 'row', gap: 6 },
   malaHapticPill: {
-    paddingHorizontal: 12, paddingVertical: 5,
+    minHeight: 30, paddingHorizontal: 11, justifyContent: 'center',
     borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    backgroundColor: 'rgba(255,255,255,0.045)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
   },
-  malaHapticText: { color: '#ffffff99', fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
+  malaHapticText: { color: '#9B98A8', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
 
-  // Scroll content, so no flex: 1; the ScrollView itself fills the screen.
-  sessionWrap: { alignItems: 'center', paddingHorizontal: 20 },
-  backBtn: { alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 4 },
-  backText: { color: '#ffffffB0', fontSize: 13, letterSpacing: 0.5 },
-  sessionName: {
-    color: '#fff',
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 28, letterSpacing: 1, marginTop: 6,
+  // Guided session — a slim setup rail feeding one dominant visual chamber.
+  sessionWrap: { paddingHorizontal: 20 },
+  backBtn: {
+    alignSelf: 'flex-start', minHeight: 38, paddingVertical: 9, paddingHorizontal: 2,
+    justifyContent: 'center',
   },
-  sessionBlurb: { fontSize: 13, marginTop: 2, letterSpacing: 1.5 },
+  backText: { color: '#AAA7B6', fontSize: 9, fontWeight: '800', letterSpacing: 1.8 },
+  sessionEyebrow: { fontSize: 8.5, fontWeight: '800', letterSpacing: 2.4, marginTop: 7 },
+  sessionName: {
+    color: '#FFFDFE',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 37, lineHeight: 40, letterSpacing: 0.1, marginTop: 5,
+  },
+  sessionBlurb: { fontSize: 11, marginTop: 3, letterSpacing: 1.6, fontWeight: '700' },
+
+  sessionStatus: { marginTop: 14 },
+  activatingNotice: {
+    width: '100%', marginTop: 9, paddingHorizontal: 12, paddingVertical: 9,
+    borderRadius: 13, borderWidth: 1, backgroundColor: 'rgba(8,9,25,0.30)',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+  },
+  activatingNoticeLabel: { fontSize: 8, fontWeight: '900', letterSpacing: 1.5 },
+  activatingNoticeText: { color: '#A9A7B6', fontSize: 9.5, flexShrink: 1, textAlign: 'right' },
+  controlDeck: { width: '100%', padding: 14, marginTop: 10 },
+  controlHeadingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+  },
+  controlEyebrow: { color: '#8E8B9A', fontSize: 8, fontWeight: '800', letterSpacing: 1.9 },
+  controlValue: { fontSize: 9.5, fontWeight: '700', letterSpacing: 0.7 },
 
   visualToggle: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.045)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    backgroundColor: 'rgba(5,6,20,0.35)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.075)',
     borderRadius: 14,
     padding: 3,
-    marginTop: 14,
+    marginTop: 12,
   },
   toggleBtn: {
-    paddingHorizontal: 16, paddingVertical: 6,
+    flex: 1, minHeight: 34,
     borderRadius: 11,
     borderWidth: 1, borderColor: 'transparent',
+    alignItems: 'center', justifyContent: 'center',
   },
-  toggleText: { color: '#ffffff99', fontSize: 12, letterSpacing: 1.5, fontWeight: '600' },
+  toggleText: { color: '#9996A7', fontSize: 10, letterSpacing: 1.1, fontWeight: '700' },
 
   lengthRow: {
-    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center',
-    gap: 6, marginTop: 10,
+    flexDirection: 'row', flexWrap: 'wrap',
+    gap: 6, marginTop: 9,
   },
   lengthPill: {
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    backgroundColor: 'rgba(255,255,255,0.045)',
+    minHeight: 31, paddingHorizontal: 10, justifyContent: 'center',
+    borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.075)',
+    backgroundColor: 'rgba(255,255,255,0.025)',
   },
-  lengthText: { color: '#ffffff99', fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
+  lengthText: { color: '#9693A3', fontSize: 9.5, fontWeight: '700', letterSpacing: 0.4 },
+
+  breathChamber: { width: '100%', marginTop: 13, paddingTop: 18, paddingBottom: 16 },
+  chamberTopRow: {
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+    paddingHorizontal: 18,
+  },
+  chamberEyebrow: { fontSize: 8.5, fontWeight: '800', letterSpacing: 2.1 },
+  chamberInstruction: { color: '#9996A6', fontSize: 10.5, marginTop: 4 },
+  chamberLiveDot: {
+    width: 30, height: 30, borderRadius: 15, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  chamberLiveDotCore: { width: 7, height: 7, borderRadius: 4 },
 
   visualStack: {
     width: 280, height: 280,
-    marginVertical: 20,
+    marginTop: 12, marginBottom: 6,
     alignSelf: 'center',
   },
   visualLayer: {
@@ -1097,10 +1239,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 280, height: 280, borderRadius: 140,
     borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.012)',
   },
   circle: {
-    width: 240, height: 240, borderRadius: 120,
-    borderWidth: 2,
+    width: 226, height: 226, borderRadius: 113,
+    borderWidth: 1.5,
   },
   circleLabelWrap: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
 
@@ -1137,30 +1280,36 @@ const styles = StyleSheet.create({
   },
   labelInner: { alignItems: 'center', justifyContent: 'center' },
   phaseText: {
-    fontSize: 22, fontWeight: '300',
-    letterSpacing: 4, textTransform: 'uppercase',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 25, lineHeight: 28, fontWeight: '400',
+    letterSpacing: 2.5, textTransform: 'uppercase',
   },
-  phaseCount: { color: '#fff', fontSize: 44, fontWeight: '200', marginTop: 4 },
-  cycleText: { color: '#ffffff66', fontSize: 11, letterSpacing: 2, marginTop: 4 },
+  phaseCount: { color: '#FFFDFE', fontSize: 42, fontWeight: '200', marginTop: 1 },
+  cycleText: { color: '#858292', fontSize: 9, letterSpacing: 1.8, marginTop: 3, textTransform: 'uppercase' },
+
+  phasePath: {
+    flexDirection: 'row', paddingHorizontal: 16, gap: 5,
+    marginTop: 2, marginBottom: 14,
+  },
+  phasePathItem: { flex: 1 },
+  phasePathRule: { height: 2, borderRadius: 1, marginBottom: 7 },
+  phasePathName: { color: '#8C8999', fontSize: 7.5, fontWeight: '800', letterSpacing: 1.1, textTransform: 'uppercase' },
+  phasePathTime: { color: '#6F6D7D', fontSize: 8.5, marginTop: 2 },
 
   playBtn: {
-    height: 58, width: '100%',
+    minHeight: 54,
     borderRadius: 999, alignItems: 'center', justifyContent: 'center',
-    marginTop: 14,
+    marginHorizontal: 16,
+    shadowOpacity: 0.24, shadowRadius: 16, shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
-  playBtnText: { fontSize: 18, fontWeight: '700', letterSpacing: 4, color: '#0B0B1F' },
+  playBtnText: { fontSize: 10.5, fontWeight: '900', letterSpacing: 2.5, color: '#0B0B1F' },
 
   sessionDescription: {
-    color: '#ffffffB0', fontSize: 13, textAlign: 'center',
-    marginTop: 20, paddingHorizontal: 12, lineHeight: 18,
+    color: '#C0BDCB', fontSize: 12.5, lineHeight: 19,
   },
-  mudraBlock: {
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    borderRadius: 14, width: '100%',
-    paddingHorizontal: 14, paddingVertical: 12,
-    marginTop: 14,
-    backgroundColor: 'rgba(255,255,255,0.045)',
-  },
-  mudraLabel: { fontSize: 10, letterSpacing: 2, fontWeight: '700', marginBottom: 4 },
-  mudraText: { color: '#ffffffB0', fontSize: 12, lineHeight: 18 },
+  guidanceBlock: { width: '100%', padding: 18 },
+  guidanceRule: { height: 1, backgroundColor: 'rgba(255,255,255,0.075)', marginVertical: 16 },
+  mudraLabel: { fontSize: 8.5, letterSpacing: 2, fontWeight: '800', marginBottom: 6 },
+  mudraText: { color: '#AAA7B7', fontSize: 12, lineHeight: 18 },
 });

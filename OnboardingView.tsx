@@ -2,6 +2,8 @@ import React, { useRef, useState } from 'react';
 import {
   Animated,
   Easing,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +13,14 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import {
+  AmbientSurface,
+  AmbientVeil,
+  EditorialHeader,
+  EditorialSection,
+} from './AmbientUI';
 
 const STORAGE_PROFILE = '@simply_ambient_profile_v1';
 // The picked intent (sleep/focus/calm/energy) personalizes the More hub.
@@ -19,9 +29,9 @@ const STORAGE_INTENT = '@simply_ambient_intent_v1';
 type Intent = 'sleep' | 'focus' | 'calm' | 'energy';
 
 const INTENTS: Array<{ id: Intent; label: string; glyph: string; color: string; blurb: string }> = [
-  { id: 'sleep',  label: 'Sleep',  glyph: '☾', color: '#8F97DE', blurb: 'Wind down. Slow the body.' },
-  { id: 'focus',  label: 'Focus',  glyph: '◉', color: '#8FB8DE', blurb: 'Clear the mind. Sharpen attention.' },
-  { id: 'calm',   label: 'Calm',   glyph: '○', color: '#9DC7AC', blurb: 'Soften. Return to centre.' },
+  { id: 'sleep', label: 'Sleep', glyph: '☾', color: '#8F97DE', blurb: 'Wind down. Slow the body.' },
+  { id: 'focus', label: 'Focus', glyph: '◉', color: '#8FB8DE', blurb: 'Clear the mind. Sharpen attention.' },
+  { id: 'calm', label: 'Calm', glyph: '○', color: '#9DC7AC', blurb: 'Soften. Return to centre.' },
   { id: 'energy', label: 'Energy', glyph: '✦', color: '#E0A470', blurb: 'Activate. Build inner heat.' },
 ];
 
@@ -31,28 +41,37 @@ const RECS: Record<Intent, {
   chakra: { name: string; reason: string };
 }> = {
   sleep: {
-    preset: { name: 'Delta · 2 Hz', tab: 'Frequencies', reason: 'Deep restorative range.' },
-    breath: { name: '4-7-8', reason: 'Drops the nervous system toward sleep.' },
-    chakra: { name: 'Root (LAM)', reason: 'Grounded, safe, settled.' },
+    preset: { name: 'Delta · 2 Hz', tab: 'Tones', reason: 'A low beat traditionally associated with deep rest.' },
+    breath: { name: '4-7-8', reason: 'A long-exhale rhythm for winding down.' },
+    chakra: { name: 'Root (LAM)', reason: 'Traditionally associated with groundedness.' },
   },
   focus: {
-    preset: { name: 'Beta · 18 Hz', tab: 'Frequencies', reason: 'Active, alert state.' },
-    breath: { name: 'Box Breathing', reason: 'Steady the nervous system, sharpen attention.' },
-    chakra: { name: 'Third Eye (OM)', reason: 'Insight and inner vision.' },
+    preset: { name: 'Beta · 18 Hz', tab: 'Tones', reason: 'A brisk beat often paired with alert work.' },
+    breath: { name: 'Box Breathing', reason: 'An even count that gives attention one clear anchor.' },
+    chakra: { name: 'Third Eye (OM)', reason: 'Traditionally associated with insight and vision.' },
   },
   calm: {
-    preset: { name: 'Alpha · 10 Hz', tab: 'Frequencies', reason: 'Relaxed alertness.' },
-    breath: { name: 'Coherent (5·5)', reason: 'Optimises heart-rate variability.' },
-    chakra: { name: 'Heart (YAM)', reason: 'Open, soft, connected.' },
+    preset: { name: 'Alpha · 10 Hz', tab: 'Tones', reason: 'A gentle beat often used for relaxed attention.' },
+    breath: { name: 'Coherent (5·5)', reason: 'Even pacing makes an approachable calming practice.' },
+    chakra: { name: 'Heart (YAM)', reason: 'Traditionally associated with openness and connection.' },
   },
   energy: {
-    preset: { name: 'Gamma · 40 Hz', tab: 'Frequencies', reason: 'Peak cognition and warmth.' },
-    breath: { name: 'Bhastrika (Bellows)', reason: 'Rapid breath builds heat and clarity.' },
-    chakra: { name: 'Solar Plexus (RAM)', reason: 'Will, vitality, inner fire.' },
+    preset: { name: 'Gamma · 40 Hz', tab: 'Tones', reason: 'A bright, quick beat for an energizing session.' },
+    breath: { name: 'Bhastrika (Bellows)', reason: 'A rapid traditional practice; use briefly and stop if light-headed.' },
+    chakra: { name: 'Solar Plexus (RAM)', reason: 'Traditionally associated with will and vitality.' },
   },
 };
 
 type Step = 0 | 1 | 2 | 3 | 4 | 5;
+
+const STEP_META: Record<Step, { label: string; accent: string }> = {
+  0: { label: 'Welcome', accent: '#A69BE2' },
+  1: { label: 'Care', accent: '#8FB8DE' },
+  2: { label: 'Intention', accent: '#9DC7AC' },
+  3: { label: 'Profile', accent: '#B39BE0' },
+  4: { label: 'Your path', accent: '#8FC7A4' },
+  5: { label: 'Guide', accent: '#E0A470' },
+};
 
 // The walkthrough is a sequence, replay-aware: a returning user replaying it
 // from Settings skips the legal step (already agreed) and the profile step
@@ -69,7 +88,7 @@ const TIPS: Array<{ label: string; body: string; color: string }> = [
   },
   {
     label: 'SLEEP TIMER',
-    body: 'Look for STILLNESS on the Frequencies tab. The audio fades out gently on its own, so you can drift off.',
+    body: 'Look for STILLNESS in Tones. The audio fades out gently on its own, so you can drift off.',
     color: '#8F97DE',
   },
   {
@@ -105,14 +124,15 @@ export default function OnboardingView({
   onDone: () => void;
   isReplay?: boolean;
 }) {
+  const insets = useSafeAreaInsets();
   const steps = isReplay ? REPLAY_STEPS : FIRST_RUN_STEPS;
   const [step, setStep] = useState<Step>(0);
   const [intent, setIntent] = useState<Intent | null>(null);
   const [name, setName] = useState('');
   // Birth date as three independent selections; -1 / 0 mean "not picked".
   const [birthMonth, setBirthMonth] = useState<number>(-1); // 0-based, -1 = unset
-  const [birthDay, setBirthDay] = useState<number>(0);      // 1-31, 0 = unset
-  const [birthYear, setBirthYear] = useState<number>(0);    // full year, 0 = unset
+  const [birthDay, setBirthDay] = useState<number>(0); // 1-31, 0 = unset
+  const [birthYear, setBirthYear] = useState<number>(0); // full year, 0 = unset
   const fade = useRef(new Animated.Value(1)).current;
 
   const birthDayMax = daysInMonth(birthMonth, birthYear);
@@ -134,11 +154,20 @@ export default function OnboardingView({
   }
 
   function transition(next: Step) {
-    Animated.timing(fade, { toValue: 0, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true })
-      .start(() => {
-        setStep(next);
-        Animated.timing(fade, { toValue: 1, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-      });
+    Animated.timing(fade, {
+      toValue: 0,
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(() => {
+      setStep(next);
+      Animated.timing(fade, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
   }
 
   // Advance along the active sequence, so replay mode skips the right steps.
@@ -150,473 +179,876 @@ export default function OnboardingView({
   }
 
   const rec = intent ? RECS[intent] : null;
-  const intentMeta = intent ? INTENTS.find(i => i.id === intent) : null;
+  const intentMeta = intent ? INTENTS.find(item => item.id === intent) : null;
+  const currentStepIndex = Math.max(0, steps.indexOf(step));
+  const accent = intentMeta?.color ?? STEP_META[step].accent;
+  const scrollInsets = {
+    paddingTop: insets.top + 82,
+    paddingBottom: insets.bottom + 34,
+  };
 
   return (
-    <View style={styles.root}>
-      <Animated.View style={{ flex: 1, opacity: fade }}>
-        {step === 0 && (
-          <ScrollView contentContainerStyle={styles.scroll}>
-            <View style={styles.center}>
-              <View style={styles.enso} />
-              <Text style={styles.title}>Simply Ambient</Text>
-              <Text style={styles.tagline}>Your spiritual center.</Text>
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.subtitle}>welcome</Text>
-                <View style={styles.dividerLine} />
-              </View>
-              <Text style={styles.intro}>
-                Binaural frequencies, breath techniques, chakras, horoscopes,
-                and a small set of grounded daily tools.{'\n\n'}
-                You'll need stereo headphones or earbuds to experience binaural
-                frequencies. The effect only works when each ear hears its own tone.
-              </Text>
-            </View>
-            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={goNext}>
-              <Text style={styles.primaryBtnText}>BEGIN</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        )}
-
-        {step === 1 && (
-          <ScrollView contentContainerStyle={styles.scroll}>
-            <Text style={styles.smallTitle}>Before you begin</Text>
-            <Text style={styles.smallSub}>Read this once. It applies to the whole app.</Text>
-
-            <View style={styles.safetySection}>
-              <Text style={styles.safetyLabel}>HEARING SAFETY</Text>
-              <Text style={styles.safetyBody}>
-                Always start at low volume and raise gradually only if needed. If a tone
-                feels piercing or sharp, stop immediately. Sustained loud headphone
-                listening can damage hearing at any frequency.
-              </Text>
-            </View>
-
-            <View style={styles.safetySection}>
-              <Text style={styles.safetyLabel}>NOT MEDICAL ADVICE</Text>
-              <Text style={styles.safetyBody}>
-                Simply Ambient is a wellness tool, not a medical device. Frequencies,
-                breathwork, chakras, horoscopes, and AI reflections are for contemplative
-                use only. They do not diagnose, treat, cure, or prevent any condition,
-                and they are not a substitute for professional care.
-              </Text>
-            </View>
-
-            <View style={styles.safetySection}>
-              <Text style={styles.safetyLabel}>WHEN NOT TO USE</Text>
-              <Text style={styles.safetyBody}>
-                Do not use while driving or operating machinery. Consult a physician first
-                if you are pregnant, have a pacemaker, history of seizures or epilepsy, a
-                heart condition, or are prone to dissociation. Stop and seek care if you
-                feel dizzy, nauseous, panicked, or hear ringing.
-              </Text>
-            </View>
-
-            <View style={styles.safetySection}>
-              <Text style={styles.safetyLabel}>YOUR DATA</Text>
-              <Text style={styles.safetyBody}>
-                Everything you enter (profile, mood, gratitude, rants, manifestations) is
-                stored only on this device. Horoscopes send only your sign; crash reports
-                carry only anonymous diagnostics, and your journals stay out of them.
-                Beyond that,
-                nothing leaves the app unless you explicitly tap an analyse button on the
-                AI Insights page, which sends only the data sources you toggle on to
-                Google Gemini using your own API key.
-              </Text>
-            </View>
-
-            <Text style={styles.safetyAck}>
-              By tapping "I agree" you accept these terms and acknowledge that use is at
-              your own risk. The full notice is available any time under More → Safety
-              & Disclaimer.
-            </Text>
-
-            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={goNext}>
-              <Text style={styles.primaryBtnText}>I AGREE & CONTINUE</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        )}
-
-        {step === 2 && (
-          <ScrollView contentContainerStyle={styles.scroll}>
-            <Text style={styles.smallTitle}>What brings you here?</Text>
-            <Text style={styles.smallSub}>Pick one. You can always switch.</Text>
-            <View style={{ marginTop: 18 }}>
-              {INTENTS.map(it => {
-                const active = intent === it.id;
-                return (
-                  <TouchableOpacity
-                    key={it.id}
-                    activeOpacity={0.85}
-                    onPress={() => { setIntent(it.id); }}
-                    style={[
-                      styles.intentCard,
-                      {
-                        borderColor: active ? it.color : it.color + '55',
-                        backgroundColor: active ? it.color + '22' : 'rgba(0,0,0,0.30)',
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.intentGlyph, { color: it.color }]}>{it.glyph}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.intentLabel}>{it.label}</Text>
-                      <Text style={styles.intentBlurb}>{it.blurb}</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={[styles.primaryBtn, !intent && { opacity: 0.4 }]}
-              disabled={!intent}
-              onPress={goNext}
+    <AmbientVeil accent={accent} strength="standard" style={styles.root}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardLayer}
+      >
+        <Animated.View style={[styles.animatedLayer, { opacity: fade }]}>
+          {step === 0 && (
+            <ScrollView
+              contentContainerStyle={[styles.scroll, scrollInsets]}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.primaryBtnText}>CONTINUE</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onDone} style={styles.skipBtn}>
-              <Text style={styles.skipText}>Skip the rest</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        )}
-
-        {step === 3 && (
-          <ScrollView contentContainerStyle={styles.scroll}>
-            <Text style={styles.smallTitle}>A little about you</Text>
-            <Text style={styles.smallSub}>
-              Optional. Stored only on this device. Used to personalize horoscopes and
-              AI reflections.
-            </Text>
-
-            <View style={{ marginTop: 22 }}>
-              <Text style={styles.fieldLabel}>NAME</Text>
-              <TextInput
-                style={styles.fieldInput}
-                placeholder="What should we call you?"
-                placeholderTextColor="#ffffff55"
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
-                returnKeyType="next"
-                maxLength={60}
+              <EditorialHeader
+                mode={isReplay ? 'REPLAY' : 'WELCOME'}
+                title="Find your quieter center"
+                subtitle="Sound, breath, and reflection — brought together in one calm, personal space."
+                accent={accent}
               />
 
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>BIRTH DATE</Text>
-              <Text style={styles.fieldHint}>Used to suggest your zodiac sign</Text>
-              <View style={styles.dateRow}>
-                <View style={[styles.datePickerWrap, { flex: 1.4 }]}>
-                  <Picker
-                    selectedValue={birthMonth}
-                    onValueChange={(v) => {
-                      const m = Number(v);
-                      setBirthMonth(m);
-                      // Keep the picked day valid for the new month (e.g. 31st -> 30).
-                      setBirthDay(d => Math.min(d, daysInMonth(m, birthYear)));
-                    }}
-                    dropdownIconColor="#ffffff99"
-                    style={styles.datePicker}
-                  >
-                    <Picker.Item label="Month" value={-1} color="#999" />
-                    {MONTHS.map((m, i) => (
-                      <Picker.Item key={m} label={m} value={i} />
-                    ))}
-                  </Picker>
-                </View>
-                <View style={[styles.datePickerWrap, { flex: 0.8 }]}>
-                  <Picker
-                    selectedValue={birthDay}
-                    onValueChange={(v) => setBirthDay(Number(v))}
-                    dropdownIconColor="#ffffff99"
-                    style={styles.datePicker}
-                  >
-                    <Picker.Item label="Day" value={0} color="#999" />
-                    {Array.from({ length: birthDayMax }, (_, i) => i + 1).map((d) => (
-                      <Picker.Item key={d} label={String(d)} value={d} />
-                    ))}
-                  </Picker>
-                </View>
-                <View style={[styles.datePickerWrap, { flex: 1 }]}>
-                  <Picker
-                    selectedValue={birthYear}
-                    onValueChange={(v) => {
-                      const y = Number(v);
-                      setBirthYear(y);
-                      // Keep the picked day valid for the new year (Feb 29 -> 28).
-                      setBirthDay(d => Math.min(d, daysInMonth(birthMonth, y)));
-                    }}
-                    dropdownIconColor="#ffffff99"
-                    style={styles.datePicker}
-                  >
-                    <Picker.Item label="Year" value={0} color="#999" />
-                    {BIRTH_YEARS.map((y) => (
-                      <Picker.Item key={y} label={String(y)} value={y} />
-                    ))}
-                  </Picker>
-                </View>
+              <View style={styles.pageBody}>
+                <AmbientSurface accent={accent} style={styles.welcomeCard}>
+                  <View style={styles.welcomeOrbit} pointerEvents="none">
+                    <View style={[styles.welcomeOrbitMiddle, { borderColor: accent + '3D' }]} />
+                    <View style={[styles.welcomeOrbitInner, { borderColor: accent + '70' }]} />
+                    <View style={[styles.welcomeCore, { backgroundColor: accent }]} />
+                  </View>
+                  <Text style={[styles.welcomeEyebrow, { color: accent }]}>A SPACE TO RETURN TO</Text>
+                  <Text style={styles.welcomeStatement}>
+                    Tune your attention.{`\n`}Follow your breath.{`\n`}Notice what shifts.
+                  </Text>
+                  <Text style={styles.welcomeBody}>
+                    Binaural frequencies, breath techniques, chakras, horoscopes,
+                    and a small set of grounded daily tools.
+                  </Text>
+                </AmbientSurface>
+
+                <AmbientSurface accent="#8FB8DE" quiet style={styles.headphoneCard}>
+                  <View style={styles.headphoneGlyph}>
+                    <Text style={styles.headphoneGlyphText}>L  ·  R</Text>
+                  </View>
+                  <View style={styles.headphoneCopy}>
+                    <Text style={styles.headphoneTitle}>Bring stereo headphones</Text>
+                    <Text style={styles.headphoneBody}>
+                      Binaural effects depend on each ear hearing its own tone. Earbuds work too.
+                    </Text>
+                  </View>
+                </AmbientSurface>
+
+                <PrimaryAction label="BEGIN" accent={accent} onPress={goNext} />
               </View>
-            </View>
+            </ScrollView>
+          )}
 
-            <Text style={[styles.smallSub, { marginTop: 18 }]}>
-              You can fill more (birth time, location, MBTI) later under More → Profile.
-            </Text>
-
-            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={goNext}>
-              <Text style={styles.primaryBtnText}>CONTINUE</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={goNext} style={styles.skipBtn}>
-              <Text style={styles.skipText}>Skip</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        )}
-
-        {step === 4 && rec && intentMeta && (
-          <ScrollView contentContainerStyle={styles.scroll}>
-            <View style={styles.center}>
-              <Text style={[styles.intentGlyph, { color: intentMeta.color, fontSize: 48, marginBottom: 8 }]}>{intentMeta.glyph}</Text>
-              <Text style={styles.smallTitle}>For {intentMeta.label.toLowerCase()}, try</Text>
-              <Text style={styles.smallSub}>{intentMeta.blurb}</Text>
-            </View>
-            <View style={{ marginTop: 22 }}>
-              <RecRow
-                label="FREQUENCY"
-                title={rec.preset.name}
-                where={`Frequencies tab`}
-                reason={rec.preset.reason}
-                color="#8FB8DE"
+          {step === 1 && (
+            <ScrollView
+              contentContainerStyle={[styles.scroll, scrollInsets]}
+              showsVerticalScrollIndicator={false}
+            >
+              <EditorialHeader
+                mode="LISTEN SAFELY"
+                title="Begin with care"
+                subtitle="A clear foundation for every frequency, breath practice, and reflection in the app."
+                accent={accent}
               />
-              <RecRow
-                label="BREATH"
-                title={rec.breath.name}
-                where={`Breath tab`}
-                reason={rec.breath.reason}
-                color="#9DC7AC"
-              />
-              <RecRow
-                label="CHAKRA"
-                title={rec.chakra.name}
-                where={`Chakras tab`}
-                reason={rec.chakra.reason}
-                color={intentMeta.color}
-              />
-            </View>
-            <Text style={styles.outro}>
-              Horoscopes, mood, gratitude, and grounding live on the Horoscopes
-              and More tabs.
-            </Text>
-            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={goNext}>
-              <Text style={styles.primaryBtnText}>CONTINUE</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        )}
 
-        {/* Defensive fallback: if step 4 is reached without an intent picked
-            (shouldn't happen, but state could desync), continue to the tips. */}
-        {step === 4 && (!rec || !intentMeta) && (
-          <ScrollView contentContainerStyle={styles.scroll}>
-            <View style={styles.center}>
-              <Text style={styles.smallTitle}>You're all set</Text>
-              <Text style={styles.smallSub}>Everything is on the tabs at the bottom.</Text>
-            </View>
-            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={goNext}>
-              <Text style={styles.primaryBtnText}>CONTINUE</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        )}
+              <View style={styles.pageBody}>
+                <AmbientSurface accent={accent} style={styles.safetyCard}>
+                  <SafetySection
+                    number="01"
+                    label="HEARING SAFETY"
+                    color="#8FB8DE"
+                    body="Always start at low volume and raise gradually only if needed. If a tone feels piercing or sharp, stop immediately. Sustained loud headphone listening can damage hearing at any frequency."
+                  />
+                  <SafetySection
+                    number="02"
+                    label="NOT MEDICAL ADVICE"
+                    color="#B39BE0"
+                    body="Simply Ambient is a wellness tool, not a medical device. Frequencies, breathwork, chakras, horoscopes, and AI reflections are for contemplative use only. They do not diagnose, treat, cure, or prevent any condition, and they are not a substitute for professional care."
+                  />
+                  <SafetySection
+                    number="03"
+                    label="WHEN NOT TO USE"
+                    color="#E0A470"
+                    body="Do not use while driving or operating machinery. Consult a physician first if you are pregnant, have a pacemaker, history of seizures or epilepsy, a heart condition, or are prone to dissociation. Stop and seek care if you feel dizzy, nauseous, panicked, or hear ringing."
+                  />
+                  <SafetySection
+                    number="04"
+                    label="YOUR DATA"
+                    color="#9DC7AC"
+                    last
+                    body="Everything you enter (profile, mood, gratitude, rants, manifestations) is stored only on this device. Horoscopes send only your sign; crash reports carry only anonymous diagnostics, and your journals stay out of them. Beyond that, nothing leaves the app unless you explicitly tap an analyse button on the AI Insights page, which sends only the data sources you toggle on to Google Gemini using your own API key."
+                  />
+                </AmbientSurface>
 
-        {step === 5 && (
-          <ScrollView contentContainerStyle={styles.scroll}>
-            <Text style={styles.smallTitle}>Good to know</Text>
-            <Text style={styles.smallSub}>Four small things people find later. Now you won't have to.</Text>
-            <View style={{ marginTop: 10 }}>
-              {TIPS.map(tip => (
-                <View key={tip.label} style={[styles.recRow, { borderColor: tip.color + '55' }]}>
-                  <Text style={[styles.recLabel, { color: tip.color }]}>{tip.label}</Text>
-                  <Text style={styles.recReason}>{tip.body}</Text>
+                <View style={styles.acknowledgement}>
+                  <View style={[styles.ackRule, { backgroundColor: accent }]} />
+                  <Text style={styles.safetyAck}>
+                    By tapping “I agree” you accept these terms and acknowledge that use is at
+                    your own risk. The full notice is available any time under More → Safety
+                    & Disclaimer.
+                  </Text>
                 </View>
-              ))}
-            </View>
-            <TouchableOpacity activeOpacity={0.85} style={styles.primaryBtn} onPress={persistProfileAndDone}>
-              <Text style={styles.primaryBtnText}>ENTER</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        )}
-      </Animated.View>
 
-      <View style={styles.dotsRow} pointerEvents="none">
-        {steps.map((s, i) => (
-          <View
-            key={s}
-            style={[
-              styles.dot,
-              i === Math.max(0, steps.indexOf(step)) && styles.dotActive,
-            ]}
-          />
-        ))}
+                <PrimaryAction label="I AGREE & CONTINUE" accent={accent} onPress={goNext} />
+              </View>
+            </ScrollView>
+          )}
+
+          {step === 2 && (
+            <ScrollView
+              contentContainerStyle={[styles.scroll, scrollInsets]}
+              showsVerticalScrollIndicator={false}
+            >
+              <EditorialHeader
+                mode="PERSONALIZE"
+                title="What do you need today?"
+                subtitle="Choose one intention. It shapes your starting path, never locks you in."
+                accent={accent}
+              />
+
+              <View style={styles.pageBody}>
+                <EditorialSection
+                  eyebrow="CHOOSE YOUR DIRECTION"
+                  title="Start with a feeling"
+                  subtitle="You can switch practices whenever you like."
+                  accent={accent}
+                />
+
+                <View
+                  style={styles.intentGrid}
+                  accessibilityRole="radiogroup"
+                  accessibilityLabel="Choose your intention"
+                >
+                  {INTENTS.map(item => {
+                    const active = intent === item.id;
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        activeOpacity={0.78}
+                        accessibilityRole="radio"
+                        accessibilityLabel={item.label}
+                        accessibilityHint={item.blurb}
+                        accessibilityState={{ selected: active, checked: active }}
+                        onPress={() => setIntent(item.id)}
+                        style={styles.intentTouch}
+                      >
+                        <AmbientSurface
+                          accent={item.color}
+                          quiet={!active}
+                          style={[
+                            styles.intentCard,
+                            active && { borderColor: item.color + '99' },
+                          ]}
+                        >
+                          <View style={styles.intentTopRow}>
+                            <Text style={[styles.intentGlyph, { color: item.color }]}>{item.glyph}</Text>
+                            <View
+                              style={[
+                                styles.intentSelection,
+                                { borderColor: item.color + '66' },
+                                active && { backgroundColor: item.color },
+                              ]}
+                            >
+                              {active ? <Text style={styles.intentCheck}>✓</Text> : null}
+                            </View>
+                          </View>
+                          <Text style={styles.intentLabel}>{item.label}</Text>
+                          <Text style={styles.intentBlurb}>{item.blurb}</Text>
+                        </AmbientSurface>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <PrimaryAction
+                  label="CONTINUE"
+                  accent={accent}
+                  disabled={!intent}
+                  onPress={goNext}
+                />
+                <SecondaryAction label="Skip the rest" onPress={persistProfileAndDone} />
+              </View>
+            </ScrollView>
+          )}
+
+          {step === 3 && (
+            <ScrollView
+              contentContainerStyle={[styles.scroll, scrollInsets]}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <EditorialHeader
+                mode="OPTIONAL PROFILE"
+                title="Make the space yours"
+                subtitle="Save a name and optional birth date to your private profile — both stay on this device."
+                accent={accent}
+              />
+
+              <View style={styles.pageBody}>
+                <AmbientSurface accent="#9DC7AC" quiet style={styles.privacyCard}>
+                  <View style={styles.privacyMark}>
+                    <Text style={styles.privacyMarkText}>⌁</Text>
+                  </View>
+                  <View style={styles.privacyCopy}>
+                    <Text style={styles.privacyTitle}>Private by default</Text>
+                    <Text style={styles.privacyBody}>
+                      Optional and stored locally. You can edit or remove it later in Profile.
+                    </Text>
+                  </View>
+                </AmbientSurface>
+
+                <AmbientSurface accent={accent} style={styles.formCard}>
+                  <Text style={[styles.formEyebrow, { color: accent }]}>A LITTLE ABOUT YOU</Text>
+
+                  <Text style={styles.fieldLabel}>NAME</Text>
+                  <TextInput
+                    accessibilityLabel="Name"
+                    style={[styles.fieldInput, { borderColor: accent + '3D' }]}
+                    placeholder="What should we call you?"
+                    placeholderTextColor="#858294"
+                    value={name}
+                    onChangeText={setName}
+                    autoCapitalize="words"
+                    returnKeyType="next"
+                    textContentType="name"
+                    maxLength={60}
+                  />
+
+                  <View style={styles.dateHeadingRow}>
+                    <Text style={styles.fieldLabel}>BIRTH DATE</Text>
+                    <Text style={styles.optionalPill}>OPTIONAL</Text>
+                  </View>
+                  <Text style={styles.fieldHint}>Saved to Profile; choose your sign separately in Stars</Text>
+
+                  <View style={styles.dateRow}>
+                    <View style={[styles.datePickerWrap, { flex: 1.4, borderColor: accent + '38' }]}>
+                      <Picker
+                        accessibilityLabel="Birth month"
+                        selectedValue={birthMonth}
+                        onValueChange={(value) => {
+                          const month = Number(value);
+                          setBirthMonth(month);
+                          // Keep the picked day valid for the new month (e.g. 31st -> 30).
+                          setBirthDay(day => Math.min(day, daysInMonth(month, birthYear)));
+                        }}
+                        dropdownIconColor="#B8B5C3"
+                        style={styles.datePicker}
+                      >
+                        <Picker.Item label="Month" value={-1} color="#999" />
+                        {MONTHS.map((month, index) => (
+                          <Picker.Item key={month} label={month} value={index} />
+                        ))}
+                      </Picker>
+                    </View>
+                    <View style={[styles.datePickerWrap, { flex: 0.8, borderColor: accent + '38' }]}>
+                      <Picker
+                        accessibilityLabel="Birth day"
+                        selectedValue={birthDay}
+                        onValueChange={(value) => setBirthDay(Number(value))}
+                        dropdownIconColor="#B8B5C3"
+                        style={styles.datePicker}
+                      >
+                        <Picker.Item label="Day" value={0} color="#999" />
+                        {Array.from({ length: birthDayMax }, (_, index) => index + 1).map(day => (
+                          <Picker.Item key={day} label={String(day)} value={day} />
+                        ))}
+                      </Picker>
+                    </View>
+                    <View style={[styles.datePickerWrap, { flex: 1, borderColor: accent + '38' }]}>
+                      <Picker
+                        accessibilityLabel="Birth year"
+                        selectedValue={birthYear}
+                        onValueChange={(value) => {
+                          const year = Number(value);
+                          setBirthYear(year);
+                          // Keep the picked day valid for the new year (Feb 29 -> 28).
+                          setBirthDay(day => Math.min(day, daysInMonth(birthMonth, year)));
+                        }}
+                        dropdownIconColor="#B8B5C3"
+                        style={styles.datePicker}
+                      >
+                        <Picker.Item label="Year" value={0} color="#999" />
+                        {BIRTH_YEARS.map(year => (
+                          <Picker.Item key={year} label={String(year)} value={year} />
+                        ))}
+                      </Picker>
+                    </View>
+                  </View>
+                </AmbientSurface>
+
+                <Text style={styles.profileFootnote}>
+                  Add birth time, location, and MBTI later under More → Profile.
+                </Text>
+
+                <PrimaryAction label="CONTINUE" accent={accent} onPress={goNext} />
+                <SecondaryAction label="Skip" onPress={goNext} />
+              </View>
+            </ScrollView>
+          )}
+
+          {step === 4 && rec && intentMeta && (
+            <ScrollView
+              contentContainerStyle={[styles.scroll, scrollInsets]}
+              showsVerticalScrollIndicator={false}
+            >
+              <EditorialHeader
+                mode="YOUR STARTING PATH"
+                title={`A ritual for ${intentMeta.label.toLowerCase()}`}
+                subtitle="Three places to begin. Think of this as a gentle first route, not a prescription."
+                accent={accent}
+              />
+
+              <View style={styles.pageBody}>
+                <AmbientSurface accent={accent} style={styles.pathHero}>
+                  <Text style={[styles.pathGlyph, { color: intentMeta.color }]}>{intentMeta.glyph}</Text>
+                  <View style={styles.pathHeroCopy}>
+                    <Text style={[styles.pathEyebrow, { color: intentMeta.color }]}>YOUR INTENTION</Text>
+                    <Text style={styles.pathTitle}>{intentMeta.label}</Text>
+                    <Text style={styles.pathBlurb}>{intentMeta.blurb}</Text>
+                  </View>
+                </AmbientSurface>
+
+                <EditorialSection
+                  index="01"
+                  eyebrow="BEGIN HERE"
+                  title="Your first three practices"
+                  accent={accent}
+                />
+
+                <View style={styles.recommendationStack}>
+                  <RecRow
+                    index="01"
+                    label="FREQUENCY"
+                    title={rec.preset.name}
+                    where="Tones tab"
+                    reason={rec.preset.reason}
+                    color="#8FB8DE"
+                  />
+                  <RecRow
+                    index="02"
+                    label="BREATH"
+                    title={rec.breath.name}
+                    where="Breath tab"
+                    reason={rec.breath.reason}
+                    color="#9DC7AC"
+                  />
+                  <RecRow
+                    index="03"
+                    label="CHAKRA"
+                    title={rec.chakra.name}
+                    where="Chakras tab"
+                    reason={rec.chakra.reason}
+                    color={intentMeta.color}
+                  />
+                </View>
+
+                <Text style={styles.outro}>
+                  Horoscopes, mood, gratitude, and grounding live on the Horoscopes
+                  and More tabs.
+                </Text>
+                <PrimaryAction label="CONTINUE" accent={accent} onPress={goNext} />
+              </View>
+            </ScrollView>
+          )}
+
+          {/* Defensive fallback: if step 4 is reached without an intent picked
+              (shouldn't happen, but state could desync), continue to the tips. */}
+          {step === 4 && (!rec || !intentMeta) && (
+            <ScrollView
+              contentContainerStyle={[styles.scroll, scrollInsets]}
+              showsVerticalScrollIndicator={false}
+            >
+              <EditorialHeader
+                mode="READY"
+                title="Everything is within reach"
+                subtitle="Your practices are arranged across the five rooms at the bottom of the app."
+                accent={accent}
+              />
+              <View style={styles.pageBody}>
+                <AmbientSurface accent={accent} style={styles.fallbackCard}>
+                  <Text style={[styles.fallbackGlyph, { color: accent }]}>✦</Text>
+                  <Text style={styles.fallbackTitle}>You’re all set</Text>
+                  <Text style={styles.fallbackBody}>Explore freely and begin wherever feels useful today.</Text>
+                </AmbientSurface>
+                <PrimaryAction label="CONTINUE" accent={accent} onPress={goNext} />
+              </View>
+            </ScrollView>
+          )}
+
+          {step === 5 && (
+            <ScrollView
+              contentContainerStyle={[styles.scroll, scrollInsets]}
+              showsVerticalScrollIndicator={false}
+            >
+              <EditorialHeader
+                mode="FIELD GUIDE"
+                title="Know your way around"
+                subtitle="Four useful details, surfaced now so the app feels familiar from your first session."
+                accent={accent}
+              />
+
+              <View style={styles.pageBody}>
+                <EditorialSection
+                  eyebrow="GOOD TO KNOW"
+                  title="Small details, close at hand"
+                  accent={accent}
+                />
+
+                <View style={styles.tipGrid}>
+                  {TIPS.map((tip, index) => (
+                    <AmbientSurface key={tip.label} accent={tip.color} quiet style={styles.tipCard}>
+                      <View style={styles.tipTopRow}>
+                        <Text style={[styles.tipIndex, { color: tip.color }]}>
+                          {String(index + 1).padStart(2, '0')}
+                        </Text>
+                        <View style={[styles.tipDot, { backgroundColor: tip.color }]} />
+                      </View>
+                      <Text style={styles.tipLabel}>{tip.label}</Text>
+                      <Text style={styles.tipBody}>{tip.body}</Text>
+                    </AmbientSurface>
+                  ))}
+                </View>
+
+                <AmbientSurface accent={accent} style={styles.readyCard}>
+                  <Text style={[styles.readyEyebrow, { color: accent }]}>YOUR SPACE IS READY</Text>
+                  <Text style={styles.readyTitle}>Begin where you are.</Text>
+                  <Text style={styles.readyBody}>
+                    There is no perfect sequence. Choose the room that meets this moment.
+                  </Text>
+                </AmbientSurface>
+
+                <PrimaryAction label="ENTER SIMPLY AMBIENT" accent={accent} onPress={persistProfileAndDone} />
+              </View>
+            </ScrollView>
+          )}
+        </Animated.View>
+      </KeyboardAvoidingView>
+
+      <View
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel="Onboarding progress"
+        accessibilityValue={{
+          min: 1,
+          max: steps.length,
+          now: currentStepIndex + 1,
+          text: `${STEP_META[step].label}, step ${currentStepIndex + 1} of ${steps.length}`,
+        }}
+        pointerEvents="none"
+        style={[styles.progressDock, { top: insets.top + 11 }]}
+      >
+        <View style={styles.progressMetaRow}>
+          <Text style={[styles.progressLabel, { color: accent }]}>{STEP_META[step].label.toUpperCase()}</Text>
+          <Text style={styles.progressCount}>
+            {String(currentStepIndex + 1).padStart(2, '0')} / {String(steps.length).padStart(2, '0')}
+          </Text>
+        </View>
+        <View style={styles.progressRail}>
+          {steps.map((sequenceStep, index) => {
+            const complete = index < currentStepIndex;
+            const current = index === currentStepIndex;
+            return (
+              <View
+                key={sequenceStep}
+                style={[
+                  styles.progressSegment,
+                  (complete || current) && { backgroundColor: accent + (current ? 'FF' : '66') },
+                  current && styles.progressSegmentCurrent,
+                ]}
+              />
+            );
+          })}
+        </View>
       </View>
+    </AmbientVeil>
+  );
+}
+
+function PrimaryAction({
+  label,
+  accent,
+  onPress,
+  disabled = false,
+}: {
+  label: string;
+  accent: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.82}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[
+        styles.primaryButton,
+        {
+          backgroundColor: disabled ? 'rgba(255,255,255,0.12)' : accent,
+          shadowColor: accent,
+        },
+      ]}
+    >
+      <Text style={[styles.primaryButtonText, disabled && styles.primaryButtonTextDisabled]}>
+        {label}
+      </Text>
+      <Text style={[styles.primaryArrow, disabled && styles.primaryButtonTextDisabled]}>→</Text>
+    </TouchableOpacity>
+  );
+}
+
+function SecondaryAction({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.72}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={styles.secondaryButton}
+    >
+      <Text style={styles.secondaryButtonText}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function SafetySection({
+  number,
+  label,
+  body,
+  color,
+  last = false,
+}: {
+  number: string;
+  label: string;
+  body: string;
+  color: string;
+  last?: boolean;
+}) {
+  return (
+    <View style={[styles.safetySection, last && styles.safetySectionLast]}>
+      <View style={styles.safetyHeadingRow}>
+        <Text style={[styles.safetyNumber, { color }]}>{number}</Text>
+        <Text style={styles.safetyLabel}>{label}</Text>
+      </View>
+      <Text style={styles.safetyBody}>{body}</Text>
     </View>
   );
 }
 
 function RecRow({
-  label, title, where, reason, color,
+  index,
+  label,
+  title,
+  where,
+  reason,
+  color,
 }: {
-  label: string; title: string; where: string; reason: string; color: string;
+  index: string;
+  label: string;
+  title: string;
+  where: string;
+  reason: string;
+  color: string;
 }) {
   return (
-    <View style={[styles.recRow, { borderColor: color + '55' }]}>
-      <Text style={[styles.recLabel, { color }]}>{label}</Text>
+    <AmbientSurface accent={color} quiet style={styles.recRow}>
+      <View style={styles.recTopRow}>
+        <Text style={[styles.recIndex, { color }]}>{index}</Text>
+        <Text style={[styles.recLabel, { color }]}>{label}</Text>
+        <Text style={styles.recWhere}>{where}</Text>
+      </View>
       <Text style={styles.recTitle}>{title}</Text>
       <Text style={styles.recReason}>{reason}</Text>
-      <Text style={styles.recWhere}>{where}</Text>
-    </View>
+    </AmbientSurface>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0B0B1F' },
-  scroll: { flexGrow: 1, padding: 24, paddingTop: 80, paddingBottom: 40 },
-  dotsRow: {
-    position: 'absolute', top: 52, left: 0, right: 0,
-    flexDirection: 'row', justifyContent: 'center', gap: 8,
-  },
-  dot: {
-    width: 6, height: 6, borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
-  dotActive: { backgroundColor: 'rgba(255,255,255,0.85)' },
-  center: { alignItems: 'center', marginBottom: 24 },
-  enso: {
-    width: 56, height: 56, borderRadius: 28,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)',
-    marginBottom: 18,
-    transform: [{ rotate: '-18deg' }],
-  },
-  title: {
-    color: '#fff',
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 44, letterSpacing: 2.5,
-    textAlign: 'center',
-  },
-  tagline: {
-    color: '#ffffffcc',
-    fontFamily: 'CormorantGaramond_500Medium_Italic',
-    fontSize: 17, letterSpacing: 1,
-    textAlign: 'center', marginTop: 6,
-  },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 18 },
-  dividerLine: { width: 28, height: 1, backgroundColor: 'rgba(255,255,255,0.35)' },
-  subtitle: {
-    color: '#ffffffaa', fontSize: 10, letterSpacing: 4,
-    marginHorizontal: 14, fontStyle: 'italic',
-  },
-  intro: {
-    color: '#ffffffcc', fontSize: 14, lineHeight: 22,
-    textAlign: 'center', marginTop: 22, paddingHorizontal: 8,
-  },
+  root: { flex: 1, backgroundColor: 'transparent' },
+  keyboardLayer: { flex: 1 },
+  animatedLayer: { flex: 1 },
+  scroll: { flexGrow: 1 },
+  pageBody: { paddingHorizontal: 20 },
 
-  smallTitle: {
-    color: '#fff', fontSize: 22,
-    fontFamily: 'CormorantGaramond_500Medium',
-    letterSpacing: 0.5, textAlign: 'center',
-  },
-  smallSub: { color: '#ffffff99', fontSize: 13, textAlign: 'center', marginTop: 4, fontStyle: 'italic' },
-
-  intentCard: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: 16, padding: 16, marginBottom: 10,
+  progressDock: {
+    position: 'absolute',
+    left: 22,
+    right: 22,
+    minHeight: 52,
+    borderRadius: 17,
     borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(11,12,30,0.54)',
+    paddingHorizontal: 13,
+    paddingVertical: 10,
   },
-  intentGlyph: { fontSize: 28, width: 48, textAlign: 'center', marginRight: 8 },
-  intentLabel: { color: '#fff', fontSize: 17, fontWeight: '600', letterSpacing: 0.5 },
-  intentBlurb: { color: '#ffffff99', fontSize: 12, marginTop: 2 },
-
-  recRow: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1,
+  progressMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  progressLabel: { fontSize: 8, fontWeight: '900', letterSpacing: 1.8 },
+  progressCount: { color: '#92909F', fontSize: 8, fontWeight: '800', letterSpacing: 1.2 },
+  progressRail: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 9 },
+  progressSegment: {
+    flex: 1,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  recLabel: { fontSize: 10, letterSpacing: 2, fontWeight: '700' },
-  recTitle: { color: '#fff', fontSize: 16, fontWeight: '600', marginTop: 4 },
-  recReason: { color: '#ffffffaa', fontSize: 12, marginTop: 4, lineHeight: 17 },
-  recWhere: { color: '#ffffff66', fontSize: 11, marginTop: 6, fontStyle: 'italic' },
+  progressSegmentCurrent: { height: 4 },
 
-  outro: {
-    color: '#ffffff88', fontSize: 12, lineHeight: 18,
-    textAlign: 'center', marginTop: 18, paddingHorizontal: 12,
+  welcomeCard: { minHeight: 315, padding: 21, justifyContent: 'flex-end' },
+  welcomeOrbit: {
+    position: 'absolute',
+    right: -28,
+    top: -34,
+    width: 218,
+    height: 218,
+    borderRadius: 109,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-
-  primaryBtn: {
-    paddingVertical: 16, borderRadius: 999,
-    backgroundColor: '#fff', alignItems: 'center',
-    marginTop: 24,
+  welcomeOrbitMiddle: {
+    width: 146,
+    height: 146,
+    borderRadius: 73,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  primaryBtnText: { color: '#0B0B1F', fontSize: 14, fontWeight: '800', letterSpacing: 4 },
-  skipBtn: { alignSelf: 'center', marginTop: 16, padding: 8 },
-  skipText: { color: '#ffffff88', fontSize: 12, letterSpacing: 1 },
+  welcomeOrbitInner: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  welcomeCore: { width: 9, height: 9, borderRadius: 5, shadowOpacity: 0.8, shadowRadius: 14 },
+  welcomeEyebrow: { fontSize: 8.5, fontWeight: '900', letterSpacing: 2.2 },
+  welcomeStatement: {
+    color: '#FCFAFF',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 34,
+    lineHeight: 35,
+    letterSpacing: 0.1,
+    marginTop: 8,
+  },
+  welcomeBody: { color: '#B5B2C0', fontSize: 11.5, lineHeight: 18, marginTop: 15, maxWidth: 286 },
+  headphoneCard: {
+    minHeight: 88,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headphoneGlyph: {
+    width: 50,
+    height: 50,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#8FB8DE55',
+    backgroundColor: '#8FB8DE12',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 13,
+  },
+  headphoneGlyphText: { color: '#8FB8DE', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  headphoneCopy: { flex: 1 },
+  headphoneTitle: { color: '#F6F4FA', fontSize: 13, fontWeight: '700' },
+  headphoneBody: { color: '#A6A4B3', fontSize: 10.5, lineHeight: 15, marginTop: 3 },
 
+  primaryButton: {
+    minHeight: 56,
+    borderRadius: 20,
+    paddingHorizontal: 19,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    shadowOpacity: 0.24,
+    shadowRadius: 17,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+  primaryButtonText: { color: '#090A1C', fontSize: 10, fontWeight: '900', letterSpacing: 2.5 },
+  primaryButtonTextDisabled: { color: '#777585' },
+  primaryArrow: { color: '#090A1C', fontSize: 18, lineHeight: 20 },
+  secondaryButton: {
+    minHeight: 46,
+    alignSelf: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    marginTop: 5,
+  },
+  secondaryButtonText: { color: '#9B99A8', fontSize: 11, letterSpacing: 0.7 },
+
+  safetyCard: { paddingHorizontal: 18, paddingVertical: 3 },
   safetySection: {
-    marginTop: 16,
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.10)',
+    paddingVertical: 17,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.085)',
   },
-  safetyLabel: {
-    color: '#9aa0b4',
-    fontSize: 10,
-    letterSpacing: 2,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  safetyBody: {
-    color: '#ffffffcc',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  safetyAck: {
-    color: '#ffffff88',
-    fontSize: 12,
-    fontStyle: 'italic',
-    lineHeight: 18,
-    marginTop: 22,
-    marginBottom: 6,
-    textAlign: 'center',
-  },
+  safetySectionLast: { borderBottomWidth: 0 },
+  safetyHeadingRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  safetyNumber: { fontSize: 8, fontWeight: '900', letterSpacing: 1.4, marginRight: 9 },
+  safetyLabel: { color: '#D8D5DF', fontSize: 9, letterSpacing: 1.8, fontWeight: '800' },
+  safetyBody: { color: '#BCB9C7', fontSize: 11.5, lineHeight: 18 },
+  acknowledgement: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 18, paddingHorizontal: 8 },
+  ackRule: { width: 2, height: 34, borderRadius: 1, marginRight: 11, opacity: 0.65 },
+  safetyAck: { color: '#8E8C9B', fontSize: 10, fontStyle: 'italic', lineHeight: 16, flex: 1 },
 
-  fieldLabel: {
-    color: '#ffffff80',
-    fontSize: 10,
-    letterSpacing: 2,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  fieldHint: {
-    color: '#ffffff66',
-    fontSize: 11,
-    fontStyle: 'italic',
-    marginBottom: 8,
-  },
-  fieldInput: {
-    color: '#fff',
-    fontSize: 16,
-    backgroundColor: 'rgba(0,0,0,0.30)',
+  intentGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  intentTouch: { flexGrow: 1, flexBasis: '46%', borderRadius: 24 },
+  intentCard: { minHeight: 155, padding: 16, justifyContent: 'space-between' },
+  intentTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  intentGlyph: { fontSize: 32, lineHeight: 38 },
+  intentSelection: {
+    width: 23,
+    height: 23,
     borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  intentCheck: { color: '#0B0B1F', fontSize: 11, fontWeight: '900' },
+  intentLabel: {
+    color: '#FAF8FF',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 25,
+    lineHeight: 27,
+    marginTop: 15,
+  },
+  intentBlurb: { color: '#A7A5B4', fontSize: 10.5, lineHeight: 15, marginTop: 4 },
+
+  privacyCard: {
+    minHeight: 84,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  privacyMark: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    backgroundColor: '#9DC7AC14',
+    borderWidth: 1,
+    borderColor: '#9DC7AC44',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 13,
+  },
+  privacyMarkText: { color: '#9DC7AC', fontSize: 25 },
+  privacyCopy: { flex: 1 },
+  privacyTitle: { color: '#F4F2F8', fontSize: 13, fontWeight: '700' },
+  privacyBody: { color: '#9F9DAC', fontSize: 10.5, lineHeight: 15, marginTop: 3 },
+  formCard: { padding: 18, marginTop: 12 },
+  formEyebrow: { fontSize: 8.5, fontWeight: '900', letterSpacing: 2, marginBottom: 20 },
+  fieldLabel: { color: '#B0AEBB', fontSize: 8.5, letterSpacing: 1.7, fontWeight: '800' },
+  fieldHint: { color: '#7F7D8D', fontSize: 10, fontStyle: 'italic', marginTop: 5, marginBottom: 9 },
+  fieldInput: {
+    color: '#F9F7FC',
+    fontSize: 15,
+    minHeight: 51,
+    backgroundColor: 'rgba(8,9,25,0.36)',
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    marginTop: 8,
   },
-  dateRow: {
+  dateHeadingRow: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
   },
-  datePickerWrap: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 12,
+  optionalPill: {
+    color: '#777585',
+    fontSize: 7,
+    fontWeight: '800',
+    letterSpacing: 1.2,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  dateRow: { flexDirection: 'row', gap: 7 },
+  datePickerWrap: {
+    minHeight: 50,
+    backgroundColor: 'rgba(8,9,25,0.36)',
+    borderRadius: 15,
+    borderWidth: 1,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  datePicker: {
-    color: '#fff',
+  datePicker: { color: '#F7F5FA' },
+  profileFootnote: {
+    color: '#817F8E',
+    fontSize: 10,
+    lineHeight: 15,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    marginTop: 14,
   },
+
+  pathHero: { minHeight: 116, padding: 17, flexDirection: 'row', alignItems: 'center' },
+  pathGlyph: { width: 62, fontSize: 47, lineHeight: 54, textAlign: 'center', marginRight: 12 },
+  pathHeroCopy: { flex: 1 },
+  pathEyebrow: { fontSize: 8, fontWeight: '900', letterSpacing: 1.8 },
+  pathTitle: {
+    color: '#FAF8FF',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 28,
+    lineHeight: 30,
+    marginTop: 2,
+  },
+  pathBlurb: { color: '#A7A5B4', fontSize: 10.5, lineHeight: 15, marginTop: 3 },
+  recommendationStack: { gap: 10 },
+  recRow: { padding: 16 },
+  recTopRow: { flexDirection: 'row', alignItems: 'center' },
+  recIndex: { fontSize: 8, fontWeight: '900', letterSpacing: 1.3, marginRight: 8 },
+  recLabel: { fontSize: 8, letterSpacing: 1.7, fontWeight: '900', flex: 1 },
+  recWhere: { color: '#797786', fontSize: 9, fontStyle: 'italic' },
+  recTitle: {
+    color: '#FAF8FF',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 23,
+    lineHeight: 26,
+    marginTop: 11,
+  },
+  recReason: { color: '#AAA8B6', fontSize: 10.5, lineHeight: 16, marginTop: 3 },
+  outro: { color: '#838190', fontSize: 10.5, lineHeight: 16, textAlign: 'center', marginTop: 17, paddingHorizontal: 14 },
+  fallbackCard: { minHeight: 260, padding: 22, alignItems: 'center', justifyContent: 'center' },
+  fallbackGlyph: { fontSize: 45, marginBottom: 13 },
+  fallbackTitle: {
+    color: '#FAF8FF',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 31,
+  },
+  fallbackBody: { color: '#AAA8B6', fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 6 },
+
+  tipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  tipCard: { flexGrow: 1, flexBasis: '46%', minHeight: 181, padding: 15 },
+  tipTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  tipIndex: { fontSize: 8, fontWeight: '900', letterSpacing: 1.3 },
+  tipDot: { width: 5, height: 5, borderRadius: 3 },
+  tipLabel: { color: '#E8E5ED', fontSize: 9, fontWeight: '900', letterSpacing: 1.5, marginTop: 24 },
+  tipBody: { color: '#A5A3B1', fontSize: 10, lineHeight: 15.5, marginTop: 8 },
+  readyCard: { padding: 19, marginTop: 12 },
+  readyEyebrow: { fontSize: 8, fontWeight: '900', letterSpacing: 1.8 },
+  readyTitle: {
+    color: '#FAF8FF',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 29,
+    lineHeight: 31,
+    marginTop: 6,
+  },
+  readyBody: { color: '#A6A4B2', fontSize: 10.5, lineHeight: 16, marginTop: 5 },
 });

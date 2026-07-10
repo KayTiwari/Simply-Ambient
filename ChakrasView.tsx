@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -10,6 +10,13 @@ import {
 import { Wind, Flame, Mountains, type IconProps } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import {
+  AmbientSurface,
+  AmbientVeil,
+  EditorialHeader,
+  EditorialSection,
+  StatusStrip,
+} from './AmbientUI';
 import type { Chakra, Dosha } from './lib/content';
 
 const DOSHA_ICONS: Record<Dosha['id'], React.ComponentType<IconProps>> = {
@@ -33,338 +40,626 @@ type Props = {
 };
 
 export default function ChakrasView({
-  chakras, doshas, activePresetId,
-  onApplyChakra, onApplyDosha,
-  toneIsPlaying, toneIsLoading, onTogglePlay,
-  beatHz, bandName, bandColor,
+  chakras,
+  doshas,
+  activePresetId,
+  onApplyChakra,
+  onApplyDosha,
+  toneIsPlaying,
+  toneIsLoading,
+  onTogglePlay,
+  beatHz,
+  bandName,
+  bandColor,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const [selectedChakraId, setSelectedChakraId] = useState(() => (
+    chakras.find(chakra => chakra.id === activePresetId)?.id
+      ?? chakras.find(chakra => chakra.name === 'Heart')?.id
+      ?? chakras[0]?.id
+      ?? ''
+  ));
+
+  useEffect(() => {
+    if (chakras.some(chakra => chakra.id === activePresetId)) {
+      setSelectedChakraId(activePresetId ?? '');
+    }
+  }, [activePresetId, chakras]);
+
+  const spectrum = useMemo(() => [...chakras].reverse(), [chakras]);
+  const selectedChakra = chakras.find(chakra => chakra.id === selectedChakraId)
+    ?? chakras[0]
+    ?? null;
+
+  const selectChakra = (chakra: Chakra) => {
+    setSelectedChakraId(chakra.id);
+    onApplyChakra(chakra);
+  };
+
   return (
-    <View style={{ flex: 1 }}>
-      <View style={styles.headerWrap}>
-        <Text style={styles.ambience}>Simply Ambient</Text>
-        <Text style={styles.title}>Chakras</Text>
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.subtitle}>Seven gates of the body</Text>
-          <View style={styles.dividerLine} />
-        </View>
-      </View>
-
-      <View style={styles.controlRow}>
-        <View style={[styles.toneStrip, { flex: 1, marginHorizontal: 0 }]}>
-          <View style={[styles.toneDot, { backgroundColor: bandColor, opacity: toneIsPlaying ? 1 : 0.4 }]} />
-          <Text style={styles.toneText} numberOfLines={1}>
-            <Text style={{ color: bandColor, fontWeight: '700' }}>{bandName}</Text>
-            <Text style={{ color: '#ffffff99' }}> · {beatHz} Hz {toneIsPlaying ? '· playing' : ''}</Text>
-          </Text>
-        </View>
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={onTogglePlay}
-          style={[styles.playBtn, { backgroundColor: toneIsPlaying ? '#fff' : bandColor }]}
-        >
-          {toneIsLoading ? (
-            <ActivityIndicator color="#0B0B1F" />
-          ) : (
-            <Text style={styles.playBtnText}>{toneIsPlaying ? 'STOP' : 'PLAY'}</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
+    <AmbientVeil accent={bandColor} strength="light">
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 96 }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 104 }]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.sectionLabel}>CHAKRAS</Text>
-        <Text style={styles.sectionSub}>Tap one to tune the tone to its frequency.</Text>
+        <EditorialHeader
+          mode="ALIGN"
+          title="Move through the spectrum"
+          subtitle="A contemplative map of seven traditional centers — from grounded presence to spacious awareness."
+          accent={bandColor}
+        />
 
-        {chakras.map(c => {
-          const active = activePresetId === c.id;
-          return (
-            <TouchableOpacity
-              key={c.id}
-              activeOpacity={0.85}
-              onPress={() => onApplyChakra(c)}
-              style={[styles.card, active && { borderColor: c.color }]}
-            >
-              <View style={styles.cardTopRow}>
-                <View style={[styles.symbolBox, { borderColor: c.color + '55' }]}>
-                  <Text style={[styles.chakraSymbol, { color: c.color }]}>{c.symbol}</Text>
-                  <Text style={styles.numText}>{c.number}</Text>
+        <View style={styles.body}>
+          <AmbientSurface accent={bandColor} style={styles.toneConsole}>
+            <View style={styles.consoleTopRow}>
+              <Text style={styles.consoleEyebrow}>CURRENT TONE</Text>
+              <StatusStrip
+                accent={bandColor}
+                label={toneIsPlaying ? 'LISTENING' : 'READY'}
+                detail={bandName}
+                active={toneIsPlaying}
+              />
+            </View>
+
+            <View style={styles.consoleMainRow}>
+              <View style={styles.frequencyBlock}>
+                <View style={styles.frequencyLine}>
+                  <Text style={styles.frequencyValue}>{beatHz}</Text>
+                  <Text style={[styles.frequencyUnit, { color: bandColor }]}>Hz</Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardName}>{c.name}</Text>
-                  <Text style={styles.sanskrit}>
-                    {c.sanskrit}
-                    <Text style={styles.sanskritMeaning}>  ·  {c.sanskritMeaning}</Text>
-                  </Text>
-                </View>
-                <View style={styles.bijaBlock}>
-                  <View style={[styles.bijaRule, { backgroundColor: c.color }]} />
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.bijaText, { color: c.color, textShadowColor: 'rgba(0,0,0,0.85)' }]}>
-                      {c.bija}
-                    </Text>
-                    <Text style={[styles.bijaPronunciation, { color: c.color, textShadowColor: 'rgba(0,0,0,0.7)' }]}>
-                      {c.bijaPronunciation}
+                <Text style={styles.frequencyCaption}>
+                  {toneIsPlaying ? 'The selected tone is playing' : 'Choose a center below, then begin'}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.82}
+                accessibilityRole="button"
+                accessibilityLabel={toneIsPlaying ? 'Stop chakra tone' : 'Play chakra tone'}
+                accessibilityState={{ disabled: toneIsLoading }}
+                disabled={toneIsLoading}
+                onPress={onTogglePlay}
+                style={[
+                  styles.playButton,
+                  {
+                    backgroundColor: toneIsPlaying ? '#F8F5FF' : bandColor,
+                    shadowColor: bandColor,
+                    opacity: toneIsLoading ? 0.68 : 1,
+                  },
+                ]}
+              >
+                {toneIsLoading ? (
+                  <ActivityIndicator color="#0B0B1F" size="small" />
+                ) : (
+                  <>
+                    <View style={toneIsPlaying ? styles.stopGlyph : styles.playGlyph} />
+                    <Text style={styles.playButtonText}>{toneIsPlaying ? 'STOP' : 'BEGIN'}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </AmbientSurface>
+
+          <EditorialSection
+            index="01"
+            eyebrow="CHAKRA MAP"
+            title="Seven centers, one listening path"
+            subtitle="Tap any point to tune the tone and open its correspondences."
+            accent={bandColor}
+          />
+
+          <AmbientSurface accent={bandColor} quiet style={styles.spectrumSurface}>
+            <View style={styles.spectrumLine} pointerEvents="none" />
+            {spectrum.map(chakra => {
+              const selected = chakra.id === selectedChakra?.id;
+              const active = chakra.id === activePresetId;
+
+              return (
+                <TouchableOpacity
+                  key={chakra.id}
+                  activeOpacity={0.76}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${chakra.name} chakra, ${chakra.hz} hertz, ${chakra.location}`}
+                  accessibilityHint="Tunes the tone and opens this center's details"
+                  accessibilityState={{ selected }}
+                  onPress={() => selectChakra(chakra)}
+                  style={[
+                    styles.spectrumRow,
+                    selected && {
+                      backgroundColor: chakra.color + '14',
+                      borderColor: chakra.color + '3D',
+                    },
+                  ]}
+                >
+                  <View style={styles.nodeColumn}>
+                    <View
+                      style={[
+                        styles.nodeHalo,
+                        selected && {
+                          borderColor: chakra.color + '99',
+                          backgroundColor: chakra.color + '20',
+                          shadowColor: chakra.color,
+                        },
+                      ]}
+                    >
+                      <View style={[styles.node, { backgroundColor: chakra.color }]} />
+                    </View>
+                  </View>
+
+                  <View style={styles.spectrumCopy}>
+                    <View style={styles.spectrumNameRow}>
+                      <Text style={[styles.spectrumIndex, { color: chakra.color }]}>
+                        {String(chakra.number).padStart(2, '0')}
+                      </Text>
+                      <Text style={styles.spectrumName}>{chakra.name}</Text>
+                      {active ? (
+                        <View style={[styles.tunedPill, { borderColor: chakra.color + '66' }]}>
+                          <Text style={[styles.tunedText, { color: chakra.color }]}>TUNED</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text style={styles.spectrumMeta} numberOfLines={1}>
+                      {chakra.sanskrit} · {chakra.location}
                     </Text>
                   </View>
-                </View>
-              </View>
 
-              <View style={styles.metaRow}>
-                <Text style={styles.metaText}>{c.hz} Hz</Text>
-                <Text style={styles.metaDot}>·</Text>
-                <Text style={styles.metaText}>{c.element}</Text>
-                <Text style={styles.metaDot}>·</Text>
-                <Text style={styles.metaText} numberOfLines={1}>{c.location}</Text>
-              </View>
+                  <View style={styles.hzBlock}>
+                    <Text style={[styles.hzValue, { color: chakra.color }]}>{chakra.hz}</Text>
+                    <Text style={styles.hzUnit}>HZ</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </AmbientSurface>
 
-              <Text style={[styles.affirmation, { color: c.color }]}>
-                "{c.affirmation}"
+          {selectedChakra ? (
+            <AmbientSurface
+              accent={selectedChakra.color}
+              style={[styles.readingCard, { borderColor: selectedChakra.color + '55' }]}
+            >
+              <Text
+                style={[styles.symbolWatermark, { color: selectedChakra.color + '18' }]}
+                pointerEvents="none"
+              >
+                {selectedChakra.symbol}
               </Text>
 
-              <Text style={[styles.governs, { color: c.color }]}>{c.governs}</Text>
-              <Text style={styles.blocked}>Blocked: <Text style={{ color: '#ffffffB0' }}>{c.blocked}</Text></Text>
-
-              <View style={styles.correspondenceRow}>
-                <View style={styles.correspondenceCol}>
-                  <Text style={styles.correspondenceLabel}>PLANETS</Text>
-                  <Text style={[styles.correspondenceValue, { color: c.color }]}>{c.planets}</Text>
+              <View style={styles.readingTopRow}>
+                <View style={[styles.symbolMedallion, { borderColor: selectedChakra.color + '70' }]}>
+                  <Text style={[styles.symbol, { color: selectedChakra.color }]}>
+                    {selectedChakra.symbol}
+                  </Text>
                 </View>
-                <View style={styles.correspondenceCol}>
-                  <Text style={styles.correspondenceLabel}>GLAND</Text>
-                  <Text style={[styles.correspondenceValue, { color: c.color }]}>{c.gland}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-
-        <View style={{ marginTop: 24 }}>
-          <Text style={styles.sectionLabel}>DOSHAS</Text>
-          <Text style={styles.sectionSub}>Ayurvedic constitution · pick one to balance</Text>
-        </View>
-
-        {doshas.map(d => {
-          const active = activePresetId === `dosha-${d.id}`;
-          const DoshaIcon = DOSHA_ICONS[d.id];
-          return (
-            <TouchableOpacity
-              key={d.id}
-              activeOpacity={0.85}
-              onPress={() => onApplyDosha(d)}
-              style={[styles.doshaCard, active && { borderColor: d.color }]}
-            >
-              <View style={styles.cardTopRow}>
-                <View style={[
-                  styles.doshaIconWrap,
-                  {
-                    borderColor: d.color + '88',
-                    shadowColor: d.color,
-                  },
-                ]}>
-                  <View style={[styles.doshaIconInner, { backgroundColor: d.color + '14' }]} />
-                  <DoshaIcon size={26} weight="fill" color={d.color} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.doshaName}>{d.name}</Text>
-                  <Text style={[styles.metaText, { color: d.color }]}>{d.element}</Text>
-                </View>
-                <View style={styles.bijaBlock}>
-                  <View style={[styles.bijaRule, { backgroundColor: d.color }]} />
-                  <Text style={[styles.bijaText, { color: d.color, fontSize: 13, letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.85)' }]}>
-                    {d.balanceHz} Hz
+                <View style={styles.readingHeading}>
+                  <Text style={[styles.readingEyebrow, { color: selectedChakra.color }]}>
+                    CENTER {String(selectedChakra.number).padStart(2, '0')} · {selectedChakra.element.toUpperCase()}
+                  </Text>
+                  <Text style={styles.readingTitle}>{selectedChakra.name}</Text>
+                  <Text style={styles.sanskritLine}>
+                    {selectedChakra.sanskrit} · {selectedChakra.sanskritMeaning}
                   </Text>
                 </View>
               </View>
-              <Text style={styles.qualities}>{d.qualities}</Text>
-              <Text style={styles.doshaDescription}>{d.description}</Text>
-              <Text style={styles.balanceLine}>
-                <Text style={{ color: '#ffffff99' }}>Balance with </Text>
-                <Text style={{ color: d.color, fontWeight: '700' }}>{d.balanceTechnique}</Text>
-                <Text style={{ color: '#ffffff99' }}> at </Text>
-                <Text style={{ color: d.color, fontWeight: '700' }}>{d.balanceHz} Hz</Text>
+
+              <View style={[styles.mantraPanel, { borderColor: selectedChakra.color + '38' }]}>
+                <View>
+                  <Text style={styles.microLabel}>AFFIRMATION</Text>
+                  <Text style={[styles.affirmation, { color: selectedChakra.color }]}>
+                    “{selectedChakra.affirmation}”
+                  </Text>
+                </View>
+                <View style={styles.mantraRule} />
+                <View style={styles.bijaColumn}>
+                  <Text style={styles.microLabel}>BIJA</Text>
+                  <Text style={[styles.bija, { color: selectedChakra.color }]}>
+                    {selectedChakra.bija}
+                  </Text>
+                  <Text style={styles.pronunciation}>{selectedChakra.bijaPronunciation}</Text>
+                </View>
+              </View>
+
+              <View style={styles.detailPair}>
+                <View style={styles.detailColumn}>
+                  <Text style={styles.microLabel}>ASSOCIATED WITH</Text>
+                  <Text style={styles.detailValue}>{selectedChakra.governs}</Text>
+                </View>
+                <View style={styles.detailColumn}>
+                  <Text style={styles.microLabel}>WHEN CONSTRICTED</Text>
+                  <Text style={styles.detailValue}>{selectedChakra.blocked}</Text>
+                </View>
+              </View>
+
+              <View style={styles.correspondenceGrid}>
+                <View style={styles.correspondenceCell}>
+                  <Text style={styles.microLabel}>LOCATION</Text>
+                  <Text style={[styles.correspondenceValue, { color: selectedChakra.color }]}>
+                    {selectedChakra.location}
+                  </Text>
+                </View>
+                <View style={styles.correspondenceCell}>
+                  <Text style={styles.microLabel}>PLANETARY</Text>
+                  <Text style={[styles.correspondenceValue, { color: selectedChakra.color }]}>
+                    {selectedChakra.planets}
+                  </Text>
+                </View>
+                <View style={styles.correspondenceCell}>
+                  <Text style={styles.microLabel}>GLAND</Text>
+                  <Text style={[styles.correspondenceValue, { color: selectedChakra.color }]}>
+                    {selectedChakra.gland}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.contextNote}>
+                These contemplative correspondences come from varied modern and traditional lineages; use them as a reflective map, not medical guidance.
               </Text>
-            </TouchableOpacity>
-          );
-        })}
+            </AmbientSurface>
+          ) : null}
+
+          <View style={styles.exploreDivider} />
+
+          <EditorialSection
+            index="02"
+            eyebrow="EXPLORE"
+            title="Ayurvedic constitutions"
+            subtitle="A separate traditional lens for noticing elemental qualities and choosing a balancing tone."
+            accent={bandColor}
+          />
+
+          <View style={styles.doshaStack}>
+            {doshas.map(dosha => {
+              const active = activePresetId === `dosha-${dosha.id}`;
+              const DoshaIcon = DOSHA_ICONS[dosha.id];
+
+              return (
+                <TouchableOpacity
+                  key={dosha.id}
+                  activeOpacity={0.78}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${dosha.name} dosha, ${dosha.element}, balance at ${dosha.balanceHz} hertz`}
+                  accessibilityHint="Applies this dosha balancing tone"
+                  accessibilityState={{ selected: active }}
+                  onPress={() => onApplyDosha(dosha)}
+                  style={styles.doshaTouch}
+                >
+                  <AmbientSurface
+                    accent={dosha.color}
+                    quiet
+                    style={[
+                      styles.doshaCard,
+                      active && { borderColor: dosha.color + '88' },
+                    ]}
+                  >
+                    <View style={styles.doshaTopRow}>
+                      <View
+                        style={[
+                          styles.doshaIcon,
+                          {
+                            borderColor: dosha.color + '66',
+                            backgroundColor: dosha.color + '12',
+                          },
+                        ]}
+                      >
+                        <DoshaIcon size={25} weight="fill" color={dosha.color} />
+                      </View>
+
+                      <View style={styles.doshaHeading}>
+                        <Text style={[styles.doshaEyebrow, { color: dosha.color }]}>
+                          {dosha.element.toUpperCase()}
+                        </Text>
+                        <Text style={styles.doshaName}>{dosha.name}</Text>
+                      </View>
+
+                      <View style={[styles.doshaHz, { borderColor: dosha.color + '44' }]}>
+                        <Text style={[styles.doshaHzValue, { color: dosha.color }]}>
+                          {dosha.balanceHz}
+                        </Text>
+                        <Text style={styles.doshaHzUnit}>HZ</Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.qualities}>{dosha.qualities}</Text>
+                    <Text style={styles.doshaDescription}>{dosha.description}</Text>
+
+                    <View style={styles.balanceRow}>
+                      <Text style={styles.balanceLabel}>BALANCING PRACTICE</Text>
+                      <Text style={[styles.balanceTechnique, { color: dosha.color }]}>
+                        {dosha.balanceTechnique}  →
+                      </Text>
+                    </View>
+
+                    {active ? (
+                      <View style={[styles.activeDoshaRule, { backgroundColor: dosha.color }]} />
+                    ) : null}
+                  </AmbientSurface>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={styles.footerNote}>
+            Sound settings are for personal reflection and relaxation. Listen at a comfortable volume.
+          </Text>
+        </View>
       </ScrollView>
-    </View>
+    </AmbientVeil>
   );
 }
 
 const styles = StyleSheet.create({
-  headerWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 8 },
-  ambience: {
-    color: '#fff',
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 38,
-    letterSpacing: 2.5,
-    textAlign: 'center',
-    lineHeight: 44,
-  },
-  title: {
-    color: '#ffffff99', fontSize: 10, fontWeight: '400',
-    letterSpacing: 4, textTransform: 'uppercase', marginTop: 2,
-  },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  dividerLine: { width: 28, height: 1, backgroundColor: 'rgba(255,255,255,0.35)' },
-  subtitle: {
-    color: '#ffffffaa', fontSize: 10, letterSpacing: 4,
-    marginHorizontal: 14, fontStyle: 'italic',
-  },
+  scrollContent: { flexGrow: 1 },
+  body: { paddingHorizontal: 20 },
 
-  toneStrip: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(15,15,32,0.55)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    marginHorizontal: 20,
-    paddingHorizontal: 12, paddingVertical: 9, borderRadius: 14,
-  },
-  toneDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
-  toneText: { fontSize: 12, letterSpacing: 0.5 },
-  controlRow: {
+  toneConsole: { padding: 16, marginBottom: 2 },
+  consoleTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginTop: 4,
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  playBtn: {
-    height: 44,
-    paddingHorizontal: 22,
-    borderRadius: 999,
+  consoleEyebrow: {
+    color: '#A9A7B8',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 2.1,
+  },
+  consoleMainRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    marginTop: 17,
+    gap: 14,
+  },
+  frequencyBlock: { flex: 1 },
+  frequencyLine: { flexDirection: 'row', alignItems: 'baseline' },
+  frequencyValue: {
+    color: '#FCFAFF',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 42,
+    lineHeight: 42,
+    letterSpacing: -0.6,
+  },
+  frequencyUnit: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 2,
+    marginLeft: 7,
+  },
+  frequencyCaption: { color: '#A6A4B4', fontSize: 10.5, lineHeight: 15, marginTop: 4 },
+  playButton: {
+    minWidth: 106,
+    minHeight: 50,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 10,
-    minWidth: 96,
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 4,
   },
-  playBtnText: {
-    color: '#0B0B1F',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 3,
+  playButtonText: {
+    color: '#0A0B1E',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  playGlyph: {
+    width: 0,
+    height: 0,
+    borderTopWidth: 5,
+    borderBottomWidth: 5,
+    borderLeftWidth: 8,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
+    borderLeftColor: '#0A0B1E',
+    marginRight: 9,
+  },
+  stopGlyph: {
+    width: 9,
+    height: 9,
+    borderRadius: 2,
+    backgroundColor: '#0A0B1E',
+    marginRight: 9,
   },
 
-  card: {
-    backgroundColor: 'rgba(15,15,32,0.55)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    borderRadius: 18, padding: 14, marginBottom: 10,
+  spectrumSurface: { paddingVertical: 10, paddingHorizontal: 10 },
+  spectrumLine: {
+    position: 'absolute',
+    top: 42,
+    bottom: 42,
+    left: 37,
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
-  cardTopRow: {
-    flexDirection: 'row', alignItems: 'center', marginBottom: 8,
-  },
-  numText: { color: '#ffffff66', fontSize: 10, letterSpacing: 1, fontWeight: '600' },
-  symbolBox: {
-    width: 52, height: 52,
-    borderRadius: 26,
+  spectrumRow: {
+    minHeight: 68,
+    borderRadius: 18,
     borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    alignItems: 'center', justifyContent: 'center',
-    marginRight: 12,
+    borderColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginVertical: 2,
   },
-  chakraSymbol: {
-    fontSize: 26,
-    lineHeight: 30,
-    fontWeight: '500',
-    textAlign: 'center',
+  nodeColumn: { width: 34, alignItems: 'center', marginRight: 10 },
+  nodeHalo: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(11,12,31,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowOpacity: 0.38,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 0 },
   },
-  cardName: { color: '#fff', fontSize: 17, fontWeight: '600' },
-  sanskrit: {
-    color: '#ffffff88',
-    fontFamily: 'CormorantGaramond_500Medium_Italic',
-    fontSize: 14,
-    marginTop: 1,
+  node: { width: 8, height: 8, borderRadius: 4 },
+  spectrumCopy: { flex: 1, minWidth: 0 },
+  spectrumNameRow: { flexDirection: 'row', alignItems: 'center' },
+  spectrumIndex: { fontSize: 8, fontWeight: '900', letterSpacing: 1.2, marginRight: 8 },
+  spectrumName: { color: '#F8F6FC', fontSize: 15, fontWeight: '600', flexShrink: 1 },
+  spectrumMeta: { color: '#9997AA', fontSize: 10.5, marginTop: 4 },
+  tunedPill: {
+    marginLeft: 8,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
   },
-  bijaBlock: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingLeft: 10,
+  tunedText: { fontSize: 7, fontWeight: '900', letterSpacing: 1.2 },
+  hzBlock: { minWidth: 44, alignItems: 'flex-end', marginLeft: 8 },
+  hzValue: {
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 18,
+    lineHeight: 19,
   },
-  bijaRule: {
-    width: 1.5, height: 32, marginRight: 10,
-    opacity: 0.85,
-  },
-  bijaText: {
-    fontFamily: 'Cinzel_700Bold',
-    fontSize: 19, letterSpacing: 3,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
-  },
-  bijaPronunciation: {
-    fontFamily: 'CormorantGaramond_500Medium_Italic',
-    fontSize: 15, letterSpacing: 0.4,
-    marginTop: 2,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
-  },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 8 },
-  metaText: { color: '#ffffffB0', fontSize: 11, letterSpacing: 0.3 },
-  metaDot: { color: '#ffffff44', fontSize: 11, marginHorizontal: 6 },
-  governs: { fontSize: 13, fontWeight: '600', letterSpacing: 0.3, marginBottom: 4 },
-  blocked: { color: '#ffffff77', fontSize: 11, lineHeight: 16 },
+  hzUnit: { color: '#777586', fontSize: 7, fontWeight: '800', letterSpacing: 1.2 },
 
-  sanskritMeaning: {
-    color: '#ffffff66',
+  readingCard: { marginTop: 14, padding: 19 },
+  symbolWatermark: {
+    position: 'absolute',
+    right: -16,
+    top: 40,
+    fontSize: 148,
+    lineHeight: 160,
+    fontWeight: '600',
+  },
+  readingTopRow: { flexDirection: 'row', alignItems: 'center' },
+  symbolMedallion: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.045)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  symbol: { fontSize: 29, lineHeight: 34, fontWeight: '500' },
+  readingHeading: { flex: 1 },
+  readingEyebrow: { fontSize: 8, fontWeight: '900', letterSpacing: 1.7 },
+  readingTitle: {
+    color: '#FCFAFF',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 30,
+    lineHeight: 31,
+    marginTop: 3,
+  },
+  sanskritLine: {
+    color: '#B1AFBE',
     fontFamily: 'CormorantGaramond_500Medium_Italic',
     fontSize: 13,
-    fontWeight: '400',
+    marginTop: 2,
   },
+  mantraPanel: {
+    borderWidth: 1,
+    borderRadius: 19,
+    backgroundColor: 'rgba(8,9,25,0.31)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+    marginTop: 18,
+  },
+  microLabel: { color: '#777586', fontSize: 7.5, fontWeight: '900', letterSpacing: 1.5 },
   affirmation: {
     fontFamily: 'CormorantGaramond_500Medium_Italic',
-    fontSize: 18,
-    letterSpacing: 0.5,
-    marginTop: 6, marginBottom: 8,
-    textShadowColor: 'rgba(0,0,0,0.7)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    fontSize: 23,
+    lineHeight: 26,
+    marginTop: 3,
   },
-  correspondenceRow: {
+  mantraRule: { width: 1, height: 38, backgroundColor: 'rgba(255,255,255,0.11)' },
+  bijaColumn: { alignItems: 'flex-end' },
+  bija: { fontFamily: 'Cinzel_700Bold', fontSize: 16, letterSpacing: 2.5, marginTop: 2 },
+  pronunciation: {
+    color: '#9F9DAF',
+    fontFamily: 'CormorantGaramond_500Medium_Italic',
+    fontSize: 13,
+    marginTop: 1,
+  },
+  detailPair: { flexDirection: 'row', gap: 16, marginTop: 17 },
+  detailColumn: { flex: 1 },
+  detailValue: { color: '#C8C5D1', fontSize: 10.5, lineHeight: 16, marginTop: 5 },
+  correspondenceGrid: {
     flexDirection: 'row',
-    marginTop: 10,
-    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.07)',
-    gap: 18,
+    borderTopColor: 'rgba(255,255,255,0.09)',
+    marginTop: 17,
+    paddingTop: 14,
+    gap: 12,
   },
-  correspondenceCol: { flex: 1 },
-  correspondenceLabel: {
-    color: '#ffffff66',
-    fontSize: 9,
-    letterSpacing: 1.5,
-    fontWeight: '700',
-    marginBottom: 3,
-  },
-  correspondenceValue: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
+  correspondenceCell: { flex: 1 },
+  correspondenceValue: { fontSize: 10.5, lineHeight: 15, fontWeight: '600', marginTop: 4 },
+  contextNote: { color: '#777586', fontSize: 9, lineHeight: 14, marginTop: 17 },
 
-  sectionLabel: {
-    color: '#ffffff77', fontSize: 10, letterSpacing: 2, fontWeight: '700',
-    paddingHorizontal: 4, marginBottom: 4,
+  exploreDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignSelf: 'center',
+    marginTop: 28,
+    marginBottom: -10,
   },
-  sectionSub: {
-    color: '#ffffffB0', fontSize: 12, lineHeight: 18,
-    marginBottom: 10, paddingHorizontal: 4,
+  doshaStack: { gap: 11 },
+  doshaTouch: { borderRadius: 26 },
+  doshaCard: { padding: 17 },
+  doshaTopRow: { flexDirection: 'row', alignItems: 'center' },
+  doshaIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
   },
-
-  doshaCard: {
-    backgroundColor: 'rgba(15,15,32,0.55)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    borderRadius: 18, padding: 14, marginBottom: 10,
+  doshaHeading: { flex: 1 },
+  doshaEyebrow: { fontSize: 8, fontWeight: '900', letterSpacing: 1.6 },
+  doshaName: {
+    color: '#FAF8FF',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 25,
+    lineHeight: 27,
+    marginTop: 1,
   },
-  doshaIconWrap: {
-    width: 42, height: 42, borderRadius: 21,
-    marginRight: 12, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, overflow: 'hidden',
-    shadowOpacity: 0.45, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
+  doshaHz: {
+    minWidth: 56,
+    minHeight: 44,
+    borderRadius: 15,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(8,9,25,0.31)',
   },
-  doshaIconInner: { ...StyleSheet.absoluteFillObject },
-  doshaName: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  qualities: { color: '#ffffff99', fontSize: 12, marginTop: 4, letterSpacing: 0.5 },
-  doshaDescription: { color: '#ffffffB0', fontSize: 12, marginTop: 6, lineHeight: 18 },
-  balanceLine: { fontSize: 12, marginTop: 8 },
+  doshaHzValue: { fontSize: 14, fontWeight: '800', letterSpacing: 0.3 },
+  doshaHzUnit: { color: '#777586', fontSize: 6.5, fontWeight: '900', letterSpacing: 1.2 },
+  qualities: { color: '#A4A2B2', fontSize: 10.5, letterSpacing: 0.5, marginTop: 13 },
+  doshaDescription: { color: '#C0BECA', fontSize: 11, lineHeight: 17, marginTop: 7 },
+  balanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    marginTop: 13,
+    paddingTop: 12,
+    gap: 10,
+  },
+  balanceLabel: { color: '#777586', fontSize: 7.5, fontWeight: '900', letterSpacing: 1.3 },
+  balanceTechnique: { fontSize: 10.5, fontWeight: '700', textAlign: 'right', flexShrink: 1 },
+  activeDoshaRule: { height: 2, borderRadius: 1, marginTop: 13 },
+  footerNote: {
+    color: '#6F6D7D',
+    fontSize: 9.5,
+    lineHeight: 15,
+    textAlign: 'center',
+    paddingHorizontal: 22,
+    marginTop: 23,
+  },
 });

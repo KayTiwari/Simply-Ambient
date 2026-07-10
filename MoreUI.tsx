@@ -36,7 +36,7 @@ export function AmbientPageShell({
   return (
     <View style={styles.shell}>
       <LinearGradient
-        colors={['#17182F', '#0C0D22', '#080919']}
+        colors={['rgba(17,18,43,0.34)', 'rgba(10,11,31,0.48)', 'rgba(7,8,24,0.62)']}
         locations={[0, 0.48, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
@@ -46,7 +46,7 @@ export function AmbientPageShell({
         pointerEvents="none"
       >
         <LinearGradient
-          colors={[accent + '42', accent + '12', 'transparent']}
+          colors={[accent + '2B', accent + '0D', 'transparent']}
           locations={[0, 0.5, 1]}
           start={{ x: 0.05, y: 0 }}
           end={{ x: 0.9, y: 1 }}
@@ -62,7 +62,7 @@ export function AmbientPageShell({
         <View style={[styles.star, styles.starTwo]} />
         <View style={[styles.star, styles.starThree, { backgroundColor: accent + '88' }]} />
         <LinearGradient
-          colors={['transparent', '#15112B99']}
+          colors={['transparent', 'rgba(13,11,35,0.42)']}
           style={styles.bottomDepth}
         />
       </Animated.View>
@@ -233,7 +233,7 @@ export function MoreSectionGroup({
 }
 
 const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: '#080919', overflow: 'hidden' },
+  shell: { flex: 1, backgroundColor: 'transparent', overflow: 'hidden' },
   topAurora: {
     position: 'absolute', top: -80, left: -80, right: -40, height: 430,
     borderBottomRightRadius: 260,

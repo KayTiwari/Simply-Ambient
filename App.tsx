@@ -4,7 +4,6 @@ import {
   Alert,
   Animated,
   AppState,
-  Dimensions,
   Easing,
   Keyboard,
   KeyboardAvoidingView,
@@ -93,8 +92,13 @@ import ChakrasView from './ChakrasView';
 import HoroscopesView from './HoroscopesView';
 import MoreView, { type NotifPref } from './MoreView';
 import OnboardingView from './OnboardingView';
+import {
+  AmbientSurface,
+  AmbientVeil,
+  EditorialHeader,
+  EditorialSection,
+} from './AmbientUI';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
 // Themed in-app dialogs. react-native-web ships Alert.alert as an empty stub,
@@ -522,15 +526,15 @@ type TuningOrigin = 'solfeggio' | 'natural' | 'cosmic' | 'archaeo' | 'scientific
 const TUNINGS: TuningPreset[] = [
   { id: 't111', hz: 111, name: '111 Hz', intent: 'Divine resonance',     blurb: 'Hypogeum cymatic tone',   origin: 'archaeo'    },
   { id: 't136', hz: 136, name: '136 Hz', intent: 'OM · Cosmic breath',   blurb: 'Earth orbital tone',      origin: 'cosmic'     },
-  { id: 't174', hz: 174, name: '174 Hz', intent: 'Pain · Grounding',     blurb: 'Eases discomfort',        origin: 'solfeggio'  },
+  { id: 't174', hz: 174, name: '174 Hz', intent: 'Grounding',            blurb: 'Traditional association', origin: 'solfeggio'  },
   { id: 't256', hz: 256, name: '256 Hz', intent: 'Scientific C',         blurb: 'Verdi · ancient pitch',   origin: 'scientific' },
-  { id: 't285', hz: 285, name: '285 Hz', intent: 'Tissue · Renewal',     blurb: 'Cellular repair',         origin: 'solfeggio'  },
+  { id: 't285', hz: 285, name: '285 Hz', intent: 'Renewal',              blurb: 'Traditional association', origin: 'solfeggio'  },
   { id: 't396', hz: 396, name: '396 Hz', intent: 'Release fear',         blurb: 'Liberation from guilt',   origin: 'solfeggio'  },
   { id: 't417', hz: 417, name: '417 Hz', intent: 'Facilitate change',    blurb: 'Undoing patterns',        origin: 'solfeggio'  },
   { id: 't432', hz: 432, name: '432 Hz', intent: 'Earth resonance',      blurb: 'Calm · Grounded tuning',  origin: 'natural'    },
   { id: 't444', hz: 444, name: '444 Hz', intent: 'Angelic tuning',       blurb: 'Companion to 528',        origin: 'natural'    },
-  { id: 't528', hz: 528, name: '528 Hz', intent: 'Love · Miracle tone',  blurb: 'DNA repair · Heart',      origin: 'solfeggio'  },
-  { id: 't639', hz: 639, name: '639 Hz', intent: 'Connection',           blurb: 'Harmonize relationships', origin: 'solfeggio'  },
+  { id: 't528', hz: 528, name: '528 Hz', intent: 'Love · Heart',         blurb: 'Traditional association', origin: 'solfeggio'  },
+  { id: 't639', hz: 639, name: '639 Hz', intent: 'Connection',           blurb: 'Relational reflection',   origin: 'solfeggio'  },
   { id: 't741', hz: 741, name: '741 Hz', intent: 'Expression',           blurb: 'Awakening · Solutions',   origin: 'solfeggio'  },
   { id: 't852', hz: 852, name: '852 Hz', intent: 'Intuition',            blurb: 'Spiritual order',         origin: 'solfeggio'  },
   { id: 't963', hz: 963, name: '963 Hz', intent: 'Divine consciousness', blurb: 'Unity · Oneness',         origin: 'solfeggio'  },
@@ -1209,6 +1213,7 @@ function ManifestQuote() {
 // crossfade between palettes when the band changes.
 function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
   const palette = PALETTES[band];
+  const { height: screenHeight } = useWindowDimensions();
   const xfade = useRef(new Animated.Value(0)).current;
   const drift = useRef(new Animated.Value(0)).current;
   const wash = useRef(new Animated.Value(0)).current;
@@ -1242,7 +1247,7 @@ function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
 
   const op1 = xfade.interpolate({ inputRange: [0, 1], outputRange: [0.95, 0.20] });
   const op2 = xfade.interpolate({ inputRange: [0, 1], outputRange: [0.20, 0.95] });
-  const driftY = drift.interpolate({ inputRange: [0, 1], outputRange: [0, -SCREEN_H * 0.22] });
+  const driftY = drift.interpolate({ inputRange: [0, 1], outputRange: [0, -screenHeight * 0.22] });
   const washOpacity = wash.interpolate({ inputRange: [0, 1], outputRange: [0.38, 0.76] });
 
   return (
@@ -1282,7 +1287,7 @@ function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
         style={{
           position: 'absolute',
           left: 0, right: 0,
-          top: 0, height: SCREEN_H * 1.6,
+          top: 0, height: screenHeight * 1.6,
           opacity: washOpacity,
           transform: [{ translateY: driftY }],
         }}
@@ -2224,7 +2229,11 @@ function AppContent() {
 
   return (
     <View style={styles.root}>
-      <WaveBackground band={activeBand} playing={isTonePlaying} overrideColor={singleColor} />
+      <WaveBackground
+        band={activeBand}
+        playing={isTonePlaying || isSoundscapePlaying || isBgPlaying}
+        overrideColor={singleColor}
+      />
       <StatusBar style="light" />
       <SafeAreaView style={[styles.safe, columnClamp]} edges={['top']}>
         <KeyboardAvoidingView
@@ -2316,6 +2325,7 @@ function AppContent() {
                 requestedPage={morePageRequest}
                 onRequestedPageHandled={() => setMorePageRequest(null)}
                 singleColor={singleColor}
+                ambientAccent={beatColor}
                 onChangeSingleColor={setSingleColorPref}
                 onReplayOnboarding={replayOnboarding}
               />
@@ -2331,7 +2341,7 @@ function AppContent() {
           isTonePlaying={isTonePlaying}
           isToneLoading={isToneLoading}
           sleepEndsAt={sleepEndsAt}
-          soundscapeName={activeSoundscape?.name ?? (isBgPlaying ? 'Imported audio' : null)}
+          soundscapeName={activeSoundscape?.name ?? null}
           soundscapePlaying={isSoundscapePlaying}
           hasSoundscape={activeSoundscapeId != null}
           onSoundscapePress={() => {
@@ -2525,6 +2535,8 @@ function MiniPlayer({
 }) {
   const [now, setNow] = useState(Date.now());
   const [rendered, setRendered] = useState(visible);
+  const { width: playerWidth } = useWindowDimensions();
+  const compactPlayer = playerWidth < 360;
   const barOpacity = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const barOffset = useRef(new Animated.Value(visible ? 0 : 12)).current;
   const ringPulse = useRef(new Animated.Value(0)).current;
@@ -2592,6 +2604,27 @@ function MiniPlayer({
   const timerText = sleepEndsAt ? formatRemaining(sleepEndsAt - now) : null;
   const ringScale = ringPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] });
   const ringGlowOpacity = ringPulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.95] });
+  const audioIsPlaying = isTonePlaying || soundscapePlaying || bgPlaying;
+  const ambientLayers = [
+    soundscapePlaying ? soundscapeName : null,
+    bgPlaying ? 'Imported audio' : null,
+  ].filter((name): name is string => Boolean(name));
+  const toneTitle = `${title} · ${beat.toFixed(0)} Hz`;
+  const sessionTitle = isTonePlaying || isToneLoading
+    ? ambientLayers.length ? `${title} + ${ambientLayers.join(' + ')}` : toneTitle
+    : ambientLayers.length ? ambientLayers.join(' + ') : 'Session timer';
+  const sessionMeta = isToneLoading
+    ? 'Preparing your tone'
+    : timerText && audioIsPlaying
+      ? `${isTonePlaying ? `${beat.toFixed(0)} Hz tone` : 'Ambient layer'} · ends in ${timerText}`
+      : timerText
+        ? `Timer armed for ${timerText} · no audio playing`
+        : isTonePlaying
+          ? ambientLayers.length ? `${beat.toFixed(0)} Hz tone with ambience` : 'Pure binaural tone'
+          : 'Ambient layer playing';
+  const statusLabel = isToneLoading ? 'PREPARING' : audioIsPlaying ? 'NOW PLAYING' : 'TIMER READY';
+  const showBgControl = hasBg && (!compactPlayer || (bgPlaying && !soundscapePlaying));
+  const showSoundscapeControl = !compactPlayer || soundscapePlaying || !bgPlaying;
 
   return (
     <Animated.View
@@ -2600,16 +2633,23 @@ function MiniPlayer({
         transform: [{ translateY: barOffset }],
       }}
     >
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={onOpen}
+      <View
         style={[styles.miniPlayer, { borderColor: accent + '66' }]}
-        accessibilityLabel="Open current sound session"
       >
+        <LinearGradient
+          colors={[accent + '20', 'rgba(16,17,37,0.95)', 'rgba(7,8,24,0.97)']}
+          locations={[0, 0.46, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <View style={[styles.miniAura, { backgroundColor: accent + '16' }]} pointerEvents="none" />
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={onTogglePlay}
           style={[styles.miniPlayBtn, { backgroundColor: isTonePlaying ? '#fff' : accent }]}
+          accessibilityRole="button"
           accessibilityLabel={isTonePlaying ? 'Pause tones' : 'Play tones'}
         >
           {isToneLoading ? (
@@ -2618,14 +2658,28 @@ function MiniPlayer({
             <Text style={styles.miniPlayText}>{isTonePlaying ? 'Ⅱ' : '▶'}</Text>
           )}
         </TouchableOpacity>
-        <View style={styles.miniBody}>
-          <Text style={styles.miniTitle} numberOfLines={1}>{title} · {beat.toFixed(0)} Hz</Text>
+        <TouchableOpacity
+          style={styles.miniBody}
+          onPress={onOpen}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel="Open current sound session"
+        >
+          <View style={styles.miniStatusRow}>
+            <View
+              style={[
+                styles.miniStatusDot,
+                { backgroundColor: accent, opacity: audioIsPlaying || isToneLoading ? 1 : 0.4 },
+              ]}
+            />
+            <Text numberOfLines={1} style={[styles.miniStatus, { color: accent }]}>{statusLabel}</Text>
+          </View>
+          <Text style={styles.miniTitle} numberOfLines={1}>{sessionTitle}</Text>
           <Text style={styles.miniMeta} numberOfLines={1}>
-            {soundscapeName ? soundscapeName : 'Pure binaural tone'}
-            {timerText ? ` · fades in ${timerText}` : ''}
+            {sessionMeta}
           </Text>
-        </View>
-        {hasBg && (
+        </TouchableOpacity>
+        {showBgControl && (
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={onBgPress}
@@ -2634,6 +2688,7 @@ function MiniPlayer({
               bgPlaying && { backgroundColor: accent + '33', borderColor: accent },
             ]}
             accessibilityLabel={bgPlaying ? 'Pause imported audio' : 'Play imported audio'}
+            accessibilityRole="button"
           >
             {bgPlaying && (
               <Animated.View
@@ -2652,7 +2707,7 @@ function MiniPlayer({
             <MusicNotes size={18} weight="duotone" color={bgPlaying ? accent : '#ffffffcc'} />
           </TouchableOpacity>
         )}
-        <TouchableOpacity
+        {showSoundscapeControl ? <TouchableOpacity
           activeOpacity={0.85}
           onPress={onSoundscapePress}
           style={[
@@ -2660,6 +2715,7 @@ function MiniPlayer({
             soundscapePlaying && { backgroundColor: accent + '33', borderColor: accent },
           ]}
           accessibilityLabel={hasSoundscape ? (soundscapePlaying ? 'Stop soundscape' : 'Play soundscape') : 'Choose a soundscape'}
+          accessibilityRole="button"
         >
           {soundscapePlaying && (
             <Animated.View
@@ -2676,16 +2732,17 @@ function MiniPlayer({
             />
           )}
           <Waveform size={18} weight="duotone" color={soundscapePlaying ? accent : '#ffffffcc'} />
-        </TouchableOpacity>
+        </TouchableOpacity> : null}
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={onStopAll}
           style={styles.miniStopBtn}
           accessibilityLabel="Stop all audio"
+          accessibilityRole="button"
         >
           <Text style={styles.miniStopText}>×</Text>
         </TouchableOpacity>
-      </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 }
@@ -2699,18 +2756,17 @@ function TabBar({
   onChange: (t: Tab) => void;
   accent: string;
 }) {
-  // Labels like "Frequencies" and "Horoscopes" overflow their slots on
-  // narrow screens with five tabs, so drop to a compact type size before
-  // they can collide.
+  // Short visible labels remain readable on narrow phones; accessibility
+  // labels keep the full destination names.
   const { width } = useWindowDimensions();
   const compact = width / 5 < 82;
   return (
     <SafeAreaView edges={['bottom']} style={styles.tabBarSafe}>
       <View style={styles.tabBar}>
-        <TabButton label="Frequencies" glyph="∿" compact={compact} active={tab === 'frequencies'} accent={accent} onPress={() => onChange('frequencies')} />
-        <TabButton label="Breath"      glyph="○" compact={compact} active={tab === 'breath'}      accent={accent} onPress={() => onChange('breath')} />
+        <TabButton label="Tones"       accessibilityLabel="Frequencies" glyph="∿" compact={compact} active={tab === 'frequencies'} accent={accent} onPress={() => onChange('frequencies')} />
+        <TabButton label="Breathe"     accessibilityLabel="Breath" glyph="○" compact={compact} active={tab === 'breath'}      accent={accent} onPress={() => onChange('breath')} />
         <TabButton label="Chakras"     glyph="✦" compact={compact} active={tab === 'chakras'}     accent={accent} onPress={() => onChange('chakras')} />
-        <TabButton label="Horoscopes"  glyph="☽" compact={compact} active={tab === 'horoscopes'}  accent={accent} onPress={() => onChange('horoscopes')} />
+        <TabButton label="Stars"       accessibilityLabel="Horoscopes" glyph="☽" compact={compact} active={tab === 'horoscopes'}  accent={accent} onPress={() => onChange('horoscopes')} />
         <TabButton label="More"        glyph="⋯" compact={compact} active={tab === 'more'}        accent={accent} onPress={() => onChange('more')} />
       </View>
     </SafeAreaView>
@@ -2718,9 +2774,10 @@ function TabBar({
 }
 
 function TabButton({
-  label, glyph, Icon, compact, active, accent, onPress,
+  label, glyph, Icon, compact, active, accent, onPress, accessibilityLabel,
 }: {
   label: string;
+  accessibilityLabel?: string;
   glyph?: string;
   Icon?: React.ComponentType<IconProps>;
   compact: boolean;
@@ -2735,15 +2792,17 @@ function TabButton({
       activeOpacity={0.85}
       style={styles.tabBtn}
       accessibilityRole="button"
-      accessibilityLabel={`${label} tab`}
+      accessibilityLabel={`${accessibilityLabel ?? label} tab`}
       accessibilityState={{ selected: active }}
     >
       {Icon ? (
-        <View style={styles.tabIconWrap}>
+        <View style={[styles.tabIconWrap, active && { backgroundColor: accent + '18', borderColor: accent + '38' }]}>
           <Icon size={22} weight="duotone" color={color} />
         </View>
       ) : (
-        <Text style={[styles.tabGlyph, { color }]}>{glyph}</Text>
+        <View style={[styles.tabIconWrap, active && { backgroundColor: accent + '18', borderColor: accent + '38' }]}>
+          <Text style={[styles.tabGlyph, { color }]}>{glyph}</Text>
+        </View>
       )}
       <Text
         numberOfLines={1}
@@ -2827,37 +2886,50 @@ function FrequenciesView(props: FreqViewProps) {
   }
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.scroll}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="on-drag"
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <View style={styles.enso} />
-        <Text style={styles.ambience}>Simply Ambient</Text>
-        <Text style={styles.title}>Binaural Frequency Generator</Text>
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.subtitle}>Manifest your Zen</Text>
-          <View style={styles.dividerLine} />
-        </View>
-        <ManifestQuote />
+    <AmbientVeil accent={beatColor} strength="light">
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+      >
+      <View style={styles.freqEditorialHeader}>
+        <EditorialHeader
+          mode={isTonePlaying ? 'LIVE SESSION' : 'CREATE'}
+          title="Shape the signal"
+          subtitle="Blend two tones into a calm, focused listening space that moves with you."
+          accent={beatColor}
+        />
       </View>
 
-      <View style={[styles.beatCard, { borderColor: beatColor + '55' }]}>
+      <AmbientSurface accent={beatColor} style={styles.beatCard}>
         <View style={styles.beatHeaderRow}>
-          <Text style={styles.beatLabel}>BEAT FREQUENCY</Text>
-          <TouchableOpacity onPress={props.onSave} style={styles.saveBtn} activeOpacity={0.7}>
+          <View>
+            <Text style={[styles.beatLabel, { color: beatColor }]}>SESSION CHAMBER</Text>
+            <Text style={styles.beatKicker}>{isTonePlaying ? 'Your mix is in motion' : 'Ready when you are'}</Text>
+          </View>
+          <TouchableOpacity
+            onPress={props.onSave}
+            style={styles.saveBtn}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Save this tone mix"
+          >
             <Text style={styles.saveBtnText}>＋ Save</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.beatHz}>
-          {beat.toFixed(0)}<Text style={styles.beatHzUnit}> Hz</Text>
-        </Text>
+        <View style={styles.signalStage} pointerEvents="none">
+          <View style={[styles.signalOrbit, styles.signalOrbitOuter, { borderColor: beatColor + '26' }]} />
+          <View style={[styles.signalOrbit, styles.signalOrbitMiddle, { borderColor: beatColor + '42' }]} />
+          <View style={[styles.signalOrbit, styles.signalOrbitInner, { borderColor: beatColor + '66' }]} />
+          <View style={[styles.signalCore, { backgroundColor: beatColor + '18', shadowColor: beatColor }]} />
+          <Text style={styles.beatHz}>
+            {beat.toFixed(0)}<Text style={styles.beatHzUnit}> Hz</Text>
+          </Text>
+        </View>
         <View style={[styles.bandPill, { backgroundColor: beatColor + '22', borderColor: beatColor }]}>
           <View style={[styles.bandDot, { backgroundColor: beatColor }]} />
-          <Text style={[styles.bandText, { color: beatColor }]}>
+          <Text numberOfLines={2} style={[styles.bandText, { color: beatColor }]}>
             {activeChakra
               ? `${activeChakra.name} · ${activeChakra.bija} · ${activeChakra.element}`
               : activeTuning
@@ -2866,10 +2938,25 @@ function FrequenciesView(props: FreqViewProps) {
           </Text>
         </View>
 
+        <View style={styles.signalReadoutRow}>
+          <View style={styles.signalReadout}>
+            <Text style={styles.signalReadoutLabel}>LEFT</Text>
+            <Text style={styles.signalReadoutValue}>{leftHz} Hz</Text>
+          </View>
+          <View style={[styles.signalReadout, styles.signalReadoutCenter]}>
+            <Text style={styles.signalReadoutLabel}>DIFFERENCE</Text>
+            <Text style={[styles.signalReadoutValue, { color: beatColor }]}>{beat.toFixed(0)} Hz</Text>
+          </View>
+          <View style={styles.signalReadout}>
+            <Text style={styles.signalReadoutLabel}>RIGHT</Text>
+            <Text style={styles.signalReadoutValue}>{rightHz} Hz</Text>
+          </View>
+        </View>
+
         <View style={styles.beatSliderBlock}>
           <View style={styles.beatSliderLabelRow}>
             <Text style={styles.beatSliderLabel}>BEAT</Text>
-            <Text style={styles.beatSliderHint}>0-{MAX_BEAT} Hz · what your brain entrains to</Text>
+            <Text style={styles.beatSliderHint}>0-{MAX_BEAT} Hz · difference between ears</Text>
           </View>
           <Slider
             style={styles.beatSlider}
@@ -2883,6 +2970,7 @@ function FrequenciesView(props: FreqViewProps) {
             onValueChange={v => props.onSlideBeatCarrier(Math.round(v), carrierForControl)}
             onSlidingComplete={v => props.onCommitBeatCarrier(Math.round(v), carrierForControl)}
             accessibilityLabel="Beat frequency"
+            accessibilityValue={{ min: 0, max: MAX_BEAT, now: beatForControl, text: `${beatForControl} hertz` }}
           />
           <View style={styles.beatSliderLabelRow}>
             <Text style={styles.beatSliderLabel}>CARRIER · {carrier} Hz</Text>
@@ -2900,15 +2988,18 @@ function FrequenciesView(props: FreqViewProps) {
             onValueChange={v => props.onSlideBeatCarrier(beatForControl, Math.round(v))}
             onSlidingComplete={v => props.onCommitBeatCarrier(beatForControl, Math.round(v))}
             accessibilityLabel="Carrier pitch"
+            accessibilityValue={{ min: carrierMin, max: carrierMax, now: carrierForControl, text: `${carrierForControl} hertz` }}
           />
         </View>
 
         <TouchableOpacity
           activeOpacity={0.88}
           onPress={props.onTogglePlay}
+          disabled={isToneLoading}
           style={[styles.primarySessionBtn, { backgroundColor: isTonePlaying ? '#fff' : beatColor }]}
           accessibilityRole="button"
           accessibilityLabel={isTonePlaying ? 'Stop binaural session' : 'Start binaural session'}
+          accessibilityState={{ disabled: isToneLoading, busy: isToneLoading }}
         >
           {isToneLoading ? (
             <ActivityIndicator color="#0B0B1F" />
@@ -2919,7 +3010,7 @@ function FrequenciesView(props: FreqViewProps) {
             </>
           )}
         </TouchableOpacity>
-      </View>
+      </AmbientSurface>
 
       <TouchableOpacity
         activeOpacity={0.8}
@@ -2927,6 +3018,7 @@ function FrequenciesView(props: FreqViewProps) {
         style={styles.advancedToggle}
         accessibilityRole="button"
         accessibilityLabel={showEarTuning ? 'Hide per-ear tuning' : 'Show per-ear tuning'}
+        accessibilityState={{ expanded: showEarTuning }}
       >
         <Text style={styles.advancedToggleText}>
           {showEarTuning ? '▾' : '▸'}  PER-EAR TUNING
@@ -2952,7 +3044,13 @@ function FrequenciesView(props: FreqViewProps) {
         </>
       ) : null}
 
-      <Text style={styles.sectionLabel}>PRESETS</Text>
+      <EditorialSection
+        index="01"
+        eyebrow="QUICK STARTS"
+        title="Begin with an intention"
+        subtitle="A few balanced starting points. Fine-tune anything after choosing."
+        accent={beatColor}
+      />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
         {PRESETS.map(p => {
           const active = activePresetId === p.id;
@@ -2961,6 +3059,9 @@ function FrequenciesView(props: FreqViewProps) {
               key={p.id}
               activeOpacity={0.85}
               onPress={() => props.onApplyBuiltIn(p)}
+              accessibilityRole="button"
+              accessibilityLabel={`${p.name} preset, ${p.range}. ${p.blurb}`}
+              accessibilityState={{ selected: active }}
               style={[styles.presetChip, {
                 backgroundColor: active ? p.color : 'rgba(255,255,255,0.05)',
                 borderColor: active ? p.color : 'rgba(255,255,255,0.12)',
@@ -2976,22 +3077,27 @@ function FrequenciesView(props: FreqViewProps) {
           const active = activePresetId === p.id;
           const userColor = '#9DC7AC';
           return (
-            <TouchableOpacity
+            <View
               key={p.id}
-              activeOpacity={0.85}
-              onPress={() => props.onApplyUser(p)}
-              onLongPress={() => props.onDeleteUser(p)}
-              style={[styles.presetChip, {
+              style={[styles.presetChip, styles.userPresetCard, {
                 backgroundColor: active ? userColor : 'rgba(255,255,255,0.05)',
                 borderColor: active ? userColor : 'rgba(154,255,200,0.4)',
                 borderStyle: 'dashed',
               }]}
-              accessibilityRole="button"
-              accessibilityLabel={`Apply preset ${p.name}`}
             >
-              <Text style={[styles.presetName, { color: active ? '#0B0B1F' : '#fff' }]}>{p.name}</Text>
-              <Text style={[styles.presetRange, { color: active ? '#0B0B1F99' : '#ffffff88' }]}>L {p.leftHz} · R {p.rightHz}</Text>
-              <Text style={[styles.presetBlurb, { color: active ? '#0B0B1F99' : '#ffffff66' }]}>beat {Math.abs(p.rightHz - p.leftHz)} Hz</Text>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => props.onApplyUser(p)}
+                onLongPress={() => props.onDeleteUser(p)}
+                style={styles.userPresetApply}
+                accessibilityRole="button"
+                accessibilityLabel={`Apply preset ${p.name}`}
+                accessibilityState={{ selected: active }}
+              >
+                <Text style={[styles.presetName, { color: active ? '#0B0B1F' : '#fff' }]}>{p.name}</Text>
+                <Text style={[styles.presetRange, { color: active ? '#0B0B1F99' : '#ffffff88' }]}>L {p.leftHz} · R {p.rightHz}</Text>
+                <Text style={[styles.presetBlurb, { color: active ? '#0B0B1F99' : '#ffffff66' }]}>beat {Math.abs(p.rightHz - p.leftHz)} Hz</Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => props.onDeleteUser(p)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -3001,13 +3107,18 @@ function FrequenciesView(props: FreqViewProps) {
               >
                 <Text style={[styles.presetDeleteText, { color: active ? '#0B0B1F88' : '#ffffff77' }]}>✕</Text>
               </TouchableOpacity>
-            </TouchableOpacity>
+            </View>
           );
         })}
       </ScrollView>
 
-      <Text style={styles.sectionLabel}>TUNING FREQUENCIES</Text>
-      <Text style={styles.sectionSub}>Solfeggio · ancient resonant tones, played equally in both ears</Text>
+      <EditorialSection
+        index="02"
+        eyebrow="TRADITIONAL TONES"
+        title="Explore resonant associations"
+        subtitle="Solfeggio-inspired references, adapted to a comfortable carrier with a gentle stereo split."
+        accent="#d9b35c"
+      />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
         {TUNINGS.map(t => {
           const active = activePresetId === t.id;
@@ -3017,6 +3128,9 @@ function FrequenciesView(props: FreqViewProps) {
               key={t.id}
               activeOpacity={0.85}
               onPress={() => props.onApplyTuning(t)}
+              accessibilityRole="button"
+              accessibilityLabel={`${t.name}, ${t.intent}. ${t.blurb}`}
+              accessibilityState={{ selected: active }}
               style={[styles.presetChip, {
                 backgroundColor: active ? tuneColor : 'rgba(255,255,255,0.05)',
                 borderColor: active ? tuneColor : 'rgba(217,179,92,0.35)',
@@ -3030,6 +3144,15 @@ function FrequenciesView(props: FreqViewProps) {
         })}
       </ScrollView>
 
+      <EditorialSection
+        index="03"
+        eyebrow="SESSION LAYERS"
+        title="Build your listening room"
+        subtitle="Set an ending and add your own background audio beneath the tones."
+        accent="#9DC7AC"
+      />
+
+      <AmbientSurface accent="#9DC7AC" quiet style={styles.mixerCard}>
       <View style={styles.sleepRow}>
         <Text style={styles.sleepLabel}>STILLNESS · auto-end</Text>
         <View style={styles.sleepPills}>
@@ -3041,6 +3164,9 @@ function FrequenciesView(props: FreqViewProps) {
                 key={m}
                 activeOpacity={0.85}
                 onPress={() => onSetSleepTimer(m)}
+                accessibilityRole="button"
+                accessibilityLabel={m === 0 ? 'Turn off sleep timer' : `End playback after ${m} minutes`}
+                accessibilityState={{ selected: active }}
                 style={[
                   styles.sleepPill,
                   active && { borderColor: beatColor, backgroundColor: beatColor + '22' },
@@ -3056,6 +3182,9 @@ function FrequenciesView(props: FreqViewProps) {
               setCustomSleepInput(isCustomSleep ? String(sleepMinutes) : '');
               setCustomSleepOpen(true);
             }}
+            accessibilityRole="button"
+            accessibilityLabel={isCustomSleep ? `Custom timer, ${sleepMinutes} minutes` : 'Set a custom sleep timer'}
+            accessibilityState={{ selected: isCustomSleep }}
             style={[
               styles.sleepPill,
               isCustomSleep && { borderColor: beatColor, backgroundColor: beatColor + '22' },
@@ -3067,6 +3196,65 @@ function FrequenciesView(props: FreqViewProps) {
           </TouchableOpacity>
         </View>
       </View>
+
+      <View style={styles.mixerDivider} />
+
+      <View style={styles.bgCard}>
+        <Text style={styles.mixerLabel}>IMPORTED AUDIO</Text>
+        {bgFileName ? (
+          <>
+            <View style={styles.bgFileRow}>
+              <Text style={styles.bgFileName} numberOfLines={1}>{bgFileName}</Text>
+              <TouchableOpacity
+                onPress={props.onClearBg}
+                style={styles.bgClearBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Remove imported audio"
+              >
+                <Text style={styles.bgClearText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.bgControlsRow}>
+              <TouchableOpacity
+                onPress={props.onToggleBg}
+                style={styles.bgPlayBtn}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={isBgPlaying ? 'Pause imported audio' : 'Play imported audio'}
+              >
+                <Text style={styles.bgPlayText}>{isBgPlaying ? '❚❚' : '▶'}</Text>
+              </TouchableOpacity>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={styles.bgVolLabel}>VOLUME · {Math.round(bgVolume * 100)}%</Text>
+                <Slider
+                  style={{ width: '100%', height: 32 }}
+                  minimumValue={0}
+                  maximumValue={1}
+                  value={bgVolume}
+                  minimumTrackTintColor="#9DC7AC"
+                  maximumTrackTintColor="rgba(255,255,255,0.12)"
+                  thumbTintColor="#9DC7AC"
+                  onValueChange={props.onChangeBgVolume}
+                  accessibilityLabel="Imported audio volume"
+                  accessibilityValue={{ min: 0, max: 100, now: Math.round(bgVolume * 100), text: `${Math.round(bgVolume * 100)} percent` }}
+                />
+              </View>
+            </View>
+          </>
+        ) : (
+          <TouchableOpacity
+            onPress={props.onPickBg}
+            style={styles.bgPickBtn}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Add an audio file from this device"
+          >
+            <Text style={styles.bgPickText}>＋ Add an audio layer</Text>
+            <Text style={styles.bgPickHint}>Your file stays on this device and plays beneath the tones.</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+      </AmbientSurface>
 
       <Modal
         visible={customSleepOpen}
@@ -3116,47 +3304,15 @@ function FrequenciesView(props: FreqViewProps) {
         </TouchableWithoutFeedback>
       </Modal>
 
-      <View style={styles.bgCard}>
-        <Text style={styles.sectionLabel}>BACKGROUND MUSIC</Text>
-        {bgFileName ? (
-          <>
-            <View style={styles.bgFileRow}>
-              <Text style={styles.bgFileName} numberOfLines={1}>{bgFileName}</Text>
-              <TouchableOpacity onPress={props.onClearBg} style={styles.bgClearBtn}>
-                <Text style={styles.bgClearText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.bgControlsRow}>
-              <TouchableOpacity onPress={props.onToggleBg} style={styles.bgPlayBtn} activeOpacity={0.8}>
-                <Text style={styles.bgPlayText}>{isBgPlaying ? '❚❚' : '▶'}</Text>
-              </TouchableOpacity>
-              <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={styles.bgVolLabel}>VOLUME · {Math.round(bgVolume * 100)}%</Text>
-                <Slider
-                  style={{ width: '100%', height: 32 }}
-                  minimumValue={0}
-                  maximumValue={1}
-                  value={bgVolume}
-                  minimumTrackTintColor="#9DC7AC"
-                  maximumTrackTintColor="rgba(255,255,255,0.12)"
-                  thumbTintColor="#9DC7AC"
-                  onValueChange={props.onChangeBgVolume}
-                />
-              </View>
-            </View>
-          </>
-        ) : (
-          <TouchableOpacity onPress={props.onPickBg} style={styles.bgPickBtn} activeOpacity={0.8}>
-            <Text style={styles.bgPickText}>＋ Pick an audio file</Text>
-            <Text style={styles.bgPickHint}>Plays alongside the binaural tones</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
       <Text style={styles.footnote}>
-        Set your intention. Wear stereo headphones. Each ear receives a different tone, and your mind tunes itself to the difference.
+        Use stereo headphones at a comfortable volume. Each ear receives a slightly different tone; the displayed beat is the difference between them.
       </Text>
-    </ScrollView>
+      <View style={styles.quotePlate}>
+        <View style={[styles.quoteRule, { backgroundColor: beatColor }]} />
+        <ManifestQuote />
+      </View>
+      </ScrollView>
+    </AmbientVeil>
   );
 }
 
@@ -3210,6 +3366,8 @@ function FrequencyControl({ ear, label, hz, color, onCommit, onSlide }: ControlP
               maxLength={4}
               selectTextOnFocus
               returnKeyType="done"
+              accessibilityLabel={`${label.toLowerCase()} ear frequency`}
+              accessibilityValue={{ text: `${hz} hertz` }}
             />
             <Text style={styles.freqHzUnit}> Hz</Text>
           </View>
@@ -3230,6 +3388,8 @@ function FrequencyControl({ ear, label, hz, color, onCommit, onSlide }: ControlP
           onSlide(n);
         }}
         onSlidingComplete={v => onCommit(Math.round(v))}
+        accessibilityLabel={`${label.toLowerCase()} ear frequency`}
+        accessibilityValue={{ min: MIN_HZ, max: MAX_HZ, now: hz, text: `${hz} hertz` }}
       />
       <View style={styles.minMaxRow}>
         <Text style={styles.minMaxText}>{MIN_HZ} Hz</Text>
@@ -3240,6 +3400,8 @@ function FrequencyControl({ ear, label, hz, color, onCommit, onSlide }: ControlP
           activeOpacity={0.7}
           onPress={() => onCommit(hz - 1)}
           style={[styles.adjBtn, { borderColor: color + '99' }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Lower ${label.toLowerCase()} ear by one hertz`}
         >
           <Text style={[styles.adjBtnText, { color }]}>−1</Text>
         </TouchableOpacity>
@@ -3248,6 +3410,8 @@ function FrequencyControl({ ear, label, hz, color, onCommit, onSlide }: ControlP
           activeOpacity={0.7}
           onPress={() => onCommit(hz + 1)}
           style={[styles.adjBtn, { borderColor: color + '99' }]}
+          accessibilityRole="button"
+          accessibilityLabel={`Raise ${label.toLowerCase()} ear by one hertz`}
         >
           <Text style={[styles.adjBtnText, { color }]}>+1</Text>
         </TouchableOpacity>
@@ -3266,12 +3430,16 @@ const styles = StyleSheet.create({
   // Centered phone-width column used on web and on wide (tablet) windows;
   // the gradient background stays full-bleed behind it.
   contentColumn: { width: '100%' as const, maxWidth: 600, alignSelf: 'center' as const },
+  // Onboarding is presented above the already-mounted app. Keep this layer
+  // opaque enough to prevent the controls underneath from bleeding through;
+  // OnboardingView adds its own fluid accent atmosphere on top.
   onboardingLayer: { backgroundColor: '#0B0B1F' },
   scroll: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 12 : 4,
     paddingBottom: 24,
   },
+  freqEditorialHeader: { marginHorizontal: -20, paddingTop: 8 },
 
   header: { alignItems: 'center', marginBottom: 22, paddingTop: 6 },
   enso: {
@@ -3306,15 +3474,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, fontWeight: '300',
   },
   beatCard: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderWidth: 1, borderRadius: 24,
-    padding: 18, paddingTop: 14, alignItems: 'center', marginBottom: 18,
+    padding: 18, paddingTop: 16, alignItems: 'center', marginBottom: 16,
   },
   beatHeaderRow: {
     flexDirection: 'row', width: '100%',
     justifyContent: 'space-between', alignItems: 'center', marginBottom: 6,
   },
   beatLabel: { color: '#ffffff80', fontSize: 11, letterSpacing: 2, fontWeight: '600' },
+  beatKicker: { color: '#AAA9B9', fontSize: 11, marginTop: 4 },
   saveBtn: {
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
@@ -3322,17 +3489,43 @@ const styles = StyleSheet.create({
   },
   saveBtnText: { color: '#fff', fontSize: 12, fontWeight: '600', letterSpacing: 0.5 },
   beatHz: {
-    color: '#fff', fontSize: 56, fontWeight: '300',
-    marginVertical: 4, letterSpacing: -1,
+    color: '#fff', fontSize: 58, fontWeight: '300', letterSpacing: -1,
   },
   beatHzUnit: { fontSize: 22, color: '#ffffff80', fontWeight: '300' },
+  signalStage: {
+    width: '100%', height: 154, alignItems: 'center', justifyContent: 'center',
+    marginTop: 3, overflow: 'hidden',
+  },
+  signalOrbit: { position: 'absolute', borderWidth: 1, borderRadius: 999 },
+  signalOrbitOuter: { width: 224, height: 112, transform: [{ rotate: '-8deg' }] },
+  signalOrbitMiddle: { width: 176, height: 98, transform: [{ rotate: '13deg' }] },
+  signalOrbitInner: { width: 124, height: 84, transform: [{ rotate: '-20deg' }] },
+  signalCore: {
+    position: 'absolute', width: 76, height: 76, borderRadius: 38,
+    shadowOpacity: 0.45, shadowRadius: 22, shadowOffset: { width: 0, height: 0 },
+  },
   bandPill: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 14, paddingVertical: 6,
     borderRadius: 999, borderWidth: 1, marginTop: 6,
+    maxWidth: '100%',
   },
   bandDot: { width: 7, height: 7, borderRadius: 4, marginRight: 8 },
-  bandText: { fontWeight: '600', fontSize: 12, letterSpacing: 1.5 },
+  bandText: {
+    flexShrink: 1, fontWeight: '600', fontSize: 12, lineHeight: 16,
+    letterSpacing: 1.2, textAlign: 'center',
+  },
+  signalReadoutRow: {
+    width: '100%', flexDirection: 'row', marginTop: 16, marginBottom: 3,
+    borderTopWidth: 1, borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  signalReadout: { flex: 1, alignItems: 'center', paddingVertical: 11 },
+  signalReadoutCenter: {
+    borderLeftWidth: 1, borderRightWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+  },
+  signalReadoutLabel: { color: '#7F7F93', fontSize: 8, fontWeight: '800', letterSpacing: 1.5 },
+  signalReadoutValue: { color: '#F6F3FA', fontSize: 12, fontWeight: '700', marginTop: 4 },
   primarySessionBtn: {
     minHeight: 58,
     borderRadius: 18,
@@ -3408,10 +3601,16 @@ const styles = StyleSheet.create({
     color: '#ffffff66', fontSize: 11, marginTop: -6, marginBottom: 10,
     paddingHorizontal: 4, fontStyle: 'italic',
   },
-  presetRow: { paddingRight: 12, paddingVertical: 4 },
+  presetRow: { paddingRight: 12, paddingVertical: 5 },
   presetChip: {
-    minWidth: 130, paddingVertical: 12, paddingHorizontal: 16,
-    borderRadius: 16, marginRight: 10, borderWidth: 1,
+    minWidth: 146, minHeight: 106, paddingVertical: 15, paddingHorizontal: 16,
+    borderRadius: 21, marginRight: 10, borderWidth: 1,
+    justifyContent: 'center',
+  },
+  userPresetCard: { padding: 0, position: 'relative' },
+  userPresetApply: {
+    flex: 1, justifyContent: 'center', paddingVertical: 15, paddingHorizontal: 16,
+    paddingRight: 34, borderRadius: 20,
   },
   presetName: { fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
   presetRange: { fontSize: 11, marginTop: 2, fontWeight: '500' },
@@ -3426,7 +3625,8 @@ const styles = StyleSheet.create({
   },
   playText: { fontSize: 18, fontWeight: '700', letterSpacing: 4, color: '#0B0B1F' },
 
-  sleepRow: { marginTop: 14, marginHorizontal: 8 },
+  mixerCard: { padding: 18, marginBottom: 2 },
+  sleepRow: { marginHorizontal: 0 },
   sleepLabel: { color: '#ffffff80', fontSize: 10, letterSpacing: 2, fontWeight: '600', marginBottom: 8 },
   sleepPills: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   sleepPill: {
@@ -3488,12 +3688,9 @@ const styles = StyleSheet.create({
   audioSafetySetBtn: { flex: 1.4, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
   audioSafetySetText: { color: '#0B0B1F', fontSize: 12, fontWeight: '800', letterSpacing: 1.5 },
 
-  bgCard: {
-    marginTop: 22,
-    backgroundColor: 'rgba(0,0,0,0.28)',
-    borderRadius: 20, padding: 18,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)',
-  },
+  mixerDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.09)', marginVertical: 20 },
+  mixerLabel: { color: '#9DC7AC', fontSize: 10, letterSpacing: 2, fontWeight: '700', marginBottom: 10 },
+  bgCard: { marginTop: 0 },
   bgPickBtn: {
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
@@ -3509,7 +3706,7 @@ const styles = StyleSheet.create({
   },
   bgFileName: { color: '#fff', fontSize: 14, flex: 1 },
   bgClearBtn: {
-    width: 28, height: 28, borderRadius: 14,
+    width: 44, height: 44, borderRadius: 22,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.10)',
   },
@@ -3525,8 +3722,10 @@ const styles = StyleSheet.create({
 
   footnote: {
     color: '#ffffff66', fontSize: 12, textAlign: 'center',
-    marginTop: 18, paddingHorizontal: 20, lineHeight: 18,
+    marginTop: 22, paddingHorizontal: 20, lineHeight: 18,
   },
+  quotePlate: { alignItems: 'center', marginTop: 28, marginBottom: 10 },
+  quoteRule: { width: 34, height: 2, borderRadius: 1 },
 
   modalBackdrop: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
@@ -3588,42 +3787,52 @@ const styles = StyleSheet.create({
   miniPlayer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 14,
-    marginBottom: 8,
-    padding: 10,
-    borderRadius: 20,
+    marginHorizontal: 12,
+    marginBottom: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    minHeight: 76,
+    borderRadius: 24,
     borderWidth: 1,
-    backgroundColor: 'rgba(8,8,22,0.92)',
+    backgroundColor: 'rgba(8,8,22,0.94)',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.35,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
   },
+  miniAura: {
+    position: 'absolute', width: 130, height: 130, borderRadius: 65,
+    right: -54, top: -78,
+  },
   miniPlayBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   miniPlayText: { color: '#0B0B1F', fontSize: 16, fontWeight: '900' },
-  miniBody: { flex: 1, marginHorizontal: 12 },
-  miniTitle: { color: '#fff', fontSize: 13, fontWeight: '800', letterSpacing: 0.6 },
-  miniMeta: { color: '#ffffff88', fontSize: 11, marginTop: 2 },
+  miniBody: { flex: 1, marginHorizontal: 12, justifyContent: 'center', minHeight: 52 },
+  miniStatusRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 3 },
+  miniStatusDot: { width: 5, height: 5, borderRadius: 3, marginRight: 6 },
+  miniStatus: { fontSize: 7.5, fontWeight: '900', letterSpacing: 1.5 },
+  miniTitle: { color: '#fff', fontSize: 13.5, fontWeight: '800', letterSpacing: 0.25 },
+  miniMeta: { color: '#A5A3B2', fontSize: 10.5, marginTop: 2 },
   miniStopBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   miniStopText: { color: '#ffffffcc', fontSize: 20, lineHeight: 22, fontWeight: '500' },
   miniSoundscapeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
@@ -3633,9 +3842,9 @@ const styles = StyleSheet.create({
   },
   miniSoundscapeRing: {
     position: 'absolute',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 49,
+    height: 49,
+    borderRadius: 25,
     borderWidth: 1.5,
     shadowOpacity: 0.9,
     shadowRadius: 8,
@@ -3643,29 +3852,32 @@ const styles = StyleSheet.create({
   },
 
   tabBarSafe: {
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(6,7,20,0.82)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: 'rgba(255,255,255,0.11)',
   },
   tabBar: {
     flexDirection: 'row',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingTop: 7,
+    paddingBottom: 6,
+    paddingHorizontal: 8,
   },
   tabBtn: {
     flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 6, paddingHorizontal: 2,
+    minHeight: 58, paddingVertical: 3, paddingHorizontal: 2,
   },
   tabGlyph: {
-    fontSize: 22,
-    marginBottom: 2,
-    minHeight: 24,
+    fontSize: 19,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
-  tabIconWrap: { minHeight: 24, marginBottom: 2, alignItems: 'center', justifyContent: 'center' },
-  tabLabel: { fontSize: 11, letterSpacing: 2, fontWeight: '600' },
-  tabLabelCompact: { fontSize: 8, letterSpacing: 0 },
+  tabIconWrap: {
+    width: 38, height: 30, borderRadius: 15, marginBottom: 2,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'transparent',
+  },
+  tabLabel: { fontSize: 10.5, letterSpacing: 0.4, fontWeight: '700' },
+  tabLabelCompact: { fontSize: 9.5, letterSpacing: 0 },
 
   beatSliderBlock: { width: '100%', marginTop: 10, marginBottom: 4 },
   beatSlider: { width: '100%', height: 30 },

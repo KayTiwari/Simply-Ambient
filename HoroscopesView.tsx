@@ -16,6 +16,13 @@ import { ArrowsClockwise } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MoonDisc, type LunarInfo } from './App';
+import {
+  AmbientSurface,
+  AmbientVeil,
+  EditorialHeader,
+  EditorialSection,
+  StatusStrip,
+} from './AmbientUI';
 import type { Zodiac } from './lib/content';
 
 const HOROSCOPE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -89,6 +96,7 @@ function freshnessLabel(ts: number): string {
 }
 
 type Period = 'daily' | 'monthly' | 'yearly';
+type ReadingMode = 'horoscope' | 'tarot';
 
 // Zodiac glyphs like U+2648 default to emoji presentation on Android and in
 // browsers (a purple app-icon square that ignores text color). The text
@@ -171,6 +179,7 @@ export default function HoroscopesView({
   zodiac, mySign, lunar, onSelectMyZodiac,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const [readingMode, setReadingMode] = useState<ReadingMode>('horoscope');
   const [period, setPeriod] = useState<Period>('daily');
   // The 12-sign picker is collapsed behind a CHANGE button; a permanent
   // "tap to set your sign" strip reads like onboarding that never ends.
@@ -394,146 +403,248 @@ export default function HoroscopesView({
     period === 'monthly' ? 'THIS MONTH · ' + monthName :
     'YEAR AHEAD · ' + yearText;
 
-  return (
-    <View style={{ flex: 1 }}>
-      <View style={styles.headerWrap}>
-        <Text style={styles.ambience}>Simply Ambient</Text>
-        <Text style={styles.title}>Horoscopes</Text>
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.subtitle}>As above, so below</Text>
-          <View style={styles.dividerLine} />
-        </View>
-      </View>
+  const accent = readingMode === 'horoscope' ? mySign.color : '#B39BE0';
+  const forecastTitle =
+    period === 'daily' ? 'A note for today' :
+    period === 'monthly' ? `The shape of ${new Date().toLocaleDateString(undefined, { month: 'long' })}` :
+    `An intention for ${yearText}`;
+  const forecastSubtitle =
+    period === 'daily'
+      ? 'A short reflection for the day in front of you.'
+      : period === 'monthly'
+        ? 'A wider lens for the month, without pretending to predict it.'
+        : 'The longer intention already held in your sign profile.';
 
+  return (
+    <AmbientVeil accent={accent} strength="light">
+      <EditorialHeader
+        mode="REFLECT"
+        title="Read the sky"
+        subtitle="A quiet room for your sign, the moon, and the cards. Take what helps; leave the rest."
+        accent={accent}
+      />
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 96 }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 104 }]}
         showsVerticalScrollIndicator={false}
       >
+        <AmbientSurface accent={accent} quiet style={styles.modeSurface}>
+          <View style={styles.modeRow} accessibilityRole="tablist">
+            {([
+              { id: 'horoscope', label: 'HOROSCOPE', hint: 'Sign & moon', glyph: '☉', color: mySign.color },
+              { id: 'tarot', label: 'TAROT', hint: 'Cards & spreads', glyph: '✦', color: '#B39BE0' },
+            ] as Array<{ id: ReadingMode; label: string; hint: string; glyph: string; color: string }>).map(item => {
+              const active = readingMode === item.id;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  onPress={() => setReadingMode(item.id)}
+                  activeOpacity={0.84}
+                  accessibilityRole="tab"
+                  accessibilityLabel={`${item.label}. ${item.hint}`}
+                  accessibilityState={{ selected: active }}
+                  style={[
+                    styles.modeButton,
+                    active && {
+                      borderColor: item.color + '66',
+                      backgroundColor: item.color + '18',
+                    },
+                  ]}
+                >
+                  <View style={[styles.modeGlyphWrap, { borderColor: item.color + '44' }]}>
+                    <Text style={[styles.modeGlyph, { color: item.color }]}>{item.glyph}</Text>
+                  </View>
+                  <View style={styles.modeCopy}>
+                    <Text style={[styles.modeLabel, active && { color: item.color }]}>{item.label}</Text>
+                    <Text style={styles.modeHint}>{item.hint}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </AmbientSurface>
+
+        {readingMode === 'horoscope' ? (
+          <>
+            <EditorialSection
+              index="01"
+              eyebrow="CELESTIAL WEATHER"
+              title="Your sign, under today's moon"
+              subtitle="The details are real and local. The reading is an invitation, not a forecast of fact."
+              accent={mySign.color}
+            />
         {/* Today / week / month widget */}
-        <View style={[styles.todayCard, { borderColor: mySign.color + '55' }]}>
-          <Text style={styles.todayLabel}>{periodLabel}</Text>
+        <AmbientSurface accent={mySign.color} style={styles.todayCard}>
           <View style={styles.todayRow}>
             <View style={[styles.signBadge, { borderColor: mySign.color + '88', backgroundColor: mySign.color + '16' }]}>
               <Text style={[styles.signBadgeGlyph, { color: mySign.color }]}>{textGlyph(mySign.glyph)}</Text>
             </View>
             <View style={{ flex: 1, marginLeft: 14 }}>
+              <Text style={[styles.todayLabel, { color: mySign.color }]}>YOUR SIGN</Text>
               <Text style={styles.todaySignName}>{mySign.name}</Text>
-              <Text style={[styles.metaText, { color: mySign.color }]}>
+              <Text style={styles.metaText}>
                 {mySign.element} · {mySign.qualities}
               </Text>
             </View>
             <TouchableOpacity
               onPress={() => setPickerOpen(o => !o)}
-              style={styles.changeSignBtn}
+              style={[styles.changeSignBtn, pickerOpen && { borderColor: mySign.color + '77' }]}
               activeOpacity={0.8}
               accessibilityRole="button"
               accessibilityLabel={pickerOpen ? 'Close sign picker' : 'Change your zodiac sign'}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Text style={styles.changeSignText}>{pickerOpen ? 'CLOSE' : 'CHANGE'}</Text>
+              <Text style={[styles.changeSignText, pickerOpen && { color: mySign.color }]}>
+                {pickerOpen ? 'CLOSE' : 'CHANGE'}
+              </Text>
             </TouchableOpacity>
           </View>
-
-          {/* Period toggle */}
-          <View style={styles.periodRow}>
-            {(['daily', 'monthly', 'yearly'] as Period[]).map(p => {
-              const active = p === period;
-              return (
-                <TouchableOpacity
-                  key={p}
-                  activeOpacity={0.85}
-                  onPress={() => setPeriod(p)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Show ${p} horoscope`}
-                  accessibilityState={{ selected: active }}
-                  style={[
-                    styles.periodBtn,
-                    active && {
-                      backgroundColor: mySign.color + '22',
-                      borderColor: mySign.color,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.periodText, active && { color: mySign.color }]}>
-                    {p.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {loading && !horoscope ? (
-            <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
-              <ActivityIndicator color={mySign.color} />
-            </View>
-          ) : horoscope ? (
-            <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
-              <Text style={styles.horoscopeText}>{horoscope}</Text>
-              {period !== 'yearly' && horoscopeTs != null ? (
-                <Text style={styles.horoscopeStamp}>{freshnessLabel(horoscopeTs)}</Text>
-              ) : null}
-            </View>
-          ) : (
-            <View style={[styles.horoscopeBox, { borderLeftColor: mySign.color }]}>
-              <Text style={styles.horoscopeFallback}>“{mySign.intention}”</Text>
-              <Text style={styles.horoscopeNote}>
-                (Couldn't reach the horoscope service. Showing the sign's intention.)
-              </Text>
-            </View>
-          )}
-
+          <View style={styles.skyRule} />
           <View style={styles.todayMoon}>
-            <MoonDisc phase={lunar.phase} size={18} />
-            <Text style={styles.todayMoonText}>
-              {lunar.name} · {illumPct}% illuminated
-            </Text>
+            <View style={[styles.moonDiscWrap, { borderColor: mySign.color + '35' }]}>
+              <MoonDisc phase={lunar.phase} size={34} />
+            </View>
+            <View style={styles.moonCopy}>
+              <Text style={styles.todayLabel}>LUNAR WEATHER</Text>
+              <Text style={styles.todayMoonName}>{lunar.name}</Text>
+              <Text style={styles.todayMoonText}>{illumPct}% illuminated</Text>
+            </View>
+            <View style={[styles.illuminationBadge, { borderColor: mySign.color + '44' }]}>
+              <Text style={[styles.illuminationNumber, { color: mySign.color }]}>{illumPct}%</Text>
+              <Text style={styles.illuminationLabel}>LIT</Text>
+            </View>
           </View>
-        </View>
+        </AmbientSurface>
 
         {pickerOpen ? (
           <>
-            <Text style={styles.sectionLabel}>YOUR ZODIAC SIGN</Text>
-            <Text style={styles.sectionSub}>
-              Tap to set your sign. Saved on this device
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.zodiacRow}
-            >
-              {zodiac.map(z => {
-                const active = mySign.id === z.id;
-                return (
-                  <TouchableOpacity
-                    key={z.id}
-                    activeOpacity={0.85}
-                    onPress={() => { onSelectMyZodiac(z); setPickerOpen(false); }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Set ${z.name} as your sign, ${z.element}`}
-                    accessibilityState={{ selected: active }}
-                    style={[
-                      styles.zodiacChip,
-                      {
-                        borderColor: active ? z.color : z.color + '55',
-                        backgroundColor: active ? z.color + '22' : 'rgba(0,0,0,0.30)',
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.zGlyph, { color: z.color }]}>{textGlyph(z.glyph)}</Text>
-                    <Text style={styles.zName}>{z.name}</Text>
-                    <Text style={[styles.zElement, { color: z.color }]}>{z.element}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            <EditorialSection
+              eyebrow="YOUR LENS"
+              title="Choose your sign"
+              subtitle="Saved only on this device. Change it whenever you need."
+              accent={mySign.color}
+            />
+            <AmbientSurface accent={mySign.color} quiet style={styles.pickerSurface}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.zodiacRow}
+              >
+                {zodiac.map(z => {
+                  const active = mySign.id === z.id;
+                  return (
+                    <TouchableOpacity
+                      key={z.id}
+                      activeOpacity={0.85}
+                      onPress={() => { onSelectMyZodiac(z); setPickerOpen(false); }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Set ${z.name} as your sign, ${z.element}`}
+                      accessibilityState={{ selected: active }}
+                      style={[
+                        styles.zodiacChip,
+                        {
+                          borderColor: active ? z.color : z.color + '45',
+                          backgroundColor: active ? z.color + '1D' : 'rgba(255,255,255,0.025)',
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.zGlyph, { color: z.color }]}>{textGlyph(z.glyph)}</Text>
+                      <Text style={styles.zName}>{z.name}</Text>
+                      <Text style={[styles.zElement, { color: z.color }]}>{z.element}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </AmbientSurface>
           </>
         ) : null}
 
+        <EditorialSection
+          index="02"
+          eyebrow="THE READING"
+          title={forecastTitle}
+          subtitle={forecastSubtitle}
+          accent={mySign.color}
+        />
+
+        <View style={styles.periodRow} accessibilityRole="tablist">
+          {(['daily', 'monthly', 'yearly'] as Period[]).map(p => {
+            const active = p === period;
+            return (
+              <TouchableOpacity
+                key={p}
+                activeOpacity={0.85}
+                onPress={() => setPeriod(p)}
+                accessibilityRole="tab"
+                accessibilityLabel={`Show ${p} horoscope`}
+                accessibilityState={{ selected: active }}
+                style={[
+                  styles.periodBtn,
+                  active && {
+                    backgroundColor: mySign.color + '1C',
+                    borderColor: mySign.color + '66',
+                  },
+                ]}
+              >
+                <Text style={[styles.periodText, active && { color: mySign.color }]}>
+                  {p.toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <AmbientSurface accent={mySign.color} style={styles.manuscript}>
+          <View style={styles.manuscriptHeading}>
+            <Text style={[styles.manuscriptKicker, { color: mySign.color }]}>{periodLabel}</Text>
+            <Text style={[styles.manuscriptGlyph, { color: mySign.color }]}>{textGlyph(mySign.glyph)}</Text>
+          </View>
+          <View style={[styles.manuscriptRule, { backgroundColor: mySign.color + '45' }]} />
+          {loading && !horoscope ? (
+            <View style={styles.readingState}>
+              <ActivityIndicator color={mySign.color} />
+              <Text style={styles.stateTitle}>Reading the sky…</Text>
+              <Text style={styles.stateHint}>Checking for the latest reflection.</Text>
+            </View>
+          ) : horoscope ? (
+            <>
+              <Text style={styles.manuscriptBody}>{horoscope}</Text>
+              <StatusStrip
+                accent={mySign.color}
+                label={period === 'yearly' ? 'SIGN INTENTION' : 'CURRENT READING'}
+                detail={period !== 'yearly' && horoscopeTs != null ? freshnessLabel(horoscopeTs) : 'held locally'}
+                active
+              />
+            </>
+          ) : (
+            <>
+              <Text style={styles.fallbackQuote}>“{mySign.intention}”</Text>
+              <View style={styles.fallbackNote}>
+                <Text style={styles.fallbackNoteTitle}>The service is quiet right now.</Text>
+                <Text style={styles.fallbackNoteText}>
+                  Showing the intention already held in your sign instead.
+                </Text>
+              </View>
+            </>
+          )}
+        </AmbientSurface>
+          </>
+        ) : (
+          <>
+            <EditorialSection
+              index="01"
+              eyebrow="CARD OF THE MOMENT"
+              title="Turn one card, when you're ready"
+              subtitle="The pause before the reveal is part of the reading. Nothing here predicts the future."
+              accent="#B39BE0"
+            />
+
         {/* TAROT CARD OF THE DAY */}
-        <View style={[styles.tarotCard, { borderColor: '#B39BE055' }]}>
+        <AmbientSurface accent="#B39BE0" style={styles.tarotCard}>
           <View style={styles.tarotHeaderRow}>
-            <Text style={styles.cardLabel}>CARD OF THE MOMENT</Text>
+            <View>
+              <Text style={styles.cardLabel}>DAILY DRAW</Text>
+              <Text style={styles.tarotRoomTitle}>Card of the moment</Text>
+            </View>
             <TouchableOpacity
               onPress={() => drawTarot()}
               style={styles.tarotRefreshBtn}
@@ -541,7 +652,7 @@ export default function HoroscopesView({
               accessibilityRole="button"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <ArrowsClockwise size={16} color="#fff" weight="regular" />
+              <ArrowsClockwise size={17} color="#C6B6EC" weight="regular" />
             </TouchableOpacity>
           </View>
           <TouchableOpacity
@@ -552,14 +663,26 @@ export default function HoroscopesView({
             accessibilityLabel="Shuffle the minor arcana into the deck"
             style={[styles.arcanaToggle, includeMinor && { borderColor: '#B39BE0', backgroundColor: '#B39BE022' }]}
           >
-            <Text style={[styles.arcanaToggleText, includeMinor && { color: '#C6B6EC' }]}>
-              ✦ INCLUDE MINOR ARCANA
-            </Text>
+            <View style={styles.deckChoiceCopy}>
+              <Text style={styles.deckChoiceLabel}>THE DECK</Text>
+              <Text style={styles.deckChoiceTitle}>
+                {includeMinor ? 'Major + minor arcana' : 'Major arcana only'}
+              </Text>
+            </View>
+            <View style={[styles.deckChoiceState, includeMinor && { backgroundColor: '#B39BE0' }]}>
+              <Text style={[styles.deckChoiceStateText, includeMinor && { color: '#111225' }]}>
+                {includeMinor ? 'ALL' : 'MAJOR'}
+              </Text>
+            </View>
           </TouchableOpacity>
           {tarotLoading ? (
-            <ActivityIndicator color="#B39BE0" style={{ marginVertical: 24 }} />
+            <View style={styles.readingState}>
+              <ActivityIndicator color="#B39BE0" />
+              <Text style={styles.stateTitle}>Shuffling the deck…</Text>
+              <Text style={styles.stateHint}>A card will rest here in a moment.</Text>
+            </View>
           ) : tarot ? (
-            <View style={{ alignItems: 'center' }}>
+            <View style={styles.tarotStage}>
               <FlipCard
                 width={156}
                 height={252}
@@ -570,28 +693,52 @@ export default function HoroscopesView({
                 face={<CardFace name={tarot.name} reversed={tarotReversed} />}
               />
               {!tarotRevealed ? (
-                <Text style={styles.tarotHint}>A card has been drawn for you. Turn it when you are ready.</Text>
+                <View style={styles.tarotPrompt}>
+                  <Text style={styles.tarotPromptTitle}>A card is waiting face down.</Text>
+                  <Text style={styles.tarotPromptText}>Turn it when you are ready to notice what it brings up.</Text>
+                  <StatusStrip accent="#B39BE0" label="FACE DOWN" detail="tap the card to reveal" active />
+                </View>
               ) : (
-                <>
+                <View style={styles.tarotInterpretation}>
+                  <Text style={styles.tarotInterpretationLabel}>WHAT IT MAY INVITE</Text>
                   <Text style={styles.tarotMeaningLead}>
                     {(tarotReversed ? tarot.meaning_rev : tarot.meaning_up) ?? tarot.meaning_up ?? ''}
                   </Text>
-                  {tarot.desc ? (
-                    <Text style={styles.tarotDesc} numberOfLines={3}>{tarot.desc}</Text>
-                  ) : null}
-                </>
+                  {tarot.desc ? <Text style={styles.tarotDesc}>{tarot.desc}</Text> : null}
+                  <StatusStrip
+                    accent={tarotReversed ? '#D68097' : '#9DC7AC'}
+                    label={tarotReversed ? 'REVERSED' : 'UPRIGHT'}
+                    detail={tarot.name}
+                    active
+                  />
+                </View>
               )}
             </View>
           ) : tarotError ? (
-            <Text style={styles.tarotMeaning}>Could not reach the cards. Try again.</Text>
+            <View style={styles.readingState}>
+              <Text style={styles.stateGlyph}>◇</Text>
+              <Text style={styles.stateTitle}>The cards could not arrive.</Text>
+              <Text style={styles.stateHint}>Check your connection, then use the redraw button above.</Text>
+            </View>
           ) : (
-            <Text style={styles.tarotMeaning}>Pull a card and pause for a moment.</Text>
+            <View style={styles.readingState}>
+              <Text style={styles.stateGlyph}>✦</Text>
+              <Text style={styles.stateTitle}>The table is ready.</Text>
+              <Text style={styles.stateHint}>Draw a card and pause for a moment.</Text>
+            </View>
           )}
-        </View>
+        </AmbientSurface>
 
         {/* TAROT SPREADS */}
-        <View style={[styles.tarotCard, { borderColor: '#B39BE055' }]}>
-          <Text style={styles.cardLabel}>DRAW A SPREAD</Text>
+        <EditorialSection
+          index="02"
+          eyebrow="SPREADS"
+          title="Lay out a wider question"
+          subtitle="Choose a shape, then turn each position in its own time."
+          accent="#B39BE0"
+        />
+        <AmbientSurface accent="#B39BE0" quiet style={styles.spreadRoom}>
+          <Text style={styles.spreadChoiceLabel}>CHOOSE THE SHAPE</Text>
           <View style={styles.spreadBtnRow}>
             {SPREAD_SIZES.map(n => {
               const active = spreadSize === n;
@@ -612,10 +759,13 @@ export default function HoroscopesView({
           </View>
 
           {spreadLoading ? (
-            <ActivityIndicator color="#B39BE0" style={{ marginVertical: 22 }} />
+            <View style={styles.readingState}>
+              <ActivityIndicator color="#B39BE0" />
+              <Text style={styles.stateTitle}>Laying out the cards…</Text>
+            </View>
           ) : spread && spreadSize ? (
             <>
-              <Text style={styles.tarotHint}>The cards are laid face down. Turn each in its own time.</Text>
+              <Text style={styles.spreadGuide}>The cards are face down. Turn each in its own time.</Text>
               {/* Wrapping rows sized so nothing scrolls or clips: 3 across,
                   5 as 3+2, 7 as 4+3. Meanings collect in a list below as
                   cards are revealed. */}
@@ -645,6 +795,7 @@ export default function HoroscopesView({
               </View>
               {spread.some((_, i) => spreadRevealed[i]) ? (
                 <View style={styles.spreadReadList}>
+                  <Text style={styles.spreadReadHeading}>THE READING SO FAR</Text>
                   {spread.map((item, i) => {
                     if (!spreadRevealed[i]) return null;
                     const pos = SPREAD_POSITIONS[spreadSize][i] ?? `Card ${i + 1}`;
@@ -653,7 +804,7 @@ export default function HoroscopesView({
                         <Text style={styles.spreadPos}>
                           {pos} · {item.card.name}{item.reversed ? ' · reversed' : ''}
                         </Text>
-                        <Text style={styles.spreadReadMeaning} numberOfLines={3}>
+                        <Text style={styles.spreadReadMeaning}>
                           {(item.reversed ? item.card.meaning_rev : item.card.meaning_up) ?? item.card.meaning_up ?? ''}
                         </Text>
                       </View>
@@ -663,18 +814,32 @@ export default function HoroscopesView({
               ) : null}
             </>
           ) : spreadError ? (
-            <Text style={styles.tarotMeaning}>Could not reach the cards. Try again.</Text>
+            <View style={styles.readingState}>
+              <Text style={styles.stateGlyph}>◇</Text>
+              <Text style={styles.stateTitle}>The spread could not be laid.</Text>
+              <Text style={styles.stateHint}>Check your connection and choose the spread again.</Text>
+            </View>
           ) : (
-            <Text style={styles.tarotMeaning}>Choose a spread to lay the cards.</Text>
+            <View style={styles.spreadEmpty}>
+              <Text style={styles.spreadEmptyGlyph}>⌁</Text>
+              <Text style={styles.spreadEmptyTitle}>No cards on the table yet.</Text>
+              <Text style={styles.spreadEmptyText}>Three is concise. Five adds context. Seven opens the widest lens.</Text>
+            </View>
           )}
-        </View>
+        </AmbientSurface>
+          </>
+        )}
 
-        <Text style={styles.footnote}>
-          Horoscopes and tarot are fetched from a free public API.
-          Take what resonates, leave the rest.
-        </Text>
+        <View style={styles.closing}>
+          <View style={[styles.closingLine, { backgroundColor: accent + '40' }]} />
+          <Text style={[styles.closingGlyph, { color: accent }]}>{readingMode === 'horoscope' ? '☾' : '✦'}</Text>
+          <View style={[styles.closingLine, { backgroundColor: accent + '40' }]} />
+          <Text style={styles.footnote}>
+            Horoscopes and tarot come from a free public API. Take what resonates, leave the rest.
+          </Text>
+        </View>
       </ScrollView>
-    </View>
+    </AmbientVeil>
   );
 }
 
@@ -797,39 +962,118 @@ function CardFace({
 }
 
 const styles = StyleSheet.create({
-  headerWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 14 },
-  ambience: {
-    color: '#fff',
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 38, letterSpacing: 2.5,
-    textAlign: 'center', lineHeight: 44,
+  scrollContent: { paddingHorizontal: 20 },
+  modeSurface: { padding: 5, marginBottom: 2 },
+  modeRow: { flexDirection: 'row', gap: 6 },
+  modeButton: {
+    flex: 1, minHeight: 58, borderRadius: 20, borderWidth: 1,
+    borderColor: 'transparent', paddingHorizontal: 10,
+    flexDirection: 'row', alignItems: 'center',
   },
-  title: {
-    color: '#ffffff99', fontSize: 10, fontWeight: '400',
-    letterSpacing: 4, textTransform: 'uppercase', marginTop: 2,
+  modeGlyphWrap: {
+    width: 34, height: 34, borderRadius: 17, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center', marginRight: 9,
   },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
-  dividerLine: { width: 28, height: 1, backgroundColor: 'rgba(255,255,255,0.35)' },
-  subtitle: {
-    color: '#ffffffaa', fontSize: 10, letterSpacing: 4,
-    marginHorizontal: 14, fontStyle: 'italic',
-  },
+  modeGlyph: { fontSize: 17 },
+  modeCopy: { flex: 1 },
+  modeLabel: { color: '#C1BFCE', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 },
+  modeHint: { color: '#7F8092', fontSize: 9.5, marginTop: 2 },
 
-  todayCard: {
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: 18, padding: 16, marginBottom: 18, borderWidth: 1,
+  skyRule: { height: 1, marginTop: 16, backgroundColor: 'rgba(255,255,255,0.08)' },
+  moonDiscWrap: {
+    width: 56, height: 56, borderRadius: 28, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(7,8,23,0.20)',
   },
+  moonCopy: { flex: 1, marginLeft: 12 },
+  todayMoonName: {
+    color: '#F6F3FC', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 20, lineHeight: 23,
+  },
+  illuminationBadge: {
+    minWidth: 50, minHeight: 48, borderRadius: 16, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(7,8,23,0.22)',
+  },
+  illuminationNumber: { fontSize: 13, fontWeight: '800' },
+  illuminationLabel: { color: '#77788B', fontSize: 7, fontWeight: '800', letterSpacing: 1.2, marginTop: 2 },
+  pickerSurface: { paddingVertical: 10, paddingLeft: 10 },
+
+  manuscript: { padding: 20, minHeight: 220 },
+  manuscriptHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  manuscriptKicker: { fontSize: 8.5, fontWeight: '800', letterSpacing: 1.7, flexShrink: 1 },
+  manuscriptGlyph: { fontFamily: GLYPH_FONT, fontSize: 26, lineHeight: 30 },
+  manuscriptRule: { height: 1, marginTop: 11, marginBottom: 17 },
+  manuscriptBody: {
+    color: '#F2EEF8', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 19, lineHeight: 29, marginBottom: 18,
+  },
+  fallbackQuote: {
+    color: '#F2EEF8', fontFamily: 'CormorantGaramond_500Medium_Italic',
+    fontSize: 22, lineHeight: 31, textAlign: 'center', marginVertical: 16,
+  },
+  fallbackNote: {
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
+    paddingTop: 14, marginTop: 8,
+  },
+  fallbackNoteTitle: { color: '#D0CEDA', fontSize: 11.5, fontWeight: '700' },
+  fallbackNoteText: { color: '#858698', fontSize: 11, lineHeight: 16, marginTop: 4 },
+
+  readingState: { minHeight: 146, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
+  stateGlyph: { color: '#B39BE0', fontSize: 28, marginBottom: 8 },
+  stateTitle: {
+    color: '#F5F2FB', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 19, lineHeight: 23, textAlign: 'center', marginTop: 10,
+  },
+  stateHint: { color: '#898A9D', fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: 5 },
+
+  tarotRoomTitle: {
+    color: '#F8F4FF', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 23, lineHeight: 26, marginTop: 3,
+  },
+  deckChoiceCopy: { flex: 1 },
+  deckChoiceLabel: { color: '#8C8D9F', fontSize: 7.5, fontWeight: '800', letterSpacing: 1.4 },
+  deckChoiceTitle: { color: '#DAD6E4', fontSize: 11.5, marginTop: 3 },
+  deckChoiceState: {
+    minWidth: 57, minHeight: 30, borderRadius: 15,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  deckChoiceStateText: { color: '#8E8FA1', fontSize: 7.5, fontWeight: '800', letterSpacing: 1 },
+  tarotStage: { alignItems: 'center', paddingTop: 5 },
+  tarotPrompt: { width: '100%', marginTop: 17, gap: 8 },
+  tarotPromptTitle: {
+    color: '#F2EFF8', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 18, textAlign: 'center',
+  },
+  tarotPromptText: { color: '#9293A5', fontSize: 11, lineHeight: 16, textAlign: 'center', marginBottom: 3 },
+  tarotInterpretation: { width: '100%', marginTop: 18 },
+  tarotInterpretationLabel: { color: '#B39BE0', fontSize: 8, fontWeight: '800', letterSpacing: 1.7, textAlign: 'center' },
+
+  spreadRoom: { padding: 16 },
+  spreadChoiceLabel: { color: '#9F94BA', fontSize: 8, fontWeight: '800', letterSpacing: 1.7 },
+  spreadGuide: { color: '#8E8FA2', fontSize: 11, fontStyle: 'italic', textAlign: 'center', marginTop: 15 },
+  spreadReadHeading: { color: '#9F94BA', fontSize: 8, fontWeight: '800', letterSpacing: 1.7, marginBottom: 2 },
+  spreadEmpty: { minHeight: 150, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22 },
+  spreadEmptyGlyph: { color: '#B39BE0', fontSize: 29 },
+  spreadEmptyTitle: {
+    color: '#F3F0F8', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 19, marginTop: 9, textAlign: 'center',
+  },
+  spreadEmptyText: { color: '#87889A', fontSize: 11, lineHeight: 16, textAlign: 'center', marginTop: 5 },
+
+  closing: { alignItems: 'center', marginTop: 31, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
+  closingLine: { width: 30, height: 1 },
+  closingGlyph: { fontSize: 16, marginHorizontal: 10 },
+  todayCard: { padding: 18 },
   todayLabel: {
-    color: '#ffffff80', fontSize: 10, letterSpacing: 2, fontWeight: '600',
-    marginBottom: 8,
+    color: '#8F90A3', fontSize: 8, letterSpacing: 1.6, fontWeight: '800',
+    marginBottom: 3,
   },
   todayRow: { flexDirection: 'row', alignItems: 'center' },
   signBadge: {
-    width: 54, height: 54, borderRadius: 27,
+    width: 60, height: 60, borderRadius: 30,
     borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
   },
-  signBadgeGlyph: { fontSize: 26, lineHeight: 32, fontFamily: GLYPH_FONT },
+  signBadgeGlyph: { fontSize: 29, lineHeight: 35, fontFamily: GLYPH_FONT },
   changeSignBtn: {
     paddingHorizontal: 10, paddingVertical: 5,
     borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',
@@ -842,57 +1086,29 @@ const styles = StyleSheet.create({
     fontFamily: 'CormorantGaramond_500Medium',
     fontSize: 30, letterSpacing: 1,
   },
-  metaText: { fontSize: 11, letterSpacing: 0.5, marginTop: 2 },
+  metaText: { color: '#9899AB', fontSize: 11, letterSpacing: 0.5, marginTop: 2 },
 
   periodRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 999, padding: 4,
-    marginTop: 14,
-    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(18,19,42,0.56)',
+    borderRadius: 18, padding: 4,
+    marginBottom: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
   periodBtn: {
-    paddingHorizontal: 14, paddingVertical: 5,
-    borderRadius: 999,
+    flex: 1, minHeight: 42,
+    paddingHorizontal: 7, paddingVertical: 7,
+    borderRadius: 14,
     borderWidth: 1, borderColor: 'transparent',
+    alignItems: 'center', justifyContent: 'center',
   },
-  periodText: { color: '#ffffff80', fontSize: 11, letterSpacing: 1.5, fontWeight: '600' },
-
-  horoscopeBox: {
-    marginTop: 14,
-    paddingLeft: 12, paddingVertical: 6,
-    borderLeftWidth: 2,
-  },
-  // The reading itself is set in the app's serif voice; plain sans here made
-  // the centerpiece feel like an API dump.
-  horoscopeText: {
-    color: '#ffffffee',
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 18, lineHeight: 27,
-  },
-  horoscopeStamp: { color: '#ffffff66', fontSize: 10, fontStyle: 'italic', marginTop: 8 },
-  horoscopeFallback: {
-    color: '#ffffffdd',
-    fontFamily: 'CormorantGaramond_500Medium_Italic',
-    fontSize: 18, lineHeight: 26,
-  },
-  horoscopeNote: { color: '#ffffff66', fontSize: 10, fontStyle: 'italic', marginTop: 6 },
+  periodText: { color: '#8D8EA0', fontSize: 9.5, letterSpacing: 1.5, fontWeight: '800' },
 
   todayMoon: {
     flexDirection: 'row', alignItems: 'center',
-    marginTop: 14, paddingTop: 12,
-    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
+    marginTop: 15,
   },
-  todayMoonText: { color: '#ffffff99', fontSize: 12, letterSpacing: 0.5, marginLeft: 8 },
-
-  sectionLabel: {
-    color: '#ffffff80', fontSize: 11, letterSpacing: 2, fontWeight: '600',
-    paddingHorizontal: 4, marginBottom: 4,
-  },
-  sectionSub: {
-    color: '#ffffff66', fontSize: 11, fontStyle: 'italic',
-    marginBottom: 10, paddingHorizontal: 4,
-  },
+  todayMoonText: { color: '#9293A6', fontSize: 10.5, letterSpacing: 0.3, marginTop: 1 },
 
   zodiacRow: { paddingRight: 12, paddingVertical: 4 },
   zodiacChip: {
@@ -909,36 +1125,31 @@ const styles = StyleSheet.create({
   zElement: { fontSize: 9, letterSpacing: 1, fontWeight: '600', marginTop: 2 },
 
   footnote: {
-    color: '#ffffff66', fontSize: 12, textAlign: 'center',
-    marginTop: 24, paddingHorizontal: 12, fontStyle: 'italic', lineHeight: 18,
+    width: '100%', color: '#747587', fontSize: 10.5, textAlign: 'center',
+    marginTop: 7, paddingHorizontal: 12, fontStyle: 'italic', lineHeight: 16,
   },
-  cardLabel: { color: '#ffffff80', fontSize: 11, letterSpacing: 2, fontWeight: '600' },
-  tarotCard: {
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    borderRadius: 18, padding: 16, marginTop: 22, borderWidth: 1,
-  },
-  tarotHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  cardLabel: { color: '#9188A9', fontSize: 8, letterSpacing: 1.8, fontWeight: '800' },
+  tarotCard: { padding: 18 },
+  tarotHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   tarotRefreshBtn: {
     width: 32, height: 32, borderRadius: 16,
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  tarotRefreshText: { color: '#fff', fontSize: 16 },
-  tarotMeaning: { color: '#ffffffdd', fontSize: 13, lineHeight: 19, marginBottom: 8 },
   tarotMeaningLead: {
-    color: '#ffffffdd', fontSize: 13, lineHeight: 19,
-    textAlign: 'center', marginTop: 14, marginBottom: 8,
+    color: '#F0ECF7', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 18, lineHeight: 27,
+    textAlign: 'center', marginTop: 12, marginBottom: 10,
   },
-  tarotDesc: { color: '#ffffff88', fontSize: 12, lineHeight: 17, fontStyle: 'italic', textAlign: 'center' },
-  tarotHint: {
-    color: '#ffffff77', fontSize: 11, fontStyle: 'italic',
-    textAlign: 'center', marginTop: 12,
+  tarotDesc: {
+    color: '#9293A6', fontSize: 11.5, lineHeight: 18,
+    fontStyle: 'italic', textAlign: 'center', marginBottom: 15,
   },
   spreadBtnRow: { flexDirection: 'row', gap: 8, marginTop: 12, marginBottom: 2 },
   spreadBtn: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 12,
+    flex: 1, minHeight: 58,
+    paddingVertical: 8,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.16)',
     backgroundColor: 'rgba(255,255,255,0.04)',
@@ -955,17 +1166,23 @@ const styles = StyleSheet.create({
     color: '#C6B6EC', fontSize: 9, fontWeight: '800',
     letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 6,
   },
-  spreadReadList: { marginTop: 16, gap: 12 },
-  spreadReadItem: { borderLeftWidth: 2, borderLeftColor: '#B39BE0', paddingLeft: 10 },
-  spreadReadMeaning: { color: '#ffffffAA', fontSize: 12, lineHeight: 17, marginTop: 3 },
-  arcanaToggle: {
-    alignSelf: 'center',
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    marginBottom: 12,
+  spreadReadList: {
+    marginTop: 18, gap: 13, paddingTop: 15,
+    borderTopWidth: 1, borderTopColor: 'rgba(179,155,224,0.24)',
   },
-  arcanaToggleText: { color: '#ffffff77', fontSize: 9, fontWeight: '700', letterSpacing: 1.6 },
+  spreadReadItem: { borderLeftWidth: 2, borderLeftColor: '#B39BE0', paddingLeft: 11 },
+  spreadReadMeaning: {
+    color: '#C6C2D0', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 15, lineHeight: 21, marginTop: 3,
+  },
+  arcanaToggle: {
+    alignSelf: 'stretch', minHeight: 52,
+    paddingHorizontal: 13, paddingVertical: 9,
+    borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    marginBottom: 18,
+    flexDirection: 'row', alignItems: 'center',
+  },
 
   cardShellBack: {
     flex: 1,
