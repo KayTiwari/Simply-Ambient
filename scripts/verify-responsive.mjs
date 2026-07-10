@@ -81,6 +81,12 @@ const exerciseRooms = async width => {
   await tap('Box Breathing');
   await page.getByText('BEGIN PRACTICE', { exact: true }).waitFor({ state: 'visible' });
   await assertNoRootOverflow(`${width} breath practice`);
+  const phaseTones = page.getByLabel('Eyes-closed phase tones', { exact: true });
+  await phaseTones.click();
+  await phaseTones.getByText('ON', { exact: true }).waitFor({ state: 'visible' });
+  await page.getByLabel('Begin breathing practice', { exact: true }).click();
+  await page.getByLabel('End breathing practice', { exact: true }).waitFor({ state: 'visible' });
+  await page.getByLabel('End breathing practice', { exact: true }).click();
 
   await tap('Chakras');
   await page.getByText('Move through the spectrum', { exact: true }).waitFor({ state: 'visible' });
@@ -97,6 +103,35 @@ const exerciseRooms = async width => {
   await tap('Take a five-second check-in');
   await page.getByText('Meet Your Mood', { exact: true }).waitFor({ state: 'visible' });
   await assertNoRootOverflow(`${width} more destination`);
+
+  await page.getByLabel('Back', { exact: true }).first().click();
+  await page.getByText('Soundscapes', { exact: true }).first().waitFor({ state: 'visible' });
+  await tap('Soundscapes');
+  await page.getByText('Layer the Room', { exact: true }).waitFor({ state: 'visible' });
+  await assertNoRootOverflow(`${width} soundscapes`);
+  await tap('Soft Rain');
+  await page.getByText('Playing now', { exact: true }).waitFor({ state: 'visible' });
+  await assertNoRootOverflow(`${width} active soundscape`);
+  const sidewaysScroll = await page.evaluate(() => ({
+    windowX: window.scrollX,
+    elements: Array.from(document.querySelectorAll('*'))
+      .filter(element => element.scrollLeft > 1)
+      .map(element => ({
+        tag: element.tagName,
+        className: element.className,
+        scrollLeft: element.scrollLeft,
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+      })),
+  }));
+  assert.equal(sidewaysScroll.windowX, 0, `${width} soundscapes shifted the window sideways`);
+  assert.deepEqual(sidewaysScroll.elements, [], `${width} soundscapes shifted an inner scroller sideways`);
+
+  const pin = page.getByLabel('Pin Soundscapes to the app navbar', { exact: true });
+  await pin.click();
+  await page.getByText('Sound', { exact: true }).waitFor({ state: 'visible' });
+  await assertNoRootOverflow(`${width} six-tab navbar`);
+  await page.getByLabel('Unpin Soundscapes from the app navbar', { exact: true }).click();
 };
 
 await exerciseRooms(320);

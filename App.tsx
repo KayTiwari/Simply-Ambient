@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AccessibilityInfo,
   Alert,
   Animated,
   AppState,
@@ -1412,6 +1413,7 @@ type Tab = 'frequencies' | 'breath' | 'chakras' | 'horoscopes' | 'more';
 
 const STORAGE_KEY_NOTIF = '@simply_ambient_notif_pref_v1';
 const STORAGE_KEY_SINGLE_COLOR = '@simply_ambient_single_color_v1';
+const STORAGE_KEY_NAV_SOUNDSCAPES = '@simply_ambient_nav_soundscapes_v1';
 // The day's affirmation, stored as JSON {date: 'YYYY-MM-DD' local, text} so
 // one phrase holds for the whole day across launches and hub previews.
 const STORAGE_KEY_AFFIRMATION = '@simply_ambient_affirmation_v1';
@@ -1427,8 +1429,11 @@ function localDateKey(d: Date = new Date()): string {
 function AppContent() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('frequencies');
+  const [soundscapesInNav, setSoundscapesInNav] = useState(false);
+  const soundscapesPinTouched = useRef(false);
+  const [moreActivePage, setMoreActivePage] = useState<string | null>(null);
   // Deep link into a More sub-page (the mini player opens Soundscapes there).
-  const [morePageRequest, setMorePageRequest] = useState<'soundscapes' | null>(null);
+  const [morePageRequest, setMorePageRequest] = useState<'soundscapes' | 'hub' | null>(null);
   const tabFade = useRef(new Animated.Value(1)).current;
   const lastTab = useRef<Tab>(tab);
 
@@ -1456,6 +1461,11 @@ function AppContent() {
     AsyncStorage.getItem(STORAGE_KEY_SINGLE_COLOR).then(v => {
       if (v) setSingleColor(v);
     }).catch(() => {});
+    AsyncStorage.getItem(STORAGE_KEY_NAV_SOUNDSCAPES)
+      .then(v => {
+        if (!soundscapesPinTouched.current) setSoundscapesInNav(v === '1');
+      })
+      .catch(() => {});
     // One of the rate-prompt gate counters (see lib/rateGate.ts).
     recordAppOpen().catch(() => {});
   }, []);
@@ -1463,6 +1473,23 @@ function AppContent() {
   // "Single app color": when set, the backdrop is pinned to this flat color
   // instead of the band-driven animated palettes.
   const [singleColor, setSingleColor] = useState<string | null>(null);
+  function setSoundscapesPinned(next: boolean) {
+    soundscapesPinTouched.current = true;
+    setSoundscapesInNav(next);
+    if (next) AsyncStorage.setItem(STORAGE_KEY_NAV_SOUNDSCAPES, '1').catch(() => {});
+    else AsyncStorage.removeItem(STORAGE_KEY_NAV_SOUNDSCAPES).catch(() => {});
+  }
+
+  function openMoreHub() {
+    if (tab === 'more' && moreActivePage !== null) setMorePageRequest('hub');
+    else setMoreActivePage(null);
+    setTab('more');
+  }
+
+  function openSoundscapesFromNav() {
+    setMorePageRequest('soundscapes');
+    setTab('more');
+  }
   function setSingleColorPref(c: string | null) {
     setSingleColor(c);
     if (c) AsyncStorage.setItem(STORAGE_KEY_SINGLE_COLOR, c).catch(() => {});
@@ -2306,6 +2333,8 @@ function AppContent() {
                 mySign={mySign}
                 lunar={lunar}
                 onSelectMyZodiac={selectMyZodiac}
+                toneIsPlaying={isTonePlaying}
+                beatHz={beat}
               />
             )}
             {tab === 'more' && (
@@ -2322,8 +2351,11 @@ function AppContent() {
                 soundscapeVolume={soundscapeVolume}
                 onToggleSoundscape={(id) => toggleSoundscape(id as SoundscapeKey)}
                 onChangeSoundscapeVolume={changeSoundscapeVolume}
+                soundscapesInNav={soundscapesInNav}
+                onToggleSoundscapesInNav={setSoundscapesPinned}
                 requestedPage={morePageRequest}
                 onRequestedPageHandled={() => setMorePageRequest(null)}
+                onPageChange={setMoreActivePage}
                 singleColor={singleColor}
                 ambientAccent={beatColor}
                 onChangeSingleColor={setSingleColorPref}
@@ -2361,8 +2393,14 @@ function AppContent() {
         />
         <TabBar
           tab={tab}
-          onChange={setTab}
+          onChange={nextTab => {
+            if (nextTab === 'more') openMoreHub();
+            else setTab(nextTab);
+          }}
           accent={beatColor}
+          soundscapesInNav={soundscapesInNav}
+          soundscapesActive={soundscapesInNav && tab === 'more' && moreActivePage === 'soundscapes'}
+          onOpenSoundscapes={openSoundscapesFromNav}
         />
       </SafeAreaView>
 
@@ -2751,15 +2789,21 @@ function TabBar({
   tab,
   onChange,
   accent,
+  soundscapesInNav,
+  soundscapesActive,
+  onOpenSoundscapes,
 }: {
   tab: Tab;
   onChange: (t: Tab) => void;
   accent: string;
+  soundscapesInNav: boolean;
+  soundscapesActive: boolean;
+  onOpenSoundscapes: () => void;
 }) {
   // Short visible labels remain readable on narrow phones; accessibility
   // labels keep the full destination names.
   const { width } = useWindowDimensions();
-  const compact = width / 5 < 82;
+  const compact = width / (soundscapesInNav ? 6 : 5) < 82;
   return (
     <SafeAreaView edges={['bottom']} style={styles.tabBarSafe}>
       <View style={styles.tabBar}>
@@ -2767,7 +2811,18 @@ function TabBar({
         <TabButton label="Breathe"     accessibilityLabel="Breath" glyph="○" compact={compact} active={tab === 'breath'}      accent={accent} onPress={() => onChange('breath')} />
         <TabButton label="Chakras"     glyph="✦" compact={compact} active={tab === 'chakras'}     accent={accent} onPress={() => onChange('chakras')} />
         <TabButton label="Stars"       accessibilityLabel="Horoscopes" glyph="☽" compact={compact} active={tab === 'horoscopes'}  accent={accent} onPress={() => onChange('horoscopes')} />
-        <TabButton label="More"        glyph="⋯" compact={compact} active={tab === 'more'}        accent={accent} onPress={() => onChange('more')} />
+        {soundscapesInNav ? (
+          <TabButton
+            label="Sound"
+            accessibilityLabel="Soundscapes"
+            Icon={Waveform}
+            compact={compact}
+            active={soundscapesActive}
+            accent={accent}
+            onPress={onOpenSoundscapes}
+          />
+        ) : null}
+        <TabButton label="More" glyph="⋯" compact={compact} active={tab === 'more' && (!soundscapesInNav || !soundscapesActive)} accent={accent} onPress={() => onChange('more')} />
       </View>
     </SafeAreaView>
   );
@@ -2886,21 +2941,40 @@ function FrequenciesView(props: FreqViewProps) {
   }
 
   return (
-    <AmbientVeil accent={beatColor} strength="light">
+    <AmbientVeil
+      accent={beatColor}
+      strength="light"
+      active={isTonePlaying}
+      motionHz={beat}
+    >
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
+      <View style={styles.freqEnsoWrap} pointerEvents="none">
+        <View style={styles.freqEnsoMark}>
+          <View style={styles.freqEnsoArc} />
+          <View style={styles.freqEnsoDot} />
+        </View>
+      </View>
       <View style={styles.freqEditorialHeader}>
         <EditorialHeader
           mode={isTonePlaying ? 'LIVE SESSION' : 'CREATE'}
           title="Shape the signal"
-          subtitle="Blend two tones into a calm, focused listening space that moves with you."
           accent={beatColor}
         />
       </View>
+
+      <AmbientSurface accent={beatColor} quiet style={styles.freqAffirmationCard}>
+        <View style={styles.freqAffirmationTopline}>
+          <View style={[styles.freqAffirmationRule, { backgroundColor: beatColor }]} />
+          <Text style={[styles.freqAffirmationLabel, { color: beatColor }]}>A THOUGHT TO CARRY</Text>
+          <Text style={[styles.freqAffirmationGlyph, { color: beatColor }]}>✦</Text>
+        </View>
+        <ManifestQuote />
+      </AmbientSurface>
 
       <AmbientSurface accent={beatColor} style={styles.beatCard}>
         <View style={styles.beatHeaderRow}>
@@ -2918,15 +2992,13 @@ function FrequenciesView(props: FreqViewProps) {
             <Text style={styles.saveBtnText}>＋ Save</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.signalStage} pointerEvents="none">
-          <View style={[styles.signalOrbit, styles.signalOrbitOuter, { borderColor: beatColor + '26' }]} />
-          <View style={[styles.signalOrbit, styles.signalOrbitMiddle, { borderColor: beatColor + '42' }]} />
-          <View style={[styles.signalOrbit, styles.signalOrbitInner, { borderColor: beatColor + '66' }]} />
-          <View style={[styles.signalCore, { backgroundColor: beatColor + '18', shadowColor: beatColor }]} />
-          <Text style={styles.beatHz}>
-            {beat.toFixed(0)}<Text style={styles.beatHzUnit}> Hz</Text>
-          </Text>
-        </View>
+        <HzSignalOrbit
+          leftHz={leftHz}
+          rightHz={rightHz}
+          beatHz={beat}
+          accent={beatColor}
+          playing={isTonePlaying}
+        />
         <View style={[styles.bandPill, { backgroundColor: beatColor + '22', borderColor: beatColor }]}>
           <View style={[styles.bandDot, { backgroundColor: beatColor }]} />
           <Text numberOfLines={2} style={[styles.bandText, { color: beatColor }]}>
@@ -3048,7 +3120,7 @@ function FrequenciesView(props: FreqViewProps) {
         index="01"
         eyebrow="QUICK STARTS"
         title="Begin with an intention"
-        subtitle="A few balanced starting points. Fine-tune anything after choosing."
+        subtitle="Choose a starting point, then fine-tune anything."
         accent={beatColor}
       />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
@@ -3116,7 +3188,6 @@ function FrequenciesView(props: FreqViewProps) {
         index="02"
         eyebrow="TRADITIONAL TONES"
         title="Explore resonant associations"
-        subtitle="Solfeggio-inspired references, adapted to a comfortable carrier with a gentle stereo split."
         accent="#d9b35c"
       />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
@@ -3307,12 +3378,124 @@ function FrequenciesView(props: FreqViewProps) {
       <Text style={styles.footnote}>
         Use stereo headphones at a comfortable volume. Each ear receives a slightly different tone; the displayed beat is the difference between them.
       </Text>
-      <View style={styles.quotePlate}>
-        <View style={[styles.quoteRule, { backgroundColor: beatColor }]} />
-        <ManifestQuote />
-      </View>
       </ScrollView>
     </AmbientVeil>
+  );
+}
+
+function HzSignalOrbit({
+  leftHz,
+  rightHz,
+  beatHz,
+  accent,
+  playing,
+}: {
+  leftHz: number;
+  rightHz: number;
+  beatHz: number;
+  accent: string;
+  playing: boolean;
+}) {
+  const leftSpin = useRef(new Animated.Value(0)).current;
+  const rightSpin = useRef(new Animated.Value(0)).current;
+  const beatSpin = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(0)).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    const values = [leftSpin, rightSpin, beatSpin, pulse];
+    if (!playing || reduceMotion) {
+      values.forEach(value => value.stopAnimation());
+      return;
+    }
+
+    // Audible carriers are compressed into a calm visual range: higher Hz
+    // rotates faster, while the visible beat controls the innermost orbit.
+    const carrierDuration = (hz: number) => {
+      const normalized = Math.max(0, Math.min(1, (hz - MIN_HZ) / (MAX_HZ - MIN_HZ)));
+      return Math.round(14500 - normalized * 9000);
+    };
+    const beatDuration = Math.round(16000 - Math.max(0, Math.min(MAX_BEAT, beatHz)) / MAX_BEAT * 12000);
+    const pulseDuration = Math.round(2600 - Math.max(0, Math.min(MAX_BEAT, beatHz)) / MAX_BEAT * 1200);
+
+    leftSpin.setValue(0);
+    rightSpin.setValue(0);
+    beatSpin.setValue(0);
+    pulse.setValue(0);
+
+    const loops = [
+      Animated.loop(Animated.timing(leftSpin, {
+        toValue: 1, duration: carrierDuration(leftHz), easing: Easing.linear, useNativeDriver: true,
+      })),
+      Animated.loop(Animated.timing(rightSpin, {
+        toValue: 1, duration: carrierDuration(rightHz), easing: Easing.linear, useNativeDriver: true,
+      })),
+      Animated.loop(Animated.timing(beatSpin, {
+        toValue: 1, duration: beatDuration, easing: Easing.linear, useNativeDriver: true,
+      })),
+      Animated.loop(Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1, duration: pulseDuration, easing: Easing.inOut(Easing.sin), useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0, duration: pulseDuration, easing: Easing.inOut(Easing.sin), useNativeDriver: true,
+        }),
+      ])),
+    ];
+    loops.forEach(loop => loop.start());
+    return () => loops.forEach(loop => loop.stop());
+  }, [beatHz, beatSpin, leftHz, leftSpin, playing, pulse, reduceMotion, rightHz, rightSpin]);
+
+  const leftRotation = leftSpin.interpolate({ inputRange: [0, 1], outputRange: ['-8deg', '352deg'] });
+  const rightRotation = rightSpin.interpolate({ inputRange: [0, 1], outputRange: ['13deg', '-347deg'] });
+  const beatRotation = beatSpin.interpolate({ inputRange: [0, 1], outputRange: ['-20deg', '340deg'] });
+  const coreScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.09] });
+  const coreOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1] });
+
+  return (
+    <View style={styles.signalStage} pointerEvents="none">
+      <Animated.View
+        style={[
+          styles.signalOrbit,
+          styles.signalOrbitOuter,
+          { borderColor: accent + '32', transform: [{ rotate: leftRotation }] },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.signalOrbit,
+          styles.signalOrbitMiddle,
+          { borderColor: accent + '4D', transform: [{ rotate: rightRotation }] },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.signalOrbit,
+          styles.signalOrbitInner,
+          { borderColor: accent + '73', transform: [{ rotate: beatRotation }] },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.signalCore,
+          {
+            backgroundColor: accent + '1D',
+            shadowColor: accent,
+            opacity: playing && !reduceMotion ? coreOpacity : 0.82,
+            transform: [{ scale: playing && !reduceMotion ? coreScale : 1 }],
+          },
+        ]}
+      />
+      <Text style={styles.beatHz}>
+        {beatHz.toFixed(0)}<Text style={styles.beatHzUnit}> Hz</Text>
+      </Text>
+    </View>
   );
 }
 
@@ -3429,7 +3612,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   // Centered phone-width column used on web and on wide (tablet) windows;
   // the gradient background stays full-bleed behind it.
-  contentColumn: { width: '100%' as const, maxWidth: 600, alignSelf: 'center' as const },
+  contentColumn: { width: '100%' as const, maxWidth: 480, alignSelf: 'center' as const },
   // Onboarding is presented above the already-mounted app. Keep this layer
   // opaque enough to prevent the controls underneath from bleeding through;
   // OnboardingView adds its own fluid accent atmosphere on top.
@@ -3440,6 +3623,24 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   freqEditorialHeader: { marginHorizontal: -20, paddingTop: 8 },
+  freqEnsoWrap: { alignItems: 'center', paddingTop: 12, marginBottom: -2 },
+  freqEnsoMark: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
+  freqEnsoArc: {
+    position: 'absolute', width: 46, height: 46, borderRadius: 23,
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.64)',
+    borderTopColor: 'transparent', transform: [{ rotate: '-24deg' }],
+  },
+  freqEnsoDot: {
+    position: 'absolute', width: 5, height: 5, borderRadius: 3,
+    top: 5, right: 12, backgroundColor: 'rgba(255,255,255,0.78)',
+  },
+  freqAffirmationCard: {
+    marginBottom: 14, paddingHorizontal: 17, paddingVertical: 14, minHeight: 92,
+  },
+  freqAffirmationTopline: { flexDirection: 'row', alignItems: 'center' },
+  freqAffirmationRule: { width: 18, height: 2, borderRadius: 1, marginRight: 8 },
+  freqAffirmationLabel: { flex: 1, fontSize: 8.5, fontWeight: '900', letterSpacing: 1.8 },
+  freqAffirmationGlyph: { fontSize: 13 },
 
   header: { alignItems: 'center', marginBottom: 22, paddingTop: 6 },
   enso: {
@@ -3469,9 +3670,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 14, fontStyle: 'italic', textTransform: 'lowercase',
   },
   quote: {
-    color: '#ffffff88', fontSize: 14, fontStyle: 'italic',
-    marginTop: 18, letterSpacing: 0.5, textAlign: 'center',
-    paddingHorizontal: 24, fontWeight: '300',
+    color: '#F2EFF8',
+    fontFamily: 'CormorantGaramond_500Medium_Italic',
+    fontSize: 18, lineHeight: 23,
+    marginTop: 9, letterSpacing: 0.2, textAlign: 'left',
+    paddingHorizontal: 0, fontWeight: '400',
   },
   beatCard: {
     padding: 18, paddingTop: 16, alignItems: 'center', marginBottom: 16,
@@ -3497,9 +3700,9 @@ const styles = StyleSheet.create({
     marginTop: 3, overflow: 'hidden',
   },
   signalOrbit: { position: 'absolute', borderWidth: 1, borderRadius: 999 },
-  signalOrbitOuter: { width: 224, height: 112, transform: [{ rotate: '-8deg' }] },
-  signalOrbitMiddle: { width: 176, height: 98, transform: [{ rotate: '13deg' }] },
-  signalOrbitInner: { width: 124, height: 84, transform: [{ rotate: '-20deg' }] },
+  signalOrbitOuter: { width: 224, height: 112 },
+  signalOrbitMiddle: { width: 176, height: 98 },
+  signalOrbitInner: { width: 124, height: 84 },
   signalCore: {
     position: 'absolute', width: 76, height: 76, borderRadius: 38,
     shadowOpacity: 0.45, shadowRadius: 22, shadowOffset: { width: 0, height: 0 },
@@ -3724,8 +3927,6 @@ const styles = StyleSheet.create({
     color: '#ffffff66', fontSize: 12, textAlign: 'center',
     marginTop: 22, paddingHorizontal: 20, lineHeight: 18,
   },
-  quotePlate: { alignItems: 'center', marginTop: 28, marginBottom: 10 },
-  quoteRule: { width: 34, height: 2, borderRadius: 1 },
 
   modalBackdrop: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',

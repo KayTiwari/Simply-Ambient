@@ -103,6 +103,10 @@ await back();
 await tap('Soundscapes', { exact: true });
 await tap('Soft Rain', { exact: true });
 await page.getByText('Playing now', { exact: true }).waitFor({ state: 'visible', timeout: 15000 });
+// Card activation may scroll the mobile body to the tile. Return to the top
+// so the screenshot includes the compact pin and current-layer hero.
+await page.mouse.wheel(0, -10000);
+await page.waitForTimeout(350);
 await shot('06-soundscape-scene.png');
 await page.getByLabel('Stop all audio', { exact: true }).click();
 await page.waitForTimeout(500);

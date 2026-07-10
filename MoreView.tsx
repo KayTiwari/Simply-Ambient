@@ -27,6 +27,7 @@ import {
   ArrowsClockwise,
   X,
   Plus,
+  PushPin,
   Waveform,
   Smiley,
   CloudLightning,
@@ -127,10 +128,15 @@ type Props = {
   soundscapeVolume: number;
   onToggleSoundscape: (id: string) => void;
   onChangeSoundscapeVolume: (v: number) => void;
+  // App owns and persists this preference using the existing navbar shortcut
+  // mechanism; More only presents the control where Soundscapes is managed.
+  soundscapesInNav: boolean;
+  onToggleSoundscapesInNav: (next: boolean) => void;
   // Deep link from elsewhere in the app (e.g. the mini player opening the
   // Soundscapes page). Set to a sub-page id, consumed via the handler.
-  requestedPage?: Exclude<SubPage, null> | null;
+  requestedPage?: Exclude<SubPage, null> | 'hub' | null;
   onRequestedPageHandled?: () => void;
+  onPageChange?: (page: SubPage) => void;
   // "Single app color" setting: null = animated band transitions.
   singleColor: string | null;
   // Live accent from the root ambient canvas. The More hub keeps its own
@@ -289,8 +295,11 @@ export default function MoreView({
   soundscapeVolume,
   onToggleSoundscape,
   onChangeSoundscapeVolume,
+  soundscapesInNav,
+  onToggleSoundscapesInNav,
   requestedPage,
   onRequestedPageHandled,
+  onPageChange,
   singleColor,
   ambientAccent,
   onChangeSingleColor,
@@ -442,6 +451,9 @@ export default function MoreView({
     setStreak(0);
     setProfileName(null);
     setIntent(null);
+    onToggleSoundscapesInNav(false);
+    onChangeSingleColor(null);
+    onChangeNotifPref('off');
     // Notification prefs were part of the wipe, so stop their schedules too.
     if (Platform.OS !== 'web') {
       try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch {}
@@ -452,8 +464,20 @@ export default function MoreView({
   const [page, setPage] = useState<SubPage>(null);
   const [pageHistory, setPageHistory] = useState<Array<Exclude<SubPage, null>>>([]);
   const slide = useRef(new Animated.Value(0)).current;
+  const transitionToken = useRef(0);
+
+  function animateOpen() {
+    transitionToken.current += 1;
+    slide.stopAnimation();
+    Animated.timing(slide, {
+      toValue: 1, duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }
 
   function open(p: Exclude<SubPage, null>) {
+    animateOpen();
     if (page === p) return;
     if (page !== null) {
       setPageHistory(history => [...history, page]);
@@ -462,29 +486,48 @@ export default function MoreView({
     }
     setPageHistory([]);
     setPage(p);
-    Animated.timing(slide, {
-      toValue: 1, duration: 280,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
+  }
+
+  // External destinations (navbar and mini player) behave like roots, not
+  // nested More links: Back always returns to the hub.
+  function openRoot(p: Exclude<SubPage, null>) {
+    animateOpen();
+    setPageHistory([]);
+    setPage(p);
   }
 
   function close() {
     if (pageHistory.length > 0) {
+      transitionToken.current += 1;
+      slide.stopAnimation();
       const previous = pageHistory[pageHistory.length - 1];
       setPageHistory(history => history.slice(0, -1));
       setPage(previous);
       return;
     }
+    closeToHub();
+  }
+
+  function closeToHub() {
+    if (page === null) return;
+    transitionToken.current += 1;
+    const myToken = transitionToken.current;
+    slide.stopAnimation();
+    setPageHistory([]);
     Animated.timing(slide, {
       toValue: 0, duration: 240,
       easing: Easing.in(Easing.cubic),
       useNativeDriver: true,
-    }).start(() => {
+    }).start(({ finished }) => {
+      if (!finished || myToken !== transitionToken.current) return;
       setPage(null);
       setPageHistory([]);
     });
   }
+
+  useEffect(() => {
+    onPageChange?.(page);
+  }, [onPageChange, page]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -498,7 +541,8 @@ export default function MoreView({
   // Honor deep links into a specific sub-page (mini player -> Soundscapes).
   useEffect(() => {
     if (requestedPage) {
-      open(requestedPage);
+      if (requestedPage === 'hub') closeToHub();
+      else openRoot(requestedPage);
       onRequestedPageHandled?.();
     }
   }, [requestedPage]);
@@ -506,7 +550,7 @@ export default function MoreView({
   // Live dimensions, so browser resizes and rotations keep the slide-over
   // offset correct (a module-level Dimensions.get snapshot would go stale).
   const { width: screenW } = useWindowDimensions();
-  const slideDistance = Math.min(screenW, 600);
+  const slideDistance = Math.min(screenW, 480);
   const subTranslateX = slide.interpolate({ inputRange: [0, 1], outputRange: [slideDistance, 0] });
   const hubScale = slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0.97] });
   // The slide-over is translucent so the global ambient field remains alive.
@@ -594,6 +638,8 @@ export default function MoreView({
               soundscapeVolume={soundscapeVolume}
               onToggleSoundscape={onToggleSoundscape}
               onChangeSoundscapeVolume={onChangeSoundscapeVolume}
+              soundscapesInNav={soundscapesInNav}
+              onToggleSoundscapesInNav={onToggleSoundscapesInNav}
             />
           )}
           {page === 'affirmations' && (
@@ -758,7 +804,7 @@ function Hub({
   };
   const heroTitle = moodToday
     ? `Today feels ${moodLabel(moodToday.value).toLowerCase()}.`
-    : 'How is your inner weather?';
+    : 'How are you feeling right now?';
   const heroCopy = moodToday
     ? 'You already checked in. You can change it anytime, or choose what would support you now.'
     : intent
@@ -770,7 +816,6 @@ function Hub({
       <View style={styles.headerWrap}>
         <View style={styles.hubBrandRow}>
           <Text style={styles.ambience}>Simply Ambient</Text>
-          <Text style={styles.title}>YOUR SPACE</Text>
         </View>
         <Text style={styles.hubHeadline}>A quiet corner,{`\n`}made for you.</Text>
         <Text style={styles.hubIntro}>
@@ -792,7 +837,7 @@ function Hub({
               <Text style={styles.hubHeroTitle}>{heroTitle}</Text>
               <Text style={styles.hubHeroCopy}>{heroCopy}</Text>
             </View>
-            <View style={styles.hubWeatherOrb}>
+            <View style={styles.hubMoodOrb}>
               <Smiley
                 size={32}
                 weight="duotone"
@@ -849,9 +894,8 @@ function Hub({
         </GlowCard>
 
         <MoreSectionGroup
-          eyebrow="01 · REFLECT"
+          eyebrow="REFLECT"
           title="Clear a little space"
-          subtitle="Private places to notice, name, keep, or release."
           accent="#D68097"
         >
           <View style={styles.tileGrid}>
@@ -897,9 +941,8 @@ function Hub({
         </MoreSectionGroup>
 
         <MoreSectionGroup
-          eyebrow="02 · RESTORE"
+          eyebrow="RESTORE"
           title="Come back to yourself"
-          subtitle="Small guided practices for focus, calm, and softer landings."
           accent="#9DC7AC"
         >
           <View style={styles.tileGrid}>
@@ -942,9 +985,8 @@ function Hub({
         </MoreSectionGroup>
 
         <MoreSectionGroup
-          eyebrow="03 · UNDERSTAND"
+          eyebrow="UNDERSTAND"
           title="Know your own shape"
-          subtitle="Personal details stay on this device and make the experience yours."
           accent="#B39BE0"
         >
           <View style={styles.tileGrid}>
@@ -977,9 +1019,8 @@ function Hub({
         </MoreSectionGroup>
 
         <MoreSectionGroup
-          eyebrow="04 · THE APP"
+          eyebrow="THE APP"
           title="Care for your space"
-          subtitle="Privacy, preferences, support, and a direct line to the maker."
           accent="#D9BE7A"
         >
           <View style={styles.tileGrid}>
@@ -1108,7 +1149,7 @@ function HubTile({
 const SUBPAGE_PRESENTATION: Record<string, {
   displayTitle: string;
   mode: string;
-  subtitle: string;
+  subtitle?: string;
   glyph: string;
 }> = {
   'Daily Affirmation': {
@@ -1132,7 +1173,6 @@ const SUBPAGE_PRESENTATION: Record<string, {
   'Release the Noise': {
     displayTitle: 'Release the Noise',
     mode: 'RELEASE',
-    subtitle: 'A private ritual for what feels loud, tangled, or unfinished.',
     glyph: '≋',
   },
   Manifestation: {
@@ -1144,7 +1184,6 @@ const SUBPAGE_PRESENTATION: Record<string, {
   '5-4-3-2-1 Grounding': {
     displayTitle: 'Return to the Room',
     mode: 'RESTORE',
-    subtitle: 'Five small sensory steps to bring this moment back into focus.',
     glyph: '⌖',
   },
   Support: {
@@ -1162,7 +1201,6 @@ const SUBPAGE_PRESENTATION: Record<string, {
   'Safety & Disclaimer': {
     displayTitle: 'Use With Care',
     mode: 'UNDERSTAND',
-    subtitle: 'Clear guidance for listening gently and keeping your data yours.',
     glyph: '◇',
   },
   Feedback: {
@@ -1174,7 +1212,6 @@ const SUBPAGE_PRESENTATION: Record<string, {
   Profile: {
     displayTitle: 'Your Constellation',
     mode: 'PERSONALIZE',
-    subtitle: 'A private sketch of the details that make reflections feel like yours.',
     glyph: '☾',
   },
   'Natal Chart': {
@@ -1198,7 +1235,6 @@ const SUBPAGE_PRESENTATION: Record<string, {
   Compatibility: {
     displayTitle: 'Two Energies',
     mode: 'UNDERSTAND',
-    subtitle: 'A light reflection on how two signs may move through the world together.',
     glyph: '☌',
   },
   'AI Insights': {
@@ -1209,11 +1245,18 @@ const SUBPAGE_PRESENTATION: Record<string, {
   },
 };
 
-function SubHeader({ title, accent, onBack }: { title: string; accent: string; onBack: () => void }) {
+function SubHeader({
+  title,
+  accent,
+  onBack,
+}: {
+  title: string;
+  accent: string;
+  onBack: () => void;
+}) {
   const presentation = SUBPAGE_PRESENTATION[title] ?? {
     displayTitle: title,
     mode: 'SIMPLY AMBIENT',
-    subtitle: 'A quieter place to pause, notice, and continue.',
     glyph: '·',
   };
   const { height } = useWindowDimensions();
@@ -1280,7 +1323,9 @@ function SubHeader({ title, accent, onBack }: { title: string; accent: string; o
           <Text style={styles.subTitle} numberOfLines={2} adjustsFontSizeToFit>
             {presentation.displayTitle}
           </Text>
-          <Text style={styles.subHeaderSubtitle}>{presentation.subtitle}</Text>
+          {presentation.subtitle ? (
+            <Text style={styles.subHeaderSubtitle}>{presentation.subtitle}</Text>
+          ) : null}
         </View>
         <View style={[styles.subGlyphOrbit, { borderColor: accent + '3A' }]}>
           <LinearGradient
@@ -1385,7 +1430,7 @@ function AffirmationsPage({
                 key={p}
                 activeOpacity={0.85}
                 onPress={() => onChangeNotifPref(p)}
-                accessibilityRole="button"
+                accessibilityRole="switch"
                 accessibilityLabel={`Affirmation notifications: ${label}`}
                 accessibilityState={{ selected: active }}
                 style={[
@@ -1525,15 +1570,14 @@ function MoodPage({
         <GlowCard accent="#8FB8DE" style={{ padding: 16, marginTop: 12 }}>
           <View style={styles.moodHeroHeading}>
             <View>
-              <Text style={styles.moodHeroKicker}>TODAY’S WEATHER</Text>
+              <Text style={styles.moodHeroKicker}>TODAY’S MOOD</Text>
               <Text style={styles.moodHeroPrompt}>
-                {moodToday ? `Feeling ${moodLabel(moodToday.value).toLowerCase()}` : 'What is here right now?'}
+                {moodToday ? `Feeling ${moodLabel(moodToday.value).toLowerCase()}` : 'How do you feel right now?'}
               </Text>
             </View>
             <Text style={styles.moodHeroStatus}>{moodToday ? 'CHECKED IN' : '5 SECONDS'}</Text>
           </View>
           <View style={styles.moodRow}>
-            <View style={styles.moodHorizonLine} pointerEvents="none" />
             {[1, 2, 3, 4, 5].map(v => {
               const active = moodToday?.value === v;
               return (
@@ -1588,7 +1632,7 @@ function MoodPage({
         {backfillOpen ? (
           <>
             <Text style={[styles.sectionSub, { marginTop: 12 }]}>
-              Pick a day, then choose the mood it deserved.
+              Pick a day, then choose how you remember feeling.
             </Text>
             <BackfillCalendar
               moodLog={moodLog}
@@ -2010,16 +2054,19 @@ function GratitudePage({
             <Text style={styles.journalFlower}>❀</Text>
           </View>
           <View style={styles.journalRule} pointerEvents="none" />
-          <TextInput
-            style={[styles.rantInput, styles.journalInput]}
-            accessibilityLabel="Gratitude entry"
-            placeholder={placeholder}
-            placeholderTextColor="#ffffff77"
-            value={text}
-            onChangeText={setText}
-            multiline
-            maxLength={500}
-          />
+          <View style={styles.journalEditor}>
+            <TextInput
+              style={[styles.rantInput, styles.journalInput]}
+              accessibilityLabel="Gratitude entry"
+              placeholder={placeholder}
+              placeholderTextColor="#A8A5AF"
+              selectionColor="#E0A470"
+              value={text}
+              onChangeText={setText}
+              multiline
+              maxLength={500}
+            />
+          </View>
         </GlowCard>
         {!text.trim() ? (
           <View style={styles.rantChipsRow}>
@@ -3854,6 +3901,8 @@ function SoundscapesPage({
   soundscapeVolume,
   onToggleSoundscape,
   onChangeSoundscapeVolume,
+  soundscapesInNav,
+  onToggleSoundscapesInNav,
 }: {
   onBack: () => void;
   soundscapes: SoundscapeOption[];
@@ -3862,6 +3911,8 @@ function SoundscapesPage({
   soundscapeVolume: number;
   onToggleSoundscape: (id: string) => void;
   onChangeSoundscapeVolume: (v: number) => void;
+  soundscapesInNav: boolean;
+  onToggleSoundscapesInNav: (next: boolean) => void;
 }) {
   const subBodyPad = useSubBodyPad();
   const activeName = activeSoundscapeId
@@ -3939,19 +3990,43 @@ function SoundscapesPage({
                   : 'Pick a layer below to begin.'}
               </Text>
             </View>
-            {activeSoundscapeId ? (
+            <View style={styles.soundscapeHeroActions}>
               <TouchableOpacity
-                onPress={() => onToggleSoundscape(activeSoundscapeId)}
-                activeOpacity={0.85}
+                onPress={() => onToggleSoundscapesInNav(!soundscapesInNav)}
+                activeOpacity={0.78}
                 accessibilityRole="button"
-                accessibilityLabel={isSoundscapePlaying ? 'Pause the soundscape' : 'Play the soundscape'}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel={soundscapesInNav
+                  ? 'Unpin Soundscapes from the app navbar'
+                  : 'Pin Soundscapes to the app navbar'}
+                accessibilityHint={soundscapesInNav
+                  ? 'Soundscapes will remain available in More.'
+                  : 'Adds a Soundscapes shortcut to the navbar.'}
+                accessibilityState={{ checked: soundscapesInNav }}
+                style={[
+                  styles.soundscapePinBtn,
+                  soundscapesInNav && styles.soundscapePinBtnActive,
+                ]}
               >
-                <Text style={styles.soundscapeSoon}>
-                  {isSoundscapePlaying ? 'PAUSE' : 'PLAY'}
-                </Text>
+                <PushPin
+                  size={18}
+                  weight={soundscapesInNav ? 'fill' : 'regular'}
+                  color={soundscapesInNav ? '#8FB8DE' : '#AAA9B8'}
+                />
               </TouchableOpacity>
-            ) : null}
+              {activeSoundscapeId ? (
+                <TouchableOpacity
+                  onPress={() => onToggleSoundscape(activeSoundscapeId)}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={isSoundscapePlaying ? 'Pause the soundscape' : 'Play the soundscape'}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.soundscapeSoon}>
+                    {isSoundscapePlaying ? 'PAUSE' : 'PLAY'}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </View>
           {activeSoundscapeId ? (
             <View style={{ marginTop: 14 }}>
@@ -4728,7 +4803,7 @@ const styles = StyleSheet.create({
     fontSize: 29, lineHeight: 32, letterSpacing: 0.2,
   },
   hubHeroCopy: { color: '#ADACBE', fontSize: 11.5, lineHeight: 17, marginTop: 5, paddingRight: 10 },
-  hubWeatherOrb: {
+  hubMoodOrb: {
     width: 60, height: 60, borderRadius: 30,
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: 'rgba(143,184,222,0.35)',
@@ -5004,10 +5079,6 @@ const styles = StyleSheet.create({
     borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5,
   },
   moodRow: { flexDirection: 'row', gap: 7, position: 'relative', paddingTop: 4 },
-  moodHorizonLine: {
-    position: 'absolute', left: 20, right: 20, top: 28,
-    height: 1, backgroundColor: 'rgba(255,255,255,0.10)',
-  },
   moodBtn: {
     flex: 1, minHeight: 66, alignItems: 'center', justifyContent: 'center',
     paddingVertical: 9, borderRadius: 24, borderWidth: 1,
@@ -5134,7 +5205,7 @@ const styles = StyleSheet.create({
   journalSheet: { marginTop: 10, paddingTop: 16 },
   journalSheetHeading: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 18,
+    paddingHorizontal: 18, position: 'relative', zIndex: 3,
   },
   journalSheetKicker: { color: '#E0A470', fontSize: 8, fontWeight: '800', letterSpacing: 1.7 },
   journalSheetDate: {
@@ -5142,8 +5213,26 @@ const styles = StyleSheet.create({
     fontSize: 20, marginTop: 2,
   },
   journalFlower: { color: '#E0A470', fontSize: 28, opacity: 0.7 },
-  journalRule: { height: 1, marginHorizontal: 18, marginTop: 12, backgroundColor: '#E0A47038' },
-  journalInput: { minHeight: 150, fontFamily: 'CormorantGaramond_500Medium', fontSize: 18, lineHeight: 27 },
+  journalRule: {
+    height: 1, marginHorizontal: 18, marginTop: 12,
+    backgroundColor: '#E0A47038', position: 'relative', zIndex: 3,
+  },
+  // The card itself has a directional accent gradient. The writing plane is
+  // deliberately uniform and stacked above every decorative layer so typed
+  // text never inherits a left-to-right contrast shift.
+  journalEditor: {
+    position: 'relative', zIndex: 4, elevation: 1,
+    marginHorizontal: 12, marginTop: 12, marginBottom: 14,
+    borderRadius: 18, borderWidth: 1,
+    borderColor: 'rgba(224,164,112,0.20)',
+    backgroundColor: '#111225', overflow: 'hidden',
+  },
+  journalInput: {
+    width: '100%', minHeight: 150,
+    color: '#FFFDF8', backgroundColor: '#111225', opacity: 1,
+    fontFamily: 'CormorantGaramond_500Medium', fontSize: 18, lineHeight: 27,
+    position: 'relative', zIndex: 5,
+  },
   gratitudeSlip: {
     borderColor: 'rgba(224,164,112,0.24)',
     backgroundColor: 'rgba(224,164,112,0.065)',
@@ -5387,6 +5476,16 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   soundscapeTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  soundscapeHeroActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  soundscapePinBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  soundscapePinBtnActive: {
+    borderColor: '#8FB8DE88', backgroundColor: '#8FB8DE18',
+  },
   soundscapeHero: { padding: 16, paddingTop: 104, marginBottom: 12, minHeight: 210 },
   soundscapeScene: {
     position: 'absolute', top: 0, left: 0, right: 0, height: 94,

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   Easing,
   StyleSheet,
@@ -21,16 +22,28 @@ export function AmbientVeil({
   children,
   style,
   strength = 'standard',
+  active = false,
+  motionHz = 0,
 }: {
   accent: string;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   strength?: 'light' | 'standard' | 'deep';
+  active?: boolean;
+  motionHz?: number;
 }) {
   const reveal = useRef(new Animated.Value(0)).current;
   const accentFade = useRef(new Animated.Value(1)).current;
+  const ambientMotion = useRef(new Animated.Value(0)).current;
   const [displayAccent, setDisplayAccent] = React.useState(accent);
   const [previousAccent, setPreviousAccent] = React.useState<string | null>(null);
+  const [reduceMotion, setReduceMotion] = React.useState(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     Animated.timing(reveal, {
@@ -57,20 +70,57 @@ export function AmbientVeil({
     });
   }, [accent, accentFade, displayAccent]);
 
+  useEffect(() => {
+    ambientMotion.stopAnimation();
+    if (!active || reduceMotion) {
+      Animated.timing(ambientMotion, {
+        toValue: 0,
+        duration: 650,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+    const normalizedHz = Math.max(0, Math.min(40, motionHz));
+    const halfCycle = Math.round(6200 - normalizedHz * 55);
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(ambientMotion, {
+        toValue: 1,
+        duration: halfCycle,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+      Animated.timing(ambientMotion, {
+        toValue: 0,
+        duration: halfCycle,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [active, ambientMotion, motionHz, reduceMotion]);
+
   const base: [string, string, string] = strength === 'light'
     ? ['rgba(8,9,25,0.08)', 'rgba(8,9,25,0.18)', 'rgba(6,7,21,0.30)']
     : strength === 'deep'
       ? ['rgba(8,9,25,0.30)', 'rgba(8,9,25,0.48)', 'rgba(6,7,21,0.68)']
       : ['rgba(8,9,25,0.18)', 'rgba(8,9,25,0.34)', 'rgba(6,7,21,0.52)'];
+  const baseDriftX = ambientMotion.interpolate({ inputRange: [0, 1], outputRange: [-7, 9] });
+  const baseDriftY = ambientMotion.interpolate({ inputRange: [0, 1], outputRange: [-5, 8] });
+  const baseScale = ambientMotion.interpolate({ inputRange: [0, 1], outputRange: [1.04, 1.085] });
 
   return (
     <View style={[shared.veil, style]}>
-      <LinearGradient
-        colors={base}
-        locations={[0, 0.52, 1]}
-        style={StyleSheet.absoluteFill}
+      <Animated.View
+        style={[
+          StyleSheet.absoluteFill,
+          { transform: [{ translateX: baseDriftX }, { translateY: baseDriftY }, { scale: baseScale }] },
+        ]}
         pointerEvents="none"
-      />
+      >
+        <LinearGradient colors={base} locations={[0, 0.52, 1]} style={StyleSheet.absoluteFill} />
+      </Animated.View>
       {previousAccent ? (
         <Animated.View
           style={[
@@ -84,32 +134,54 @@ export function AmbientVeil({
           ]}
           pointerEvents="none"
         >
-          <VeilAtmosphere accent={previousAccent} />
+          <VeilAtmosphere accent={previousAccent} motion={ambientMotion} />
         </Animated.View>
       ) : null}
       <Animated.View
         style={[StyleSheet.absoluteFill, { opacity: Animated.multiply(reveal, accentFade) }]}
         pointerEvents="none"
       >
-        <VeilAtmosphere accent={displayAccent} />
+        <VeilAtmosphere accent={displayAccent} motion={ambientMotion} />
       </Animated.View>
       {children}
     </View>
   );
 }
 
-function VeilAtmosphere({ accent }: { accent: string }) {
+function VeilAtmosphere({ accent, motion }: { accent: string; motion: Animated.Value }) {
+  const auraX = motion.interpolate({ inputRange: [0, 1], outputRange: [-8, 12] });
+  const auraY = motion.interpolate({ inputRange: [0, 1], outputRange: [-5, 11] });
+  const auraScale = motion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.075] });
+  const orbitLargeScale = motion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.085] });
+  const orbitSmallScale = motion.interpolate({ inputRange: [0, 1], outputRange: [1, 0.925] });
   return (
     <View style={StyleSheet.absoluteFill}>
-      <LinearGradient
-        colors={[accent + '24', accent + '08', 'transparent']}
-        locations={[0, 0.56, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0.92, y: 1 }}
-        style={shared.aurora}
+      <Animated.View
+        style={[
+          shared.aurora,
+          { transform: [{ translateX: auraX }, { translateY: auraY }, { scale: auraScale }] },
+        ]}
+      >
+        <LinearGradient
+          colors={[accent + '24', accent + '08', 'transparent']}
+          locations={[0, 0.56, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0.92, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+      <Animated.View
+        style={[
+          shared.orbitLarge,
+          { borderColor: accent + '27', transform: [{ scale: orbitLargeScale }] },
+        ]}
       />
-      <View style={[shared.orbitLarge, { borderColor: accent + '1C' }]} />
-      <View style={[shared.orbitSmall, { borderColor: accent + '16' }]} />
+      <Animated.View
+        style={[
+          shared.orbitSmall,
+          { borderColor: accent + '20', transform: [{ scale: orbitSmallScale }] },
+        ]}
+      />
       <View style={[shared.spark, shared.sparkOne, { backgroundColor: accent + '99' }]} />
       <View style={[shared.spark, shared.sparkTwo]} />
     </View>
@@ -117,7 +189,6 @@ function VeilAtmosphere({ accent }: { accent: string }) {
 }
 
 export function EditorialHeader({
-  mode,
   title,
   subtitle,
   accent,
@@ -125,7 +196,7 @@ export function EditorialHeader({
 }: {
   mode: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   accent: string;
   compact?: boolean;
 }) {
@@ -133,22 +204,19 @@ export function EditorialHeader({
     <View style={[shared.header, compact && shared.headerCompact]}>
       <View style={shared.brandRow}>
         <Text style={shared.brand}>Simply Ambient</Text>
-        <View style={[shared.modePill, { borderColor: accent + '55', backgroundColor: accent + '11' }]}>
-          <View style={[shared.modeDot, { backgroundColor: accent }]} />
-          <Text style={[shared.mode, { color: accent }]}>{mode}</Text>
-        </View>
       </View>
       <Text accessibilityRole="header" style={[shared.pageTitle, compact && shared.pageTitleCompact]}>{title}</Text>
-      <View style={shared.subtitleRow}>
-        <View style={[shared.subtitleRule, { backgroundColor: accent }]} />
-        <Text style={shared.pageSubtitle}>{subtitle}</Text>
-      </View>
+      {subtitle ? (
+        <View style={shared.subtitleRow}>
+          <View style={[shared.subtitleRule, { backgroundColor: accent }]} />
+          <Text style={shared.pageSubtitle}>{subtitle}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 export function EditorialSection({
-  index,
   eyebrow,
   title,
   subtitle,
@@ -165,7 +233,7 @@ export function EditorialSection({
       <View style={shared.sectionEyebrowRow}>
         <View style={[shared.sectionRule, { backgroundColor: accent }]} />
         <Text style={[shared.sectionEyebrow, { color: accent }]}>
-          {index ? `${index} · ` : ''}{eyebrow}
+          {eyebrow}
         </Text>
       </View>
       <Text accessibilityRole="header" style={shared.sectionTitle}>{title}</Text>
@@ -222,15 +290,61 @@ export function StatusStrip({
   label,
   detail,
   active = false,
+  pulse: pulsing = false,
 }: {
   accent: string;
   label: string;
   detail?: string;
   active?: boolean;
+  pulse?: boolean;
 }) {
+  const pulseValue = useRef(new Animated.Value(0)).current;
+  const [reduceMotion, setReduceMotion] = React.useState(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    pulseValue.stopAnimation();
+    if (!pulsing || reduceMotion) {
+      pulseValue.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(pulseValue, {
+        toValue: 1,
+        duration: 850,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+      Animated.timing(pulseValue, {
+        toValue: 0,
+        duration: 850,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [pulseValue, pulsing, reduceMotion]);
+
+  const dotScale = pulseValue.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
+  const dotOpacity = pulseValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [active ? 0.72 : 0.48, active ? 1 : 0.48],
+  });
+
   return (
     <View style={[shared.status, { borderColor: accent + '38', backgroundColor: accent + '0D' }]}>
-      <View style={[shared.statusDot, { backgroundColor: accent, opacity: active ? 1 : 0.48 }]} />
+      <Animated.View
+        style={[
+          shared.statusDot,
+          { backgroundColor: accent, opacity: dotOpacity, transform: [{ scale: dotScale }] },
+        ]}
+      />
       <Text style={[shared.statusLabel, { color: accent }]} numberOfLines={1}>{label}</Text>
       {detail ? <Text style={shared.statusDetail} numberOfLines={1}> · {detail}</Text> : null}
     </View>
@@ -268,12 +382,6 @@ const shared = StyleSheet.create({
     fontSize: 20,
     letterSpacing: 1.2,
   },
-  modePill: {
-    minHeight: 30, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-  },
-  modeDot: { width: 4, height: 4, borderRadius: 2, marginRight: 7 },
-  mode: { fontSize: 8.5, fontWeight: '800', letterSpacing: 2.2 },
   pageTitle: {
     color: '#FFFDFE',
     fontFamily: 'CormorantGaramond_500Medium',

@@ -82,30 +82,33 @@ await tap('CONTINUE', { exact: true });   // recommendations -> tips
 await page.getByText('GOOD TO KNOW', { exact: true }).first().waitFor({ state: 'visible' });
 await tap('ENTER SIMPLY AMBIENT', { exact: true }); // tips -> app
 
-// --- 2. Frequencies tab, tone playing (hero) --------------------------------
+// --- 2. Frequencies tab, restored ensō + daily affirmation ------------------
 await page.getByText('START SESSION').first().waitFor({ state: 'visible', timeout: 15000 });
+await shot('00-frequencies-top.png');
+
+// --- 3. Frequencies tab, tone playing (hero) --------------------------------
 await tap('START SESSION');
 await tap('I UNDERSTAND, PLAY');          // audio-safety confirm
 await page.waitForTimeout(2600);          // gradient crossfade mid-motion
 await shot('01-frequencies-hero.png');
 
-// --- 3. More inherits the live Alpha field ----------------------------------
+// --- 4. More inherits the live Alpha field ----------------------------------
 await tap('More', { exact: true });
 await shot('09-more-fluid.png');
 
-// --- 4. Soundscapes layered under the tone ---------------------------------
+// --- 5. Soundscapes layered under the tone ---------------------------------
 await tap('Soundscapes');
 await tap('Soft Rain');
 await page.waitForTimeout(1200);
 await shot('02-soundscapes-layered.png');
 
-// --- 5. Settings: privacy card + rate + replay ------------------------------
+// --- 6. Settings: privacy card + rate + replay ------------------------------
 await page.getByLabel('Back', { exact: true }).first().click(); // Soundscapes sub-page -> hub
 await tap('Settings', { exact: true });
 await page.getByText('YOUR PRIVACY').first().scrollIntoViewIfNeeded();
 await shot('04-settings-privacy.png');
 
-// --- 6. Breath library + immersive mandala session --------------------------
+// --- 7. Breath library + immersive mandala session --------------------------
 await tap('Breathe', { exact: true });    // tab bar
 await shot('10-breath-library.png');
 await tap('Box Breathing');
@@ -114,11 +117,11 @@ await tap('BEGIN PRACTICE', { exact: true });
 await page.waitForTimeout(4200);          // mid-phase
 await shot('03-breath-mandala.png');
 
-// --- 7. Chakra spectrum -----------------------------------------------------
+// --- 8. Chakra spectrum -----------------------------------------------------
 await tap('Chakras', { exact: true });
 await shot('06-chakra-spectrum.png');
 
-// --- 8. Horoscope manuscript + tarot room ----------------------------------
+// --- 9. Horoscope manuscript + tarot room ----------------------------------
 await tap('Stars', { exact: true });
 await page.getByText('HOROSCOPE', { exact: true }).first().waitFor({ state: 'visible' });
 await shot('07-horoscope-reading.png');

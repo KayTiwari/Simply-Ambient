@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Animated,
   Easing,
@@ -97,6 +98,7 @@ function freshnessLabel(ts: number): string {
 
 type Period = 'daily' | 'monthly' | 'yearly';
 type ReadingMode = 'horoscope' | 'tarot';
+const MODE_SEGMENT_GAP = 6;
 
 // Zodiac glyphs like U+2648 default to emoji presentation on Android and in
 // browsers (a purple app-icon square that ignores text color). The text
@@ -116,6 +118,8 @@ type Props = {
   mySign: Zodiac;
   lunar: LunarInfo;
   onSelectMyZodiac: (z: Zodiac) => void;
+  toneIsPlaying: boolean;
+  beatHz: number;
 };
 
 type TarotCard = {
@@ -176,10 +180,15 @@ async function fetchCards(count: number, majorOnly: boolean): Promise<TarotCard[
 }
 
 export default function HoroscopesView({
-  zodiac, mySign, lunar, onSelectMyZodiac,
+  zodiac, mySign, lunar, onSelectMyZodiac, toneIsPlaying, beatHz,
 }: Props) {
   const insets = useSafeAreaInsets();
   const [readingMode, setReadingMode] = useState<ReadingMode>('horoscope');
+  const [modeRowWidth, setModeRowWidth] = useState(0);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const modePosition = useRef(new Animated.Value(0)).current;
+  const contentReveal = useRef(new Animated.Value(1)).current;
+  const contentDirection = useRef(1);
   const [period, setPeriod] = useState<Period>('daily');
   // The 12-sign picker is collapsed behind a CHANGE button; a permanent
   // "tap to set your sign" strip reads like onboarding that never ends.
@@ -204,6 +213,62 @@ export default function HoroscopesView({
   const [spreadRevealed, setSpreadRevealed] = useState<boolean[]>([]);
   const [spreadLoading, setSpreadLoading] = useState(false);
   const [spreadError, setSpreadError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(enabled => { if (active) setReduceMotion(enabled); })
+      .catch(() => {});
+    const listener = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => {
+      active = false;
+      listener.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!reduceMotion) return;
+    modePosition.stopAnimation();
+    contentReveal.stopAnimation();
+    modePosition.setValue(readingMode === 'tarot' ? 1 : 0);
+    contentReveal.setValue(1);
+  }, [contentReveal, modePosition, readingMode, reduceMotion]);
+
+  const selectReadingMode = (nextMode: ReadingMode) => {
+    if (nextMode === readingMode) return;
+    const currentIndex = readingMode === 'tarot' ? 1 : 0;
+    const nextIndex = nextMode === 'tarot' ? 1 : 0;
+    contentDirection.current = nextIndex > currentIndex ? 1 : -1;
+    modePosition.stopAnimation();
+    contentReveal.stopAnimation();
+
+    if (reduceMotion) {
+      modePosition.setValue(nextIndex);
+      contentReveal.setValue(1);
+      setReadingMode(nextMode);
+      return;
+    }
+
+    // Hide the outgoing room before React swaps it, then let the incoming
+    // room arrive from the direction of the selected segment.
+    contentReveal.setValue(0);
+    setReadingMode(nextMode);
+    Animated.parallel([
+      Animated.timing(modePosition, {
+        toValue: nextIndex,
+        duration: 340,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(contentReveal, {
+        toValue: 1,
+        duration: 280,
+        delay: 35,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
 
   // Guards the tarot fetch callbacks against setState after unmount.
   const mountedRef = useRef(true);
@@ -408,19 +473,14 @@ export default function HoroscopesView({
     period === 'daily' ? 'A note for today' :
     period === 'monthly' ? `The shape of ${new Date().toLocaleDateString(undefined, { month: 'long' })}` :
     `An intention for ${yearText}`;
-  const forecastSubtitle =
-    period === 'daily'
-      ? 'A short reflection for the day in front of you.'
-      : period === 'monthly'
-        ? 'A wider lens for the month, without pretending to predict it.'
-        : 'The longer intention already held in your sign profile.';
+  const modeSegmentWidth = Math.max(0, (modeRowWidth - MODE_SEGMENT_GAP) / 2);
+  const modeSegmentTravel = modeSegmentWidth + MODE_SEGMENT_GAP;
 
   return (
-    <AmbientVeil accent={accent} strength="light">
+    <AmbientVeil accent={accent} strength="light" active={toneIsPlaying} motionHz={beatHz}>
       <EditorialHeader
         mode="REFLECT"
         title="Read the sky"
-        subtitle="A quiet room for your sign, the moon, and the cards. Take what helps; leave the rest."
         accent={accent}
       />
       <ScrollView
@@ -428,7 +488,34 @@ export default function HoroscopesView({
         showsVerticalScrollIndicator={false}
       >
         <AmbientSurface accent={accent} quiet style={styles.modeSurface}>
-          <View style={styles.modeRow} accessibilityRole="tablist">
+          <View
+            style={styles.modeRow}
+            accessibilityRole="tablist"
+            onLayout={event => {
+              const nextWidth = event.nativeEvent.layout.width;
+              setModeRowWidth(current => Math.abs(current - nextWidth) > 0.5 ? nextWidth : current);
+            }}
+          >
+            {modeSegmentWidth > 0 ? (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.modeSelectionPill,
+                  {
+                    width: modeSegmentWidth,
+                    borderColor: accent + '66',
+                    backgroundColor: accent + '18',
+                    shadowColor: accent,
+                    transform: [{
+                      translateX: modePosition.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, modeSegmentTravel],
+                      }),
+                    }],
+                  },
+                ]}
+              />
+            ) : null}
             {([
               { id: 'horoscope', label: 'HOROSCOPE', hint: 'Sign & moon', glyph: '☉', color: mySign.color },
               { id: 'tarot', label: 'TAROT', hint: 'Cards & spreads', glyph: '✦', color: '#B39BE0' },
@@ -437,20 +524,22 @@ export default function HoroscopesView({
               return (
                 <TouchableOpacity
                   key={item.id}
-                  onPress={() => setReadingMode(item.id)}
+                  onPress={() => selectReadingMode(item.id)}
                   activeOpacity={0.84}
                   accessibilityRole="tab"
                   accessibilityLabel={`${item.label}. ${item.hint}`}
                   accessibilityState={{ selected: active }}
-                  style={[
-                    styles.modeButton,
-                    active && {
-                      borderColor: item.color + '66',
-                      backgroundColor: item.color + '18',
-                    },
-                  ]}
+                  style={styles.modeButton}
                 >
-                  <View style={[styles.modeGlyphWrap, { borderColor: item.color + '44' }]}>
+                  <View
+                    style={[
+                      styles.modeGlyphWrap,
+                      {
+                        borderColor: item.color + (active ? '66' : '35'),
+                        backgroundColor: active ? item.color + '10' : 'transparent',
+                      },
+                    ]}
+                  >
                     <Text style={[styles.modeGlyph, { color: item.color }]}>{item.glyph}</Text>
                   </View>
                   <View style={styles.modeCopy}>
@@ -463,13 +552,26 @@ export default function HoroscopesView({
           </View>
         </AmbientSurface>
 
-        {readingMode === 'horoscope' ? (
+        <Animated.View
+          style={[
+            styles.modeContent,
+            {
+              opacity: contentReveal,
+              transform: [{
+                translateX: contentReveal.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [contentDirection.current * 14, 0],
+                }),
+              }],
+            },
+          ]}
+        >
+          {readingMode === 'horoscope' ? (
           <>
             <EditorialSection
               index="01"
               eyebrow="CELESTIAL WEATHER"
               title="Your sign, under today's moon"
-              subtitle="The details are real and local. The reading is an invitation, not a forecast of fact."
               accent={mySign.color}
             />
         {/* Today / week / month widget */}
@@ -520,7 +622,7 @@ export default function HoroscopesView({
             <EditorialSection
               eyebrow="YOUR LENS"
               title="Choose your sign"
-              subtitle="Saved only on this device. Change it whenever you need."
+              subtitle="Choose a sign; you can change it whenever you need."
               accent={mySign.color}
             />
             <AmbientSurface accent={mySign.color} quiet style={styles.pickerSurface}>
@@ -562,7 +664,6 @@ export default function HoroscopesView({
           index="02"
           eyebrow="THE READING"
           title={forecastTitle}
-          subtitle={forecastSubtitle}
           accent={mySign.color}
         />
 
@@ -634,7 +735,6 @@ export default function HoroscopesView({
               index="01"
               eyebrow="CARD OF THE MOMENT"
               title="Turn one card, when you're ready"
-              subtitle="The pause before the reveal is part of the reading. Nothing here predicts the future."
               accent="#B39BE0"
             />
 
@@ -828,7 +928,8 @@ export default function HoroscopesView({
           )}
         </AmbientSurface>
           </>
-        )}
+          )}
+        </Animated.View>
 
         <View style={styles.closing}>
           <View style={[styles.closingLine, { backgroundColor: accent + '40' }]} />
@@ -964,11 +1065,17 @@ function CardFace({
 const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 20 },
   modeSurface: { padding: 5, marginBottom: 2 },
-  modeRow: { flexDirection: 'row', gap: 6 },
+  modeRow: { flexDirection: 'row', gap: MODE_SEGMENT_GAP, position: 'relative' },
+  modeSelectionPill: {
+    position: 'absolute', left: 0, top: 0, bottom: 0,
+    borderRadius: 20, borderWidth: 1,
+    shadowOpacity: 0.22, shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 }, elevation: 2,
+  },
   modeButton: {
     flex: 1, minHeight: 58, borderRadius: 20, borderWidth: 1,
     borderColor: 'transparent', paddingHorizontal: 10,
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center', zIndex: 1,
   },
   modeGlyphWrap: {
     width: 34, height: 34, borderRadius: 17, borderWidth: 1,
@@ -978,6 +1085,7 @@ const styles = StyleSheet.create({
   modeCopy: { flex: 1 },
   modeLabel: { color: '#C1BFCE', fontSize: 9, fontWeight: '800', letterSpacing: 1.2 },
   modeHint: { color: '#7F8092', fontSize: 9.5, marginTop: 2 },
+  modeContent: { width: '100%' },
 
   skyRule: { height: 1, marginTop: 16, backgroundColor: 'rgba(255,255,255,0.08)' },
   moonDiscWrap: {

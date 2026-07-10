@@ -50,20 +50,25 @@ type Props = {
 
 export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandColor }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const libraryOffset = useRef(0);
   const technique = TECHNIQUES.find(t => t.id === activeId) ?? null;
   const accent = technique?.color ?? bandColor;
 
   return (
-    <AmbientVeil accent={accent} strength={technique ? 'deep' : 'standard'}>
-      <EditorialHeader
-        mode="RESTORE"
-        title="Follow the breath"
-        subtitle={technique
-          ? 'Let the form recede. Follow one phase, then the next.'
-          : 'Choose a rhythm for the moment you are in.'}
-        accent={accent}
-        compact={Boolean(technique)}
-      />
+    <AmbientVeil
+      accent={accent}
+      strength={technique ? 'deep' : 'standard'}
+      active={toneIsPlaying}
+      motionHz={beatHz}
+    >
+      {!technique ? (
+        <EditorialHeader
+          mode="RESTORE"
+          title="Follow the breath"
+          subtitle="Choose a rhythm for the moment you are in."
+          accent={accent}
+        />
+      ) : null}
 
       {toneIsPlaying ? (
         <View style={styles.toneStripWrap}>
@@ -72,6 +77,7 @@ export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandCo
             label={`${bandName.toUpperCase()} TONE`}
             detail={`${beatHz} Hz continues underneath`}
             active
+            pulse
           />
         </View>
       ) : null}
@@ -79,7 +85,12 @@ export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandCo
       {technique ? (
         <BreathSession technique={technique} onBack={() => setActiveId(null)} />
       ) : (
-        <TechniqueList accent={accent} onPick={t => setActiveId(t.id)} />
+        <TechniqueList
+          accent={accent}
+          initialOffset={libraryOffset.current}
+          onOffsetChange={offset => { libraryOffset.current = offset; }}
+          onPick={t => setActiveId(t.id)}
+        />
       )}
     </AmbientVeil>
   );
@@ -235,13 +246,38 @@ function MalaCounter({ accent }: { accent: string }) {
   );
 }
 
-function TechniqueList({ accent, onPick }: { accent: string; onPick: (t: Technique) => void }) {
+function TechniqueList({
+  accent,
+  initialOffset,
+  onOffsetChange,
+  onPick,
+}: {
+  accent: string;
+  initialOffset: number;
+  onOffsetChange: (offset: number) => void;
+  onPick: (t: Technique) => void;
+}) {
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const restored = useRef(false);
   const calming = TECHNIQUES.filter(t => t.category === 'calming');
   const activating = TECHNIQUES.filter(t => t.category === 'activating');
 
+  const restoreOffset = () => {
+    if (restored.current || initialOffset <= 0) return;
+    restored.current = true;
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: initialOffset, animated: false });
+    });
+  };
+
   return (
     <ScrollView
+      ref={scrollRef}
+      contentOffset={{ x: 0, y: initialOffset }}
+      onContentSizeChange={restoreOffset}
+      onScroll={event => onOffsetChange(event.nativeEvent.contentOffset.y)}
+      scrollEventThrottle={16}
       // Clear the ~80px tab bar rendered by App.tsx plus the safe-area inset.
       contentContainerStyle={{ paddingBottom: insets.bottom + 90, paddingHorizontal: 20 }}
       showsVerticalScrollIndicator={false}
@@ -250,7 +286,6 @@ function TechniqueList({ accent, onPick }: { accent: string; onPick: (t: Techniq
         index="01"
         eyebrow="RITUAL"
         title="Mark the moment"
-        subtitle="A quiet counter for practices that do not need a timer."
         accent={accent}
       />
       <MalaCounter accent="#D9B86C" />
@@ -259,7 +294,6 @@ function TechniqueList({ accent, onPick }: { accent: string; onPick: (t: Techniq
         index="02"
         eyebrow="SETTLE"
         title="Return to stillness"
-        subtitle="Measured rhythms to soften the body and quiet the mind."
         accent={accent}
       />
       {calming.map((t, index) => (
@@ -270,7 +304,6 @@ function TechniqueList({ accent, onPick }: { accent: string; onPick: (t: Techniq
         index="03"
         eyebrow="AWAKEN"
         title="Gather your energy"
-        subtitle="Brighter cadences for presence, focus, and momentum."
         accent={accent}
       />
       {activating.map((t, index) => (
@@ -356,6 +389,7 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
   // played through its own tiny players so it layers over any running
   // binaural tone, soundscape, or imported audio.
   const [cuesOn, setCuesOn] = useState(false);
+  const [cuesReady, setCuesReady] = useState(Platform.OS === 'web');
   const cuesOnRef = useRef(false);
   useEffect(() => { cuesOnRef.current = cuesOn; }, [cuesOn]);
   const cuePlayersRef = useRef<Partial<Record<keyof typeof CUE_TONES, AudioPlayer>>>({});
@@ -371,18 +405,34 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
         try { (p as any)?.remove?.(); } catch {}
       });
       cuePlayersRef.current = {};
+      if (webCueCtxRef.current) {
+        try { webCueCtxRef.current.close(); } catch {}
+        webCueCtxRef.current = null;
+      }
     };
   }, []);
 
   function setCuesPref(on: boolean) {
     setCuesOn(on);
     AsyncStorage.setItem(STORAGE_BREATH_CUES, on ? '1' : '0').catch(() => {});
+    if (on && Platform.OS === 'web') {
+      try {
+        if (!webCueCtxRef.current) {
+          const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+          webCueCtxRef.current = new AC();
+        }
+        webCueCtxRef.current?.resume().catch(() => {});
+      } catch {}
+    }
   }
 
-  // Native players are synthesized lazily the first time cues turn on.
+  // Prepare the complete native cue set atomically when the practice opens.
+  // Keeping partial players out of the shared ref avoids an off/on toggle
+  // leaving one phase without a sound.
   useEffect(() => {
-    if (!cuesOn || Platform.OS === 'web' || cuePlayersRef.current.Inhale) return;
+    if (Platform.OS === 'web') return;
     let cancelled = false;
+    const prepared: Partial<Record<keyof typeof CUE_TONES, AudioPlayer>> = {};
     (async () => {
       try {
         for (const name of Object.keys(CUE_TONES) as Array<keyof typeof CUE_TONES>) {
@@ -391,17 +441,31 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
           await FileSystem.writeAsStringAsync(path, buildCueWav(f0, f1), {
             encoding: FileSystem.EncodingType.Base64,
           });
-          if (cancelled) return;
+          if (cancelled) break;
           const player = createAudioPlayer({ uri: path });
           player.volume = 0.5;
-          cuePlayersRef.current[name] = player;
+          prepared[name] = player;
         }
-      } catch {}
+        if (cancelled) {
+          Object.values(prepared).forEach(player => {
+            try { player?.release(); } catch {}
+            try { (player as any)?.remove?.(); } catch {}
+          });
+          return;
+        }
+        cuePlayersRef.current = prepared;
+        setCuesReady(true);
+      } catch {
+        Object.values(prepared).forEach(player => {
+          try { player?.release(); } catch {}
+          try { (player as any)?.remove?.(); } catch {}
+        });
+      }
     })();
     return () => { cancelled = true; };
-  }, [cuesOn]);
+  }, []);
 
-  function playCue(name: keyof typeof CUE_TONES) {
+  async function playCue(name: keyof typeof CUE_TONES) {
     if (!cuesOnRef.current) return;
     const [f0, f1] = CUE_TONES[name];
     if (Platform.OS === 'web') {
@@ -411,7 +475,8 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
           webCueCtxRef.current = new AC();
         }
         const ctx = webCueCtxRef.current!;
-        if (ctx.state === 'suspended') ctx.resume();
+        if (ctx.state === 'suspended') await ctx.resume();
+        if (!cuesOnRef.current || ctx.state !== 'running') return;
         const t = ctx.currentTime;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -431,7 +496,8 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
     const player = cuePlayersRef.current[name];
     if (!player) return;
     try {
-      player.seekTo(0);
+      await player.seekTo(0);
+      if (!cuesOnRef.current) return;
       player.play();
     } catch {}
   }
@@ -533,7 +599,7 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
       // eyes-closed users get a clear start signal.
       if (started) phaseTick();
       started = true;
-      playCue(phase.name);
+      void playCue(phase.name);
       setPhaseIdx(idx);
       setSecondsLeft(phase.seconds);
       if (idx === 0) {
@@ -608,6 +674,14 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
   const phaseLabel = complete ? 'Complete' : playing ? phase.name : 'Ready';
   const targetLabel = targetCycles == null ? 'Endless practice' : `${targetCycles} cycle practice`;
   const cycleChoices = activating ? [5, 10] : CYCLE_CHOICES;
+  const togglePractice = () => {
+    if (!playing && cuesOn && !cuesReady) return;
+    if (!playing && Platform.OS === 'web') {
+      webCueCtxRef.current?.resume().catch(() => {});
+    }
+    setComplete(false);
+    setPlaying(current => !current);
+  };
 
   return (
     <ScrollView
@@ -626,7 +700,7 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
       </TouchableOpacity>
 
       <Text style={[styles.sessionEyebrow, { color: technique.color }]}>GUIDED PRACTICE</Text>
-      <Text style={styles.sessionName}>{technique.name}</Text>
+      <Text accessibilityRole="header" style={styles.sessionName}>{technique.name}</Text>
       <Text style={[styles.sessionBlurb, { color: technique.color }]}>{technique.blurb}</Text>
       <View style={styles.sessionStatus} accessibilityLiveRegion="polite">
         <StatusStrip
@@ -634,12 +708,13 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
           label={phaseLabel.toUpperCase()}
           detail={playing ? `${secondsLeft}s · cycle ${cycle}` : targetLabel}
           active={playing || complete}
+          pulse={playing}
         />
       </View>
       {activating ? (
         <View style={[styles.activatingNotice, { borderColor: technique.color + '45' }]}>
-          <Text style={[styles.activatingNoticeLabel, { color: technique.color }]}>ACTIVE RHYTHM</Text>
-          <Text style={styles.activatingNoticeText}>Stay seated · keep it brief · stop if light-headed</Text>
+          <Text style={[styles.activatingNoticeLabel, { color: technique.color }]}>SHORT PRACTICE</Text>
+          <Text style={styles.activatingNoticeText}>Active rhythm · stay seated · stop if light-headed</Text>
         </View>
       ) : null}
 
@@ -707,40 +782,67 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
               </TouchableOpacity>
             );
           })}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => setCuesPref(!cuesOn)}
-            accessibilityRole="button"
-            accessibilityLabel={cuesOn ? 'Turn off audio cues' : 'Turn on audio cues, a soft tone on each phase change'}
-            accessibilityState={{ selected: cuesOn }}
-            style={[
-              styles.lengthPill,
-              cuesOn && {
-                backgroundColor: technique.color + '22',
-                borderColor: technique.color,
-              },
-            ]}
-          >
-            <Text style={[styles.lengthText, cuesOn && { color: technique.color }]}>♪ Cues</Text>
-          </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          activeOpacity={0.86}
+          onPress={() => setCuesPref(!cuesOn)}
+          accessibilityRole="switch"
+          accessibilityLabel="Eyes-closed phase tones"
+          accessibilityHint="Plays a rising tone for inhale, a steady tone for hold, and a falling tone for exhale."
+          accessibilityState={{ checked: cuesOn }}
+          accessibilityValue={{ text: cuesOn ? (cuesReady ? 'On' : 'Preparing') : 'Off' }}
+          style={[
+            styles.audioCueControl,
+            cuesOn && { backgroundColor: technique.color + '16', borderColor: technique.color + '88' },
+          ]}
+        >
+          <View style={styles.audioCueCopy}>
+            <Text style={[styles.audioCueEyebrow, cuesOn && { color: technique.color }]}>EYES-CLOSED AUDIO</Text>
+            <Text style={styles.audioCueTitle}>Phase tones</Text>
+            <Text style={styles.audioCueDetail}>Rising inhale · steady hold · falling exhale</Text>
+          </View>
+          <View style={[
+            styles.audioCueState,
+            cuesOn && { backgroundColor: technique.color, borderColor: technique.color },
+          ]}>
+            <Text style={[styles.audioCueStateText, cuesOn && styles.audioCueStateTextOn]}>
+              {cuesOn ? (cuesReady ? 'ON' : '…') : 'OFF'}
+            </Text>
+          </View>
+        </TouchableOpacity>
       </AmbientSurface>
 
       <AmbientSurface accent={technique.color} style={styles.breathChamber}>
         <View style={styles.chamberTopRow}>
           <View>
             <Text style={[styles.chamberEyebrow, { color: technique.color }]}>BREATHING CHAMBER</Text>
-            <Text style={styles.chamberInstruction}>{playing ? 'Stay with the current phase' : 'Begin when your body feels ready'}</Text>
+            <Text style={styles.chamberInstruction}>
+              {playing
+                ? 'Stay with the current phase'
+                : cuesOn && !cuesReady
+                  ? 'Preparing your phase tones…'
+                  : 'Begin when your body feels ready'}
+            </Text>
           </View>
           <View style={[styles.chamberLiveDot, { borderColor: technique.color + '55' }]}>
             <View style={[styles.chamberLiveDotCore, { backgroundColor: technique.color, opacity: playing ? 1 : 0.35 }]} />
           </View>
         </View>
 
-        <View style={styles.visualStack}>
+        <TouchableOpacity
+          activeOpacity={0.94}
+          onPress={togglePractice}
+          accessibilityRole="button"
+          accessibilityLabel={playing ? 'End breathing practice' : 'Begin breathing practice'}
+          accessibilityHint="The breathing visual is also the start and stop control."
+          accessibilityState={{ disabled: !playing && cuesOn && !cuesReady }}
+          disabled={!playing && cuesOn && !cuesReady}
+          style={styles.visualStack}
+        >
           <Animated.View
             style={[styles.visualLayer, { opacity: circleOpacity }]}
-            pointerEvents={visual === 'circle' ? 'auto' : 'none'}
+            pointerEvents="none"
           >
             <BreathCircle
               breath={breath}
@@ -753,7 +855,7 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
           </Animated.View>
           <Animated.View
             style={[styles.visualLayer, { opacity: mandalaOpacity }]}
-            pointerEvents={visual === 'mandala' ? 'auto' : 'none'}
+            pointerEvents="none"
           >
             <BreathMandala
               breath={breath}
@@ -766,7 +868,7 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
               active={playing || complete}
             />
           </Animated.View>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.phasePath} accessibilityLiveRegion="polite">
           {technique.phases.map((item, index) => {
@@ -786,9 +888,11 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
 
         <TouchableOpacity
           activeOpacity={0.85}
-          onPress={() => { setComplete(false); setPlaying(p => !p); }}
+          onPress={togglePractice}
           accessibilityRole="button"
           accessibilityLabel={playing ? 'Stop breathing session' : 'Start breathing session'}
+          accessibilityState={{ disabled: !playing && cuesOn && !cuesReady }}
+          disabled={!playing && cuesOn && !cuesReady}
           style={[
             styles.playBtn,
             {
@@ -797,7 +901,9 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
             },
           ]}
         >
-          <Text style={styles.playBtnText}>{playing ? 'END PRACTICE' : 'BEGIN PRACTICE'}</Text>
+          <Text style={styles.playBtnText}>
+            {playing ? 'END PRACTICE' : cuesOn && !cuesReady ? 'PREPARING AUDIO' : 'BEGIN PRACTICE'}
+          </Text>
         </TouchableOpacity>
       </AmbientSurface>
 
@@ -1155,7 +1261,7 @@ const styles = StyleSheet.create({
   // Guided session — a slim setup rail feeding one dominant visual chamber.
   sessionWrap: { paddingHorizontal: 20 },
   backBtn: {
-    alignSelf: 'flex-start', minHeight: 38, paddingVertical: 9, paddingHorizontal: 2,
+    alignSelf: 'flex-start', minHeight: 44, paddingVertical: 9, paddingHorizontal: 2,
     justifyContent: 'center',
   },
   backText: { color: '#AAA7B6', fontSize: 9, fontWeight: '800', letterSpacing: 1.8 },
@@ -1208,6 +1314,35 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.025)',
   },
   lengthText: { color: '#9693A3', fontSize: 9.5, fontWeight: '700', letterSpacing: 0.4 },
+  audioCueControl: {
+    minHeight: 68,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.025)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  audioCueCopy: { flex: 1, minWidth: 0 },
+  audioCueEyebrow: { color: '#8F8C9B', fontSize: 7.5, fontWeight: '900', letterSpacing: 1.65 },
+  audioCueTitle: { color: '#F5F2FA', fontSize: 13, fontWeight: '700', marginTop: 3 },
+  audioCueDetail: { color: '#918E9E', fontSize: 9.5, lineHeight: 14, marginTop: 2 },
+  audioCueState: {
+    minWidth: 44,
+    minHeight: 32,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  audioCueStateText: { color: '#9996A6', fontSize: 8.5, fontWeight: '900', letterSpacing: 1.3 },
+  audioCueStateTextOn: { color: '#0B0B1F' },
 
   breathChamber: { width: '100%', marginTop: 13, paddingTop: 18, paddingBottom: 16 },
   chamberTopRow: {

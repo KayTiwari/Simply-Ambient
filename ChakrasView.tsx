@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
+  Animated,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,6 +26,12 @@ const DOSHA_ICONS: Record<Dosha['id'], React.ComponentType<IconProps>> = {
   pitta: Flame,
   kapha: Mountains,
 };
+
+// Every node keeps the same vertical footprint so the selection plate can
+// travel on a stable track even on narrow phones. Copy is constrained to one
+// line where needed; the 70pt row remains a comfortable touch target.
+const SPECTRUM_ROW_HEIGHT = 70;
+const SPECTRUM_PADDING_VERTICAL = 10;
 
 type Props = {
   chakras: Chakra[];
@@ -59,6 +67,18 @@ export default function ChakrasView({
       ?? chakras[0]?.id
       ?? ''
   ));
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const spectrum = useMemo(() => [...chakras].reverse(), [chakras]);
+  const selectedChakra = chakras.find(chakra => chakra.id === selectedChakraId)
+    ?? chakras[0]
+    ?? null;
+  const selectedSpectrumIndex = Math.max(
+    0,
+    spectrum.findIndex(chakra => chakra.id === selectedChakra?.id),
+  );
+  const selectionOffset = useRef(
+    new Animated.Value(selectedSpectrumIndex * SPECTRUM_ROW_HEIGHT),
+  ).current;
 
   useEffect(() => {
     if (chakras.some(chakra => chakra.id === activePresetId)) {
@@ -66,10 +86,45 @@ export default function ChakrasView({
     }
   }, [activePresetId, chakras]);
 
-  const spectrum = useMemo(() => [...chakras].reverse(), [chakras]);
-  const selectedChakra = chakras.find(chakra => chakra.id === selectedChakraId)
-    ?? chakras[0]
-    ?? null;
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(enabled => {
+        if (mounted) setReduceMotion(enabled);
+      })
+      .catch(() => {});
+
+    const subscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReduceMotion,
+    );
+
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    const toValue = selectedSpectrumIndex * SPECTRUM_ROW_HEIGHT;
+    selectionOffset.stopAnimation();
+
+    if (reduceMotion) {
+      selectionOffset.setValue(toValue);
+      return;
+    }
+
+    Animated.spring(selectionOffset, {
+      toValue,
+      stiffness: 210,
+      damping: 25,
+      mass: 0.82,
+      overshootClamping: false,
+      restDisplacementThreshold: 0.25,
+      restSpeedThreshold: 0.25,
+      useNativeDriver: true,
+    }).start();
+  }, [reduceMotion, selectedSpectrumIndex, selectionOffset]);
 
   const selectChakra = (chakra: Chakra) => {
     setSelectedChakraId(chakra.id);
@@ -77,7 +132,7 @@ export default function ChakrasView({
   };
 
   return (
-    <AmbientVeil accent={bandColor} strength="light">
+    <AmbientVeil accent={bandColor} strength="light" active={toneIsPlaying} motionHz={beatHz}>
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 104 }]}
         showsVerticalScrollIndicator={false}
@@ -85,7 +140,6 @@ export default function ChakrasView({
         <EditorialHeader
           mode="ALIGN"
           title="Move through the spectrum"
-          subtitle="A contemplative map of seven traditional centers — from grounded presence to spacious awareness."
           accent={bandColor}
         />
 
@@ -98,6 +152,7 @@ export default function ChakrasView({
                 label={toneIsPlaying ? 'LISTENING' : 'READY'}
                 detail={bandName}
                 active={toneIsPlaying}
+                pulse={toneIsPlaying}
               />
             </View>
 
@@ -150,6 +205,41 @@ export default function ChakrasView({
 
           <AmbientSurface accent={bandColor} quiet style={styles.spectrumSurface}>
             <View style={styles.spectrumLine} pointerEvents="none" />
+            {selectedChakra ? (
+              <Animated.View
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                pointerEvents="none"
+                style={[
+                  styles.spectrumSelection,
+                  {
+                    backgroundColor: selectedChakra.color + '14',
+                    borderColor: selectedChakra.color + '4D',
+                    shadowColor: selectedChakra.color,
+                    transform: [{ translateY: selectionOffset }],
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.selectionAccent,
+                    { backgroundColor: selectedChakra.color },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.selectionNodeRing,
+                    { borderColor: selectedChakra.color + 'B8' },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.selectionGlow,
+                    { backgroundColor: selectedChakra.color + '18' },
+                  ]}
+                />
+              </Animated.View>
+            ) : null}
             {spectrum.map(chakra => {
               const selected = chakra.id === selectedChakra?.id;
               const active = chakra.id === activePresetId;
@@ -163,25 +253,10 @@ export default function ChakrasView({
                   accessibilityHint="Tunes the tone and opens this center's details"
                   accessibilityState={{ selected }}
                   onPress={() => selectChakra(chakra)}
-                  style={[
-                    styles.spectrumRow,
-                    selected && {
-                      backgroundColor: chakra.color + '14',
-                      borderColor: chakra.color + '3D',
-                    },
-                  ]}
+                  style={styles.spectrumRow}
                 >
                   <View style={styles.nodeColumn}>
-                    <View
-                      style={[
-                        styles.nodeHalo,
-                        selected && {
-                          borderColor: chakra.color + '99',
-                          backgroundColor: chakra.color + '20',
-                          shadowColor: chakra.color,
-                        },
-                      ]}
-                    >
+                    <View style={styles.nodeHalo}>
                       <View style={[styles.node, { backgroundColor: chakra.color }]} />
                     </View>
                   </View>
@@ -191,7 +266,7 @@ export default function ChakrasView({
                       <Text style={[styles.spectrumIndex, { color: chakra.color }]}>
                         {String(chakra.number).padStart(2, '0')}
                       </Text>
-                      <Text style={styles.spectrumName}>{chakra.name}</Text>
+                      <Text style={styles.spectrumName} numberOfLines={1}>{chakra.name}</Text>
                       {active ? (
                         <View style={[styles.tunedPill, { borderColor: chakra.color + '66' }]}>
                           <Text style={[styles.tunedText, { color: chakra.color }]}>TUNED</Text>
@@ -302,7 +377,6 @@ export default function ChakrasView({
             index="02"
             eyebrow="EXPLORE"
             title="Ayurvedic constitutions"
-            subtitle="A separate traditional lens for noticing elemental qualities and choosing a balancing tone."
             accent={bandColor}
           />
 
@@ -464,25 +538,67 @@ const styles = StyleSheet.create({
     marginRight: 9,
   },
 
-  spectrumSurface: { paddingVertical: 10, paddingHorizontal: 10 },
+  spectrumSurface: {
+    paddingVertical: SPECTRUM_PADDING_VERTICAL,
+    paddingHorizontal: 10,
+  },
   spectrumLine: {
     position: 'absolute',
-    top: 42,
-    bottom: 42,
+    top: SPECTRUM_PADDING_VERTICAL + SPECTRUM_ROW_HEIGHT / 2,
+    bottom: SPECTRUM_PADDING_VERTICAL + SPECTRUM_ROW_HEIGHT / 2,
     left: 37,
     width: 1,
     backgroundColor: 'rgba(255,255,255,0.16)',
   },
+  spectrumSelection: {
+    position: 'absolute',
+    top: SPECTRUM_PADDING_VERTICAL + 2,
+    left: 10,
+    right: 10,
+    height: SPECTRUM_ROW_HEIGHT - 4,
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowOpacity: 0.17,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 5 },
+  },
+  selectionAccent: {
+    position: 'absolute',
+    left: 0,
+    top: 15,
+    bottom: 15,
+    width: 2,
+    borderTopRightRadius: 2,
+    borderBottomRightRadius: 2,
+  },
+  selectionNodeRing: {
+    position: 'absolute',
+    left: 12,
+    top: (SPECTRUM_ROW_HEIGHT - 34) / 2,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+  },
+  selectionGlow: {
+    position: 'absolute',
+    right: -34,
+    top: -47,
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+  },
   spectrumRow: {
-    minHeight: 68,
+    zIndex: 1,
+    height: SPECTRUM_ROW_HEIGHT,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: 10,
-    marginVertical: 2,
   },
   nodeColumn: { width: 34, alignItems: 'center', marginRight: 10 },
   nodeHalo: {

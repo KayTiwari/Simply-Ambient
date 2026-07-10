@@ -215,7 +215,7 @@ export function MoreSectionGroup({
 }: {
   eyebrow: string;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   accent: string;
   children: React.ReactNode;
 }) {
@@ -226,7 +226,7 @@ export function MoreSectionGroup({
         <Text style={[styles.sectionEyebrow, { color: accent }]}>{eyebrow}</Text>
       </View>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+      {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
       <View style={styles.sectionChildren}>{children}</View>
     </View>
   );

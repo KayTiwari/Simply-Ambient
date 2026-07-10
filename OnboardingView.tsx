@@ -203,7 +203,6 @@ export default function OnboardingView({
               <EditorialHeader
                 mode={isReplay ? 'REPLAY' : 'WELCOME'}
                 title="Find your quieter center"
-                subtitle="Sound, breath, and reflection — brought together in one calm, personal space."
                 accent={accent}
               />
 
@@ -249,7 +248,6 @@ export default function OnboardingView({
               <EditorialHeader
                 mode="LISTEN SAFELY"
                 title="Begin with care"
-                subtitle="A clear foundation for every frequency, breath practice, and reflection in the app."
                 accent={accent}
               />
 
@@ -312,7 +310,6 @@ export default function OnboardingView({
                 <EditorialSection
                   eyebrow="CHOOSE YOUR DIRECTION"
                   title="Start with a feeling"
-                  subtitle="You can switch practices whenever you like."
                   accent={accent}
                 />
 
@@ -563,7 +560,6 @@ export default function OnboardingView({
               <EditorialHeader
                 mode="READY"
                 title="Everything is within reach"
-                subtitle="Your practices are arranged across the five rooms at the bottom of the app."
                 accent={accent}
               />
               <View style={styles.pageBody}>
@@ -585,7 +581,6 @@ export default function OnboardingView({
               <EditorialHeader
                 mode="FIELD GUIDE"
                 title="Know your way around"
-                subtitle="Four useful details, surfaced now so the app feels familiar from your first session."
                 accent={accent}
               />
 
