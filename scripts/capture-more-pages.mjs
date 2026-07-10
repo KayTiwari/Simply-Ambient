@@ -1,4 +1,5 @@
-// Screenshots of the reworked More section (docs/screenshots/more/).
+// Screenshots of the composition-level More redesign
+// (docs/screenshots/more-v2/).
 // Usage: npm run build:web && node scripts/capture-more-pages.mjs
 // Drives the exported web build with a named profile so the hub greeting,
 // day-scoped mood, and value-first Insights states are all visible.
@@ -11,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DIST = join(ROOT, 'dist');
-const OUT = join(ROOT, 'docs', 'screenshots', 'more');
+const OUT = join(ROOT, 'docs', 'screenshots', 'more-v2');
 await mkdir(OUT, { recursive: true });
 const PORT = 4174;
 
@@ -69,32 +70,100 @@ await page.getByText('Good to know').first().waitFor({ state: 'visible' });
 await tap('ENTER', { exact: true });
 await page.waitForTimeout(1200);
 
-// 1. Hub with greeting and regrouped tiles.
+// 1. Personalized editorial hub.
 await tap('More', { exact: true });
-await shot('01-hub-greeting.png');
+await shot('01-editorial-hub.png');
 
-// 2. Mood: log today, see the day-scoped page.
-await tap('Mood Check-in');
+// 2. Mood horizon: log today, then show the selected weather.
+await tap('Take a five-second check-in', { exact: true });
+await page.waitForTimeout(700);
 await tap('Good', { exact: true });
 await page.waitForTimeout(3600); // let the Noted toast pass
-await shot('02-mood-day-scoped.png');
+await shot('02-mood-horizon.png');
 await back();
 
-// 3. AI Insights: value-first empty state.
-await tap('AI Insights');
-await shot('03-insights-welcome.png');
+// 3. Release ritual.
+await tap('Release', { exact: true });
+await shot('03-release-ritual.png');
 await back();
 
-// 4. Grounding: mark two steps of the ritual.
-await tap('Grounding');
-await tap('see', { nth: 0 });
-await tap('touch', { nth: 0 });
-await shot('04-grounding-ritual.png');
+// 4. Grounding compass: move to the third sense.
+await tap('5-4-3-2-1 Grounding', { exact: true });
+await tap('Done, next', { exact: true });
+await tap('Done, next', { exact: true });
+await shot('04-grounding-compass.png');
 await back();
 
-// 5. Support: reordered with shipped group.
+// 5. Gratitude daybook.
+await tap('Gratitude', { exact: true });
+await shot('05-gratitude-daybook.png');
+await back();
+
+// 6. Soundscape scene, actively playing.
+await tap('Soundscapes', { exact: true });
+await tap('Soft Rain', { exact: true });
+await page.getByText('Playing now', { exact: true }).waitFor({ state: 'visible', timeout: 15000 });
+await shot('06-soundscape-scene.png');
+await page.getByLabel('Stop all audio', { exact: true }).click();
+await page.waitForTimeout(500);
+await back();
+
+// 7. Profile identity atlas, seeded for the cosmic pages that follow.
+await tap('Profile', { exact: true });
+await page.getByPlaceholder('YYYY-MM-DD').fill('1990-06-15');
+await page.getByPlaceholder('HH:MM').fill('08:30');
+await page.getByPlaceholder('City, country').fill('Detroit, USA');
+await shot('07-profile-atlas.png');
+await back();
+
+// 8. Honest natal wheel (Sun sign only).
+await tap('Natal', { exact: true });
+await shot('08-natal-wheel.png');
+await back();
+
+// 9. Settings atmosphere preview.
+await tap('Settings', { exact: true });
+await shot('09-settings-preview.png');
+await back();
+
+// 10. Scannable safety guide.
+await tap('Safety', { exact: true });
+await shot('10-safety-guide.png');
+await back();
+
+// 11. Feedback postcard.
+await tap('Feedback', { exact: true });
+await shot('11-feedback-postcard.png');
+await back();
+
+// 12. Maker letter and visual roadmap.
 await tap('Support', { exact: true });
-await shot('05-support-reordered.png');
+await shot('12-support-maker-letter.png');
+await back();
+
+// 13. Reading room and data-ingredient tray.
+await tap('AI Insights', { exact: true });
+await shot('13-insights-reading-room.png');
+await back();
+
+// 14. Themed routine paths.
+await tap('Routines', { exact: true });
+await shot('14-routine-paths.png');
+await back();
+
+// 15. Dual-orbit compatibility composer.
+await tap('Compatibility', { exact: true });
+await shot('15-compatibility-orbits.png');
+await back();
+
+// 16. Daily affirmation talisman.
+await tap('Affirmation', { exact: true });
+await shot('16-affirmation-talisman.png');
+await back();
+
+// 17. Intention seed and orbit archive.
+await tap('Intentions', { exact: true });
+await shot('17-intention-seed.png');
 
 await browser.close();
 server.close();

@@ -3665,7 +3665,7 @@ const styles = StyleSheet.create({
   },
   tabIconWrap: { minHeight: 24, marginBottom: 2, alignItems: 'center', justifyContent: 'center' },
   tabLabel: { fontSize: 11, letterSpacing: 2, fontWeight: '600' },
-  tabLabelCompact: { fontSize: 9, letterSpacing: 0.4 },
+  tabLabelCompact: { fontSize: 8, letterSpacing: 0 },
 
   beatSliderBlock: { width: '100%', marginTop: 10, marginBottom: 4 },
   beatSlider: { width: '100%', height: 30 },

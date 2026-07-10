@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  BackHandler,
   Easing,
   Linking,
+  Keyboard,
   Modal,
   Platform,
   ScrollView,
@@ -35,7 +37,14 @@ import {
 } from 'phosphor-react-native';
 import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AmbientPageShell, GlowCard, EmptyStateCard, ActionPill, PromptChip } from './MoreUI';
+import {
+  AmbientPageShell,
+  GlowCard,
+  EmptyStateCard,
+  ActionPill,
+  PromptChip,
+  MoreSectionGroup,
+} from './MoreUI';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
@@ -291,7 +300,7 @@ export default function MoreView({
   // Personalizes the hub greeting. The intent is loaded alongside the name so
   // the hub can lean on it as personalization grows.
   const [profileName, setProfileName] = useState<string | null>(null);
-  const [, setIntent] = useState<Intent | null>(null);
+  const [intent, setIntent] = useState<Intent | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_PROFILE).then(v => {
@@ -427,6 +436,8 @@ export default function MoreView({
     setRants([]);
     setManifestations([]);
     setStreak(0);
+    setProfileName(null);
+    setIntent(null);
     // Notification prefs were part of the wipe, so stop their schedules too.
     if (Platform.OS !== 'web') {
       try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch {}
@@ -435,9 +446,17 @@ export default function MoreView({
 
   // Slide-over navigation
   const [page, setPage] = useState<SubPage>(null);
+  const [pageHistory, setPageHistory] = useState<Array<Exclude<SubPage, null>>>([]);
   const slide = useRef(new Animated.Value(0)).current;
 
   function open(p: Exclude<SubPage, null>) {
+    if (page === p) return;
+    if (page !== null) {
+      setPageHistory(history => [...history, page]);
+      setPage(p);
+      return;
+    }
+    setPageHistory([]);
     setPage(p);
     Animated.timing(slide, {
       toValue: 1, duration: 280,
@@ -447,12 +466,30 @@ export default function MoreView({
   }
 
   function close() {
+    if (pageHistory.length > 0) {
+      const previous = pageHistory[pageHistory.length - 1];
+      setPageHistory(history => history.slice(0, -1));
+      setPage(previous);
+      return;
+    }
     Animated.timing(slide, {
       toValue: 0, duration: 240,
       easing: Easing.in(Easing.cubic),
       useNativeDriver: true,
-    }).start(() => setPage(null));
+    }).start(() => {
+      setPage(null);
+      setPageHistory([]);
+    });
   }
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (page === null) return false;
+      close();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [page, pageHistory]);
 
   // Honor deep links into a specific sub-page (mini player -> Soundscapes).
   useEffect(() => {
@@ -485,6 +522,7 @@ export default function MoreView({
           gratitude={gratitude}
           streak={streak}
           profileName={profileName}
+          intent={intent}
           onOpen={open}
         />
       </Animated.View>
@@ -505,7 +543,10 @@ export default function MoreView({
             pointerEvents="none"
           />
           {page === 'profile' && (
-            <ProfilePage onBack={close} />
+            <ProfilePage
+              onBack={close}
+              onProfileChange={next => setProfileName(next.name?.trim() || null)}
+            />
           )}
           {page === 'natal' && (
             <NatalChartPage onBack={close} />
@@ -631,6 +672,7 @@ type HubProps = {
   gratitude: GratEntry[];
   streak: number;
   profileName: string | null;
+  intent: Intent | null;
   onOpen: (p: Exclude<SubPage, null>) => void;
 };
 
@@ -647,6 +689,7 @@ function Hub({
   gratitude,
   streak,
   profileName,
+  intent,
   onOpen,
 }: HubProps) {
   // Weekly insights, derived from the parent's live state. The Hub stays
@@ -688,197 +731,280 @@ function Hub({
   const showMoodChip = weekly.moodAvg !== null && weekly.moodDays >= 3;
   const showGratChip = weekly.gratCount > 0;
 
+  const intentionCopy: Record<Intent, string> = {
+    sleep: 'You came here for softer landings and deeper rest.',
+    focus: 'You came here to make a little more room for focus.',
+    calm: 'You came here to find steadiness when the day feels loud.',
+    energy: 'You came here to meet the day with clearer energy.',
+  };
+  const heroTitle = moodToday
+    ? `Today feels ${moodLabel(moodToday.value).toLowerCase()}.`
+    : 'How is your inner weather?';
+  const heroCopy = moodToday
+    ? 'You already checked in. You can change it anytime, or choose what would support you now.'
+    : intent
+      ? intentionCopy[intent]
+      : 'Start with a five-second check-in, then choose only what feels useful.';
+
   return (
     <AmbientPageShell accent="#8F97DE">
       <View style={styles.headerWrap}>
-        <Text style={styles.ambience}>Simply Ambient</Text>
-        <Text style={styles.title}>More</Text>
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.subtitle}>{greeting}</Text>
-          <View style={styles.dividerLine} />
+        <View style={styles.hubBrandRow}>
+          <Text style={styles.ambience}>Simply Ambient</Text>
+          <Text style={styles.title}>YOUR SPACE</Text>
         </View>
+        <Text style={styles.hubHeadline}>A quiet corner,{`\n`}made for you.</Text>
+        <Text style={styles.hubIntro}>
+          Reflect, restore, or simply notice what you need.
+        </Text>
       </View>
 
-      {/* Compact pulse row: streak plus recent numbers at a glance. */}
-      {showStreakChip || showMoodChip || showGratChip ? (
-        <View style={styles.pulseRow}>
-          {showStreakChip ? (
-            <View style={styles.pulseChip}>
-              <Text style={[styles.pulseNum, { color: '#9DC7AC' }]}>{streak}</Text>
-              <Text style={styles.pulseCap}>GRATITUDE STREAK</Text>
-            </View>
-          ) : null}
-          {showMoodChip && weekly.moodAvg !== null ? (
-            <View style={styles.pulseChip}>
-              <Text style={[styles.pulseNum, { color: '#8FB8DE' }]}>
-                {weekly.moodAvg.toFixed(1)}
-                {weekly.moodTrend === 'up' ? ' ↑' : weekly.moodTrend === 'down' ? ' ↓' : ''}
-              </Text>
-              <Text style={styles.pulseCap}>MOOD · 7D</Text>
-            </View>
-          ) : null}
-          {showGratChip ? (
-            <View style={styles.pulseChip}>
-              <Text style={[styles.pulseNum, { color: '#E0A470' }]}>{weekly.gratCount}</Text>
-              <Text style={styles.pulseCap}>GRATITUDE · 7D</Text>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 }}
+        contentContainerStyle={styles.hubScrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Grouped by how often each tool is reached for: daily journaling
-            first, one-time setup and app meta last. Tiles carry one accent
-            per section instead of a color per item. */}
-        <Text style={styles.hubSection}>REFLECT</Text>
-        <View style={styles.tileGrid}>
-          <HubTile
-            Icon={Smiley}
-            accent="#8FB8DE"
-            label="Mood Check-in"
-            sub={
-              moodToday
-                ? `Logged today: ${moodLabel(moodToday.value)}`
-                : 'How are you feeling right now?'
-            }
-            badge={moodToday ? moodLabel(moodToday.value) : null}
-            badgeColor={moodToday ? moodColor(moodToday.value) : undefined}
+        <GlowCard accent="#8F97DE" style={styles.hubHeroCard}>
+          <View style={styles.hubHeroTopline}>
+            <View style={styles.hubLiveDot} />
+            <Text style={styles.hubHeroGreeting}>{greeting.toUpperCase()}</Text>
+          </View>
+          <View style={styles.hubHeroMain}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.hubHeroTitle}>{heroTitle}</Text>
+              <Text style={styles.hubHeroCopy}>{heroCopy}</Text>
+            </View>
+            <View style={styles.hubWeatherOrb}>
+              <Smiley
+                size={32}
+                weight="duotone"
+                color={moodToday ? moodColor(moodToday.value) : '#8FB8DE'}
+              />
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.hubHeroAction}
             onPress={() => onOpen('mood')}
-          />
-          <HubTile
-            glyph="❀"
-            accent="#8FB8DE"
-            label="Gratitude"
-            sub={
-              gratitude.length === 0
-                ? 'Notice one good thing from today'
-                : `${gratitude.length} ${gratitude.length === 1 ? 'entry' : 'entries'} and counting`
-            }
-            onPress={() => onOpen('gratitude')}
-          />
-          <HubTile
-            Icon={CloudLightning}
-            accent="#8FB8DE"
-            label="Rant"
-            sub="Pour it out. Keep it or release it"
-            onPress={() => onOpen('rant')}
-          />
-          <HubTile
-            glyph="⌖"
-            accent="#8FB8DE"
-            label="Grounding"
-            sub="Come back to your senses in five steps"
-            onPress={() => onOpen('grounding')}
-          />
-          <HubTile
-            glyph="✷"
-            accent="#8FB8DE"
-            label="Manifestation"
-            sub="Name what you're calling in"
-            onPress={() => onOpen('manifestation')}
-          />
-          <HubTile
-            glyph="⌬"
-            accent="#8FB8DE"
-            label="AI Insights"
-            sub="Gentle reflections drawn from your entries"
-            onPress={() => onOpen('insights')}
-          />
-        </View>
+            activeOpacity={0.82}
+            accessibilityRole="button"
+            accessibilityLabel="Open mood check-in"
+          >
+            <Text style={styles.hubHeroActionText}>
+              {moodToday ? 'Revisit today’s check-in' : 'Take a five-second check-in'}
+            </Text>
+            <CaretRight size={16} color="#0B0B1F" weight="bold" />
+          </TouchableOpacity>
 
-        <Text style={styles.hubSection}>PRACTICE</Text>
-        <View style={styles.tileGrid}>
-          <HubTile
-            glyph="☉"
-            accent="#9DC7AC"
-            label="Daily Affirmation"
-            sub={affirmationPreview ? `“${affirmationPreview}”` : 'Anchor a single thought for the day'}
-            badge={notifPref === 'off' ? null : notifPref === 'daily' ? '1×/day' : '3×/day'}
-            onPress={() => onOpen('affirmations')}
-          />
-          <HubTile
-            glyph="⟁"
-            accent="#9DC7AC"
-            label="Routines"
-            sub="Guided recipes for longer sessions"
-            onPress={() => onOpen('routines')}
-          />
-          <HubTile
-            Icon={Waveform}
-            accent="#9DC7AC"
-            label="Soundscapes"
-            sub="Rain · ocean · forest · white noise"
-            onPress={() => onOpen('soundscapes')}
-          />
-        </View>
+          {showStreakChip || showMoodChip || showGratChip ? (
+            <View style={styles.pulseRow}>
+              {showStreakChip ? (
+                <View style={styles.pulseChip}>
+                  <Text style={[styles.pulseNum, { color: '#9DC7AC' }]}>{streak}</Text>
+                  <Text style={styles.pulseCap}>GRATITUDE STREAK</Text>
+                </View>
+              ) : null}
+              {showMoodChip && weekly.moodAvg !== null ? (
+                <View style={styles.pulseChip}>
+                  <Text style={[styles.pulseNum, { color: '#8FB8DE' }]}>
+                    {weekly.moodAvg.toFixed(1)}
+                    {weekly.moodTrend === 'up' ? ' ↑' : weekly.moodTrend === 'down' ? ' ↓' : ''}
+                  </Text>
+                  <Text style={styles.pulseCap}>MOOD · 7D</Text>
+                </View>
+              ) : null}
+              {showGratChip ? (
+                <View style={styles.pulseChip}>
+                  <Text style={[styles.pulseNum, { color: '#E0A470' }]}>{weekly.gratCount}</Text>
+                  <Text style={styles.pulseCap}>THANKS · 7D</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : (
+            <View style={styles.hubPrivacyStrip}>
+              <Text style={styles.hubPrivacyText}>LOCAL ONLY</Text>
+              <View style={styles.hubPrivacyDot} />
+              <Text style={styles.hubPrivacyText}>NO ACCOUNT</Text>
+              <View style={styles.hubPrivacyDot} />
+              <Text style={styles.hubPrivacyText}>YOURS</Text>
+            </View>
+          )}
+        </GlowCard>
 
-        <Text style={styles.hubSection}>COSMOS</Text>
-        <View style={styles.tileGrid}>
-          <HubTile
-            glyph="◯"
-            accent="#B39BE0"
-            label="Profile"
-            sub="Birth details · MBTI · personality"
-            onPress={() => onOpen('profile')}
-          />
-          <HubTile
-            glyph="☌"
-            accent="#B39BE0"
-            label="Natal Chart"
-            sub="Your birth details and chart"
-            onPress={() => onOpen('natal')}
-          />
-          <HubTile
-            glyph="⚭"
-            accent="#B39BE0"
-            label="Compatibility"
-            sub="How two signs sit together"
-            onPress={() => onOpen('compatibility')}
-          />
-        </View>
+        <MoreSectionGroup
+          eyebrow="01 · REFLECT"
+          title="Clear a little space"
+          subtitle="Private places to notice, name, keep, or release."
+          accent="#D68097"
+        >
+          <View style={styles.tileGrid}>
+            <HubTile
+              glyph="≋"
+              accent="#D68097"
+              label="Release"
+              kicker="PRIVATE RITUAL"
+              sub="Pour out what is heavy. Keep it only if it helps."
+              variant="feature"
+              onPress={() => onOpen('rant')}
+            />
+            <HubTile
+              glyph="❀"
+              accent="#E0A470"
+              label="Gratitude"
+              sub={
+                gratitude.length === 0
+                  ? 'Notice one good thing'
+                  : `${gratitude.length} private ${gratitude.length === 1 ? 'entry' : 'entries'}`
+              }
+              variant="half"
+              onPress={() => onOpen('gratitude')}
+            />
+            <HubTile
+              glyph="✷"
+              accent="#B39BE0"
+              label="Intentions"
+              sub="Name what you are calling in"
+              variant="half"
+              onPress={() => onOpen('manifestation')}
+            />
+            <HubTile
+              glyph="⌁"
+              accent="#8FB8DE"
+              label="AI Insights"
+              kicker="OPT-IN REFLECTION"
+              sub="Read patterns from only the journal sources you choose."
+              variant="wide"
+              onPress={() => onOpen('insights')}
+            />
+          </View>
+        </MoreSectionGroup>
 
-        <Text style={styles.hubSection}>APP</Text>
-        <View style={styles.tileGrid}>
-          <HubTile
-            Icon={GearSix}
-            accent="#d9b35c"
-            label="Settings"
-            sub="Background color and behavior"
-            onPress={() => onOpen('settings')}
-          />
-          <HubTile
-            Icon={Coffee}
-            accent="#d9b35c"
-            label="Support"
-            sub="If the app brings you peace"
-            onPress={() => onOpen('support')}
-          />
-          <HubTile
-            Icon={ShieldCheck}
-            accent="#d9b35c"
-            label="Safety"
-            sub="Hearing safety, medical notice, terms"
-            onPress={() => onOpen('safety')}
-          />
-          <HubTile
-            Icon={ChatCircleText}
-            accent="#d9b35c"
-            label="Feedback"
-            sub="Ideas, kind words, bug reports"
-            onPress={() => onOpen('bug')}
-          />
-        </View>
+        <MoreSectionGroup
+          eyebrow="02 · RESTORE"
+          title="Come back to yourself"
+          subtitle="Small guided practices for focus, calm, and softer landings."
+          accent="#9DC7AC"
+        >
+          <View style={styles.tileGrid}>
+            <HubTile
+              glyph="⌖"
+              accent="#9DC7AC"
+              label="5-4-3-2-1 Grounding"
+              kicker="2 MINUTES · FIVE SENSES"
+              sub="A paced ritual for returning to the room."
+              variant="feature"
+              onPress={() => onOpen('grounding')}
+            />
+            <HubTile
+              glyph="☉"
+              accent="#D9BE7A"
+              label="Affirmation"
+              sub={affirmationPreview ? `“${affirmationPreview}”` : 'One thought for today'}
+              badge={notifPref === 'off' ? null : notifPref === 'daily' ? '1×' : '3×'}
+              variant="half"
+              onPress={() => onOpen('affirmations')}
+            />
+            <HubTile
+              glyph="△"
+              accent="#9DC7AC"
+              label="Routines"
+              sub="Follow a ready-made session path"
+              variant="half"
+              onPress={() => onOpen('routines')}
+            />
+            <HubTile
+              Icon={Waveform}
+              accent="#8FB8DE"
+              label="Soundscapes"
+              kicker="BUILT IN · OFFLINE"
+              sub="Rain, ocean, forest, fire, stream, and white noise."
+              variant="wide"
+              onPress={() => onOpen('soundscapes')}
+            />
+          </View>
+        </MoreSectionGroup>
+
+        <MoreSectionGroup
+          eyebrow="03 · UNDERSTAND"
+          title="Know your own shape"
+          subtitle="Personal details stay on this device and make the experience yours."
+          accent="#B39BE0"
+        >
+          <View style={styles.tileGrid}>
+            <HubTile
+              glyph="◯"
+              accent="#B39BE0"
+              label="Profile"
+              sub={trimmedName ? `${firstWord(trimmedName)} · private profile` : 'Birth details and personality'}
+              variant="half"
+              onPress={() => onOpen('profile')}
+            />
+            <HubTile
+              glyph="☉"
+              accent="#D9BE7A"
+              label="Natal"
+              sub="Begin with your sun sign"
+              variant="half"
+              onPress={() => onOpen('natal')}
+            />
+            <HubTile
+              glyph="☌"
+              accent="#D8A0B0"
+              label="Compatibility"
+              kicker="TWO PROFILES"
+              sub="A grounded reflection on how two signs meet."
+              variant="wide"
+              onPress={() => onOpen('compatibility')}
+            />
+          </View>
+        </MoreSectionGroup>
+
+        <MoreSectionGroup
+          eyebrow="04 · THE APP"
+          title="Care for your space"
+          subtitle="Privacy, preferences, support, and a direct line to the maker."
+          accent="#D9BE7A"
+        >
+          <View style={styles.tileGrid}>
+            <HubTile
+              Icon={GearSix}
+              accent="#D9BE7A"
+              label="Settings"
+              sub="Atmosphere and reminders"
+              variant="half"
+              onPress={() => onOpen('settings')}
+            />
+            <HubTile
+              Icon={ShieldCheck}
+              accent="#9DC7AC"
+              label="Safety"
+              sub="Listen gently · know your data"
+              variant="half"
+              onPress={() => onOpen('safety')}
+            />
+            <HubTile
+              Icon={Coffee}
+              accent="#E0A470"
+              label="Support"
+              sub="Help a one-person app grow"
+              variant="half"
+              onPress={() => onOpen('support')}
+            />
+            <HubTile
+              Icon={ChatCircleText}
+              accent="#D68097"
+              label="Feedback"
+              sub="Ideas, notes, and bug reports"
+              variant="half"
+              onPress={() => onOpen('bug')}
+            />
+          </View>
+        </MoreSectionGroup>
       </ScrollView>
     </AmbientPageShell>
   );
 }
 
 function HubTile({
-  glyph, Icon, accent, label, sub, badge, badgeColor, onPress,
+  glyph, Icon, accent, label, sub, kicker, badge, badgeColor, variant = 'half', onPress,
 }: {
   // Either a unicode glyph (kept for spiritual symbols: ensō, flower, sparkle)
   // or a Phosphor icon component (used for utility items: Soundscapes, Bug, etc.)
@@ -887,31 +1013,71 @@ function HubTile({
   accent: string;
   label: string;
   sub: string;
+  kicker?: string;
   badge?: string | null;
   // Optional tint for the badge text; falls back to the section accent.
   badgeColor?: string;
+  variant?: 'half' | 'wide' | 'feature';
   onPress: () => void;
 }) {
+  const horizontal = variant === 'wide';
+  const feature = variant === 'feature';
   return (
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={onPress}
-      style={styles.tile}
+      style={[
+        styles.tile,
+        variant === 'half' && styles.tileHalf,
+        horizontal && styles.tileWide,
+        feature && styles.tileFeature,
+        { borderColor: accent + '32', shadowColor: accent },
+      ]}
       accessibilityRole="button"
       accessibilityLabel={`${label}. ${sub}`}
     >
+      <LinearGradient
+        colors={[accent + (feature ? '2D' : '20'), 'rgba(28,29,53,0.94)', 'rgba(14,15,33,0.98)']}
+        locations={[0, 0.56, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View style={[styles.tileAura, { backgroundColor: accent + '1A' }]} pointerEvents="none" />
       {badge ? (
-        <Text style={[styles.tileBadge, { color: badgeColor ?? accent }]}>{badge}</Text>
+        <View style={[styles.tileBadgeWrap, { borderColor: (badgeColor ?? accent) + '55' }]}>
+          <Text style={[styles.tileBadge, { color: badgeColor ?? accent }]}>{badge}</Text>
+        </View>
       ) : null}
-      <View style={styles.tileGlyphWrap}>
+      <View style={[styles.tileGlyphWrap, { borderColor: accent + '40', backgroundColor: accent + '12' }]}>
         {Icon ? (
-          <Icon size={22} weight="duotone" color={accent} />
+          <Icon size={horizontal ? 20 : 23} weight="duotone" color={accent} />
         ) : (
           <Text style={[styles.tileGlyph, { color: accent }]}>{glyph}</Text>
         )}
       </View>
-      <Text style={styles.tileLabel} numberOfLines={1}>{label}</Text>
-      <Text style={styles.tileSub} numberOfLines={2}>{sub}</Text>
+      <View style={[
+        styles.tileCopy,
+        (horizontal || feature) && styles.tileCopyHorizontal,
+        (horizontal || feature) && { flex: 1 },
+      ]}>
+        {kicker ? <Text style={[styles.tileKicker, { color: accent }]}>{kicker}</Text> : null}
+        <Text
+          style={[styles.tileLabel, feature && styles.tileLabelFeature]}
+          numberOfLines={feature ? 2 : 1}
+        >
+          {label}
+        </Text>
+        <Text style={[styles.tileSub, (horizontal || feature) && styles.tileSubLeft]} numberOfLines={feature ? 2 : 3}>
+          {sub}
+        </Text>
+      </View>
+      {(horizontal || feature) ? (
+        <View style={[styles.tileArrow, { borderColor: accent + '40' }]}>
+          <CaretRight size={15} color={accent} weight="bold" />
+        </View>
+      ) : null}
     </TouchableOpacity>
   );
 }
@@ -920,21 +1086,204 @@ function HubTile({
 //   Sub-page header
 // ===========================================================================
 
+const SUBPAGE_PRESENTATION: Record<string, {
+  displayTitle: string;
+  mode: string;
+  subtitle: string;
+  glyph: string;
+}> = {
+  'Daily Affirmation': {
+    displayTitle: 'A Thought to Carry',
+    mode: 'RESTORE',
+    subtitle: 'Choose one gentle sentence and let it frame the day.',
+    glyph: '◌',
+  },
+  Mood: {
+    displayTitle: 'Meet Your Mood',
+    mode: 'REFLECT',
+    subtitle: 'Notice today without judging it. A few honest seconds is enough.',
+    glyph: '◡',
+  },
+  Gratitude: {
+    displayTitle: 'Notice the Good',
+    mode: 'REFLECT',
+    subtitle: 'Give one bright, ordinary moment a place to stay.',
+    glyph: '❀',
+  },
+  'Release the Noise': {
+    displayTitle: 'Release the Noise',
+    mode: 'RELEASE',
+    subtitle: 'A private ritual for what feels loud, tangled, or unfinished.',
+    glyph: '≋',
+  },
+  Manifestation: {
+    displayTitle: 'Name the Direction',
+    mode: 'PREPARE',
+    subtitle: 'Turn a vague hope into an intention you can return to.',
+    glyph: '✷',
+  },
+  '5-4-3-2-1 Grounding': {
+    displayTitle: 'Return to the Room',
+    mode: 'RESTORE',
+    subtitle: 'Five small sensory steps to bring this moment back into focus.',
+    glyph: '⌖',
+  },
+  Support: {
+    displayTitle: 'Help It Grow',
+    mode: 'SUPPORT',
+    subtitle: 'See what is being built and help shape what comes next.',
+    glyph: '↟',
+  },
+  Settings: {
+    displayTitle: 'Make It Yours',
+    mode: 'PERSONALIZE',
+    subtitle: 'Tune the atmosphere, reminders, and privacy to fit your rhythm.',
+    glyph: '◐',
+  },
+  'Safety & Disclaimer': {
+    displayTitle: 'Use With Care',
+    mode: 'UNDERSTAND',
+    subtitle: 'Clear guidance for listening gently and keeping your data yours.',
+    glyph: '◇',
+  },
+  Feedback: {
+    displayTitle: 'Leave a Note',
+    mode: 'SUPPORT',
+    subtitle: 'Share an idea, a kind word, or something that needs fixing.',
+    glyph: '✎',
+  },
+  Profile: {
+    displayTitle: 'Your Constellation',
+    mode: 'PERSONALIZE',
+    subtitle: 'A private sketch of the details that make reflections feel like yours.',
+    glyph: '☾',
+  },
+  'Natal Chart': {
+    displayTitle: 'Begin With Your Sun',
+    mode: 'UNDERSTAND',
+    subtitle: 'Start with what your birth date can honestly reveal today.',
+    glyph: '☉',
+  },
+  Routines: {
+    displayTitle: 'Choose a Path',
+    mode: 'RESTORE',
+    subtitle: 'Follow a calm sequence when deciding what comes next feels like work.',
+    glyph: '△',
+  },
+  Soundscapes: {
+    displayTitle: 'Layer the Room',
+    mode: 'WIND DOWN',
+    subtitle: 'Set the weather around your practice with quiet, offline ambience.',
+    glyph: '≈',
+  },
+  Compatibility: {
+    displayTitle: 'Two Energies',
+    mode: 'UNDERSTAND',
+    subtitle: 'A light reflection on how two signs may move through the world together.',
+    glyph: '☌',
+  },
+  'AI Insights': {
+    displayTitle: 'Read the Pattern',
+    mode: 'REFLECT',
+    subtitle: 'Invite a gentle reading from only the journal sources you choose.',
+    glyph: '⌁',
+  },
+};
+
 function SubHeader({ title, accent, onBack }: { title: string; accent: string; onBack: () => void }) {
+  const presentation = SUBPAGE_PRESENTATION[title] ?? {
+    displayTitle: title,
+    mode: 'SIMPLY AMBIENT',
+    subtitle: 'A quieter place to pause, notice, and continue.',
+    glyph: '·',
+  };
+  const { height } = useWindowDimensions();
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  // While a keyboard is open, the large editorial header yields the room to
+  // the field being edited. Very short web/mobile viewports use the same
+  // compact treatment so the focused input is not trapped behind chrome.
+  if (keyboardOpen || height < 480) {
+    return (
+      <View style={styles.subHeaderCompact}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={[styles.subBackBtnCompact, { borderColor: accent + '38', backgroundColor: accent + '12' }]}
+          activeOpacity={0.7}
+          accessibilityLabel="Back"
+          accessibilityRole="button"
+        >
+          <CaretLeft size={18} color={accent} weight="regular" />
+        </TouchableOpacity>
+        <View style={styles.subCompactCopy}>
+          <Text style={[styles.subCompactMode, { color: accent }]}>{presentation.mode}</Text>
+          <Text style={styles.subCompactTitle} numberOfLines={1}>{presentation.displayTitle}</Text>
+        </View>
+        <View style={[styles.subNavDot, { backgroundColor: accent }]} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.subHeader}>
-      <TouchableOpacity
-        onPress={onBack}
-        style={styles.subBackBtn}
-        activeOpacity={0.7}
-        accessibilityLabel="Back"
-        accessibilityRole="button"
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      >
-        <CaretLeft size={26} color={accent} weight="thin" />
-      </TouchableOpacity>
-      <Text style={styles.subTitle}>{title}</Text>
-      <View style={{ width: 36 }} />
+      <View style={styles.subNavRow}>
+        <TouchableOpacity
+          onPress={onBack}
+          style={[styles.subBackBtn, { borderColor: accent + '38', backgroundColor: accent + '12' }]}
+          activeOpacity={0.7}
+          accessibilityLabel="Back"
+          accessibilityRole="button"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <CaretLeft size={20} color={accent} weight="regular" />
+        </TouchableOpacity>
+        <Text style={styles.subBrand}>SIMPLY AMBIENT</Text>
+        <View style={[styles.subNavDot, { backgroundColor: accent }]} />
+      </View>
+
+      <View style={styles.subHeroRow}>
+        <View style={styles.subHeroCopy}>
+          <View style={styles.subModeRow}>
+            <View style={[styles.subModeLine, { backgroundColor: accent }]} />
+            <Text style={[styles.subMode, { color: accent }]}>{presentation.mode}</Text>
+          </View>
+          <Text style={styles.subTitle} numberOfLines={2} adjustsFontSizeToFit>
+            {presentation.displayTitle}
+          </Text>
+          <Text style={styles.subHeaderSubtitle}>{presentation.subtitle}</Text>
+        </View>
+        <View style={[styles.subGlyphOrbit, { borderColor: accent + '3A' }]}>
+          <LinearGradient
+            colors={[accent + '36', accent + '0D']}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[styles.subGlyphInner, { borderColor: accent + '2E' }]}>
+            <Text style={[styles.subGlyph, { color: accent }]}>{presentation.glyph}</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function PageClosing({ accent, glyph, label }: { accent: string; glyph: string; label: string }) {
+  return (
+    <View style={styles.pageClosing}>
+      <View style={[styles.pageClosingLine, { backgroundColor: accent + '42' }]} />
+      <Text style={[styles.pageClosingGlyph, { color: accent }]}>{glyph}</Text>
+      <View style={[styles.pageClosingLine, { backgroundColor: accent + '42' }]} />
+      <Text style={styles.pageClosingLabel}>{label}</Text>
     </View>
   );
 }
@@ -958,6 +1307,9 @@ function AffirmationsPage({
   // Warn when a reminder is chosen but the OS has notifications turned off.
   // Skipped on web and in Expo Go, where local notifications don't apply.
   const [notifBlocked, setNotifBlocked] = useState(false);
+  const todayLabel = new Date().toLocaleDateString(undefined, {
+    weekday: 'long', month: 'long', day: 'numeric',
+  });
   useEffect(() => {
     if (notifPref === 'off' || Platform.OS === 'web' || isExpoGo) {
       setNotifBlocked(false);
@@ -974,15 +1326,15 @@ function AffirmationsPage({
     <AmbientPageShell accent="#9DC7AC">
       <SubHeader title="Daily Affirmation" accent="#9DC7AC" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>TODAY</Text>
-        <Text style={styles.sectionSub}>
-          One intention, repeated, becomes a frame for the day. Read it once, then carry on.
-        </Text>
-
         <GlowCard
           accent="#9DC7AC"
-          style={{ padding: 22, alignItems: 'center', minHeight: 160, justifyContent: 'center' }}
+          style={styles.affirmTalisman}
         >
+          <View style={styles.affirmSunOuter} pointerEvents="none">
+            <View style={styles.affirmSunInner} />
+          </View>
+          <Text style={styles.affirmDate}>{todayLabel.toUpperCase()}</Text>
+          <View style={styles.affirmRule} />
           {loading ? (
             <ActivityIndicator color="#9DC7AC" />
           ) : (
@@ -997,13 +1349,14 @@ function AffirmationsPage({
           >
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <ArrowsClockwise size={14} color="#0B0B1F" weight="regular" />
-              <Text style={[styles.bigRefreshText, { marginLeft: 8 }]}>CHOOSE ANOTHER</Text>
+              <Text style={[styles.bigRefreshText, { marginLeft: 8 }]}>Choose another</Text>
             </View>
           </TouchableOpacity>
+          <Text style={styles.affirmCarry}>Read it slowly. Keep only what feels true.</Text>
         </GlowCard>
 
-        <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
-        <Text style={styles.sectionSub}>How often should we send a gentle nudge?</Text>
+        <Text style={styles.sectionLabel}>CARRY IT WITH YOU</Text>
+        <Text style={styles.sectionSub}>Choose whether this thought should gently return later.</Text>
         <View style={styles.notifPills}>
           {(['off', 'daily', 'thrice'] as NotifPref[]).map(p => {
             const active = p === notifPref;
@@ -1042,6 +1395,7 @@ function AffirmationsPage({
             Notifications require a standalone build (EAS / TestFlight / Play Store). They are inactive in Expo Go.
           </Text>
         ) : null}
+        <PageClosing accent="#9DC7AC" glyph="◌" label="ONE THOUGHT · ONE DAY" />
       </ScrollView>
     </AmbientPageShell>
   );
@@ -1150,11 +1504,17 @@ function MoodPage({
       <SubHeader title="Mood" accent="#8FB8DE" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <GlowCard accent="#8FB8DE" style={{ padding: 16, marginTop: 12 }}>
-          <Text style={[styles.sectionLabel, { marginTop: 0 }]}>TODAY</Text>
-          <Text style={styles.sectionSub}>
-            A 5-second check-in. Tap again anytime today to change it.
-          </Text>
+          <View style={styles.moodHeroHeading}>
+            <View>
+              <Text style={styles.moodHeroKicker}>TODAY’S WEATHER</Text>
+              <Text style={styles.moodHeroPrompt}>
+                {moodToday ? `Feeling ${moodLabel(moodToday.value).toLowerCase()}` : 'What is here right now?'}
+              </Text>
+            </View>
+            <Text style={styles.moodHeroStatus}>{moodToday ? 'CHECKED IN' : '5 SECONDS'}</Text>
+          </View>
           <View style={styles.moodRow}>
+            <View style={styles.moodHorizonLine} pointerEvents="none" />
             {[1, 2, 3, 4, 5].map(v => {
               const active = moodToday?.value === v;
               return (
@@ -1176,6 +1536,9 @@ function MoodPage({
                     },
                   ]}
                 >
+                  {active ? (
+                    <View style={[styles.moodActiveHalo, { borderColor: MOOD_COLORS[v - 1] + '55' }]} />
+                  ) : null}
                   <Text style={[styles.moodValue, { color: MOOD_COLORS[v - 1] }]}>{v}</Text>
                   <Text style={[styles.moodLabel, { color: active ? MOOD_COLORS[v - 1] : '#ffffff88' }]}>
                     {MOOD_LABELS[v - 1]}
@@ -1606,16 +1969,31 @@ function GratitudePage({
   return (
     <AmbientPageShell accent="#E0A470">
       <SubHeader title="Gratitude" accent="#E0A470" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.subBody, subBodyPad]}
+        showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
+      >
         <Text style={styles.sectionLabel}>TODAY</Text>
         <Text style={styles.sectionSub}>
           {savedToday
             ? 'Saved for today. Add another if more comes to mind.'
             : "One thing you appreciate, named daily, shifts attention toward what's working. Saved only on this device."}
         </Text>
-        <GlowCard accent="#E0A470" style={{ marginTop: 10 }}>
+        <GlowCard accent="#E0A470" style={styles.journalSheet}>
+          <View style={styles.journalSheetHeading}>
+            <View>
+              <Text style={styles.journalSheetKicker}>A NOTE FROM TODAY</Text>
+              <Text style={styles.journalSheetDate}>
+                {new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}
+              </Text>
+            </View>
+            <Text style={styles.journalFlower}>❀</Text>
+          </View>
+          <View style={styles.journalRule} pointerEvents="none" />
           <TextInput
-            style={styles.rantInput}
+            style={[styles.rantInput, styles.journalInput]}
+            accessibilityLabel="Gratitude entry"
             placeholder={placeholder}
             placeholderTextColor="#ffffff77"
             value={text}
@@ -1699,7 +2077,8 @@ function GratitudePage({
                 })}
               </Text>
               {items.map(g => (
-                <View key={g.ts} style={styles.gratItem}>
+                <View key={g.ts} style={[styles.gratItem, styles.gratitudeSlip]}>
+                  <Text style={styles.gratitudeQuote}>“</Text>
                   <Text style={styles.gratItemText}>{g.text}</Text>
                   <TouchableOpacity
                     onPress={() => onDelete(g.ts)}
@@ -1774,16 +2153,27 @@ function RantPage({
   return (
     <AmbientPageShell accent="#D68097">
       <SubHeader title="Release the Noise" accent="#D68097" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>A PRIVATE PLACE</Text>
-        <Text style={styles.sectionSub}>
-          Pour out what is heavy. Keep it only if it helps.
-        </Text>
-        <GlowCard accent="#D68097" style={{ marginTop: 10 }}>
+      <ScrollView
+        contentContainerStyle={[styles.subBody, subBodyPad]}
+        showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
+      >
+        <GlowCard accent="#D68097" style={styles.releaseSheet}>
+          <View style={styles.releaseSheetTop}>
+            <View style={styles.releaseCloudMark}>
+              <View style={[styles.releaseCloudDot, { width: 18 }]} />
+              <View style={[styles.releaseCloudDot, { width: 12, marginLeft: -4, opacity: 0.55 }]} />
+              <View style={[styles.releaseCloudDot, { width: 7, marginLeft: 5, opacity: 0.25 }]} />
+            </View>
+            <Text style={styles.releaseSheetMeta}>UNFILTERED · PRIVATE</Text>
+            <Text style={styles.releaseCount}>{text.length} / 4000</Text>
+          </View>
+          <View style={styles.releaseRule} />
           <TextInput
-            style={styles.rantInput}
-            placeholder="Let it out…"
-            placeholderTextColor="#ffffff66"
+            style={[styles.rantInput, styles.releaseInput]}
+            accessibilityLabel="Private release entry"
+            placeholder="What feels loud right now?"
+            placeholderTextColor="#ffffff88"
             value={text}
             onChangeText={setText}
             multiline
@@ -1791,11 +2181,14 @@ function RantPage({
           />
         </GlowCard>
         {!text.trim() ? (
-          <View style={styles.rantChipsRow}>
-            {RANT_PROMPTS.map(p => (
-              <PromptChip key={p} label={p} accent="#D68097" onPress={() => setText(p + ' ')} />
-            ))}
-          </View>
+          <>
+            <Text style={styles.releasePromptLabel}>NEED A STARTING THREAD?</Text>
+            <View style={styles.rantChipsRow}>
+              {RANT_PROMPTS.map(p => (
+                <PromptChip key={p} label={p} accent="#D68097" onPress={() => setText(p + ' ')} />
+              ))}
+            </View>
+          </>
         ) : null}
         <View style={styles.rantActionsRow}>
           <ActionPill
@@ -1812,9 +2205,12 @@ function RantPage({
             onPress={commit}
           />
         </View>
-        <Text style={styles.bugAppInfoHint}>
-          Stays on this device. Shared with AI Insights only if you opt in there.
-        </Text>
+        <View style={styles.releasePrivacyBar}>
+          <ShieldCheck size={15} color="#D68097" weight="duotone" />
+          <Text style={styles.releasePrivacyText}>
+            Stays here. AI Insights sees it only if you explicitly opt in there.
+          </Text>
+        </View>
         {justKept ? (
           <TouchableOpacity
             onPress={onOpenGrounding}
@@ -1839,7 +2235,8 @@ function RantPage({
           />
         ) : (
           entries.map(r => (
-            <View key={r.ts} style={styles.gratItem}>
+            <View key={r.ts} style={[styles.gratItem, styles.releaseNote]}>
+              <View style={styles.releaseNoteFold} pointerEvents="none" />
               <TouchableOpacity
                 style={{ flex: 1 }}
                 onPress={() => toggleExpanded(r.ts)}
@@ -1904,14 +2301,28 @@ function ManifestationPage({
   return (
     <AmbientPageShell accent="#B39BE0">
       <SubHeader title="Manifestation" accent="#B39BE0" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.subBody, subBodyPad]}
+        showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
+      >
         <Text style={styles.sectionLabel}>NEW INTENTION</Text>
         <Text style={styles.sectionSub}>
           Writing what you're calling in clarifies it. Mark it manifested when it lands.
         </Text>
         <GlowCard accent="#B39BE0" style={{ marginTop: 10 }}>
+          <View style={styles.manifestComposerTop}>
+            <View style={styles.manifestSeed}>
+              <Text style={styles.manifestSeedGlyph}>✷</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.manifestComposerKicker}>PLANT AN INTENTION</Text>
+              <Text style={styles.manifestComposerHint}>Specific enough to remember. Open enough to breathe.</Text>
+            </View>
+          </View>
           <TextInput
             style={[styles.rantInput, { minHeight: 90 }]}
+            accessibilityLabel="New intention"
             placeholder="I am calling in…"
             placeholderTextColor="#ffffff77"
             value={text}
@@ -1957,6 +2368,7 @@ function ManifestationPage({
             ))}
           </>
         ) : null}
+        <PageClosing accent="#B39BE0" glyph="✷" label="HELD HERE · UNTIL IT ARRIVES" />
       </ScrollView>
     </AmbientPageShell>
   );
@@ -1972,7 +2384,12 @@ function ManifestRow({
   const fmtDay = (ts: number) =>
     new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return (
-    <View style={styles.gratItem}>
+    <View style={[
+      styles.gratItem,
+      styles.manifestOrbitItem,
+      item.manifested && styles.manifestArrived,
+    ]}>
+      <View style={[styles.manifestOrbitLine, item.manifested && { backgroundColor: '#D9BE7A55' }]} />
       <TouchableOpacity
         onPress={() => onToggle(item.ts)}
         activeOpacity={0.8}
@@ -2054,6 +2471,11 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
             accent={current.color}
             style={styles.groundStepCard}
           >
+            <View style={styles.groundCompass} pointerEvents="none">
+              <View style={[styles.groundRing, styles.groundRingOuter, { borderColor: current.color + '24' }]} />
+              <View style={[styles.groundRing, styles.groundRingMiddle, { borderColor: current.color + '32' }]} />
+              <View style={[styles.groundRing, styles.groundRingInner, { borderColor: current.color + '44' }]} />
+            </View>
             <Text style={styles.groundStepLabel}>STEP {step + 1} OF {GROUND_STEPS.length}</Text>
             <Text style={[styles.groundBigNum, styles.groundStepNum, { color: current.color }]}>
               {current.num}
@@ -2066,6 +2488,10 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
           </GlowCard>
         ) : (
           <GlowCard accent="#8F97DE" style={styles.groundStepCard}>
+            <View style={styles.groundCompass} pointerEvents="none">
+              <View style={[styles.groundRing, styles.groundRingOuter, { borderColor: '#8F97DE24' }]} />
+              <View style={[styles.groundRing, styles.groundRingMiddle, { borderColor: '#8F97DE32' }]} />
+            </View>
             <Text style={styles.groundStepLabel}>COMPLETE</Text>
             <Text style={styles.groundGuide}>
               You are here. Take one more slow breath before you go.
@@ -2110,6 +2536,7 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
             you a little more firmly to the present.
           </Text>
         ) : null}
+        <PageClosing accent="#8F97DE" glyph="·" label="INHALE · EXHALE · HERE" />
       </ScrollView>
     </AmbientPageShell>
   );
@@ -2170,8 +2597,11 @@ function SupportPage({ onBack }: { onBack: () => void }) {
       <SubHeader title="Support" accent="#d9b35c" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <GlowCard accent="#d9b35c" style={{ padding: 22, marginTop: 8, alignItems: 'center' }}>
-          <Text style={styles.supportEmoji}>☕</Text>
-          <Text style={styles.supportHeadline}>Built by one person</Text>
+          <View style={styles.supportSeal}>
+            <Coffee size={28} color="#D9BE7A" weight="duotone" />
+          </View>
+          <Text style={styles.supportKicker}>A NOTE FROM THE MAKER</Text>
+          <Text style={styles.supportHeadline}>Built slowly, by one person</Text>
           <Text style={styles.supportText}>
             Simply Ambient is built and maintained by one person. If it's brought you peace and
             you'd like to see more, a small donation directly funds the features below.
@@ -2180,14 +2610,19 @@ function SupportPage({ onBack }: { onBack: () => void }) {
             onPress={() => Linking.openURL(SUPPORT_URL).catch(() => {})}
             style={styles.supportBtn}
             activeOpacity={0.85}
+            accessibilityRole="link"
+            accessibilityLabel="Support Simply Ambient and its next features"
           >
-            <Text style={styles.supportBtnText}>BUY A COFFEE</Text>
+            <Text style={styles.supportBtnText}>Support the next chapter</Text>
           </TouchableOpacity>
         </GlowCard>
 
         {ROADMAP.map(group => (
-          <View key={group.phase}>
-            <Text style={styles.sectionLabel}>{group.phase}</Text>
+          <View key={group.phase} style={styles.roadmapGroup}>
+            <View style={styles.roadmapGroupHeader}>
+              <Text style={styles.sectionLabel}>{group.phase}</Text>
+              <Text style={styles.roadmapGroupCount}>{group.items.length}</Text>
+            </View>
             {group.items.map(item => (
               <View key={item.title} style={styles.roadmapItem}>
                 {group.shipped ? (
@@ -2231,92 +2666,87 @@ function SupportPage({ onBack }: { onBack: () => void }) {
 //   Safety & Disclaimer
 // ===========================================================================
 
+function SafetyPanel({
+  number, title, accent, children,
+}: {
+  number: string;
+  title: string;
+  accent: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <GlowCard accent={accent} quiet style={styles.safetyPanel}>
+      <View style={styles.safetyPanelHeading}>
+        <Text style={[styles.safetyPanelNumber, { color: accent }]}>{number}</Text>
+        <Text style={styles.safetyPanelTitle}>{title}</Text>
+      </View>
+      {children}
+    </GlowCard>
+  );
+}
+
 export function SafetyContent() {
   return (
-    <>
-      <Text style={styles.sectionLabel}>HEARING SAFETY</Text>
-      <Text style={styles.safetyBody}>
-        Always begin at a low volume and raise gradually only if needed. Sustained
-        listening through headphones can damage hearing at high volumes regardless
-        of frequency. If anything feels piercing, sharp, or uncomfortable, stop
-        immediately and lower the volume.
-      </Text>
+    <View style={styles.safetyPanelStack}>
+      <SafetyPanel number="01" title="Listen gently" accent="#8FB8DE">
+        <Text style={styles.safetyBody}>
+          Always begin at a low volume and raise gradually only if needed. Sustained
+          listening through headphones can damage hearing at high volumes regardless
+          of frequency. If anything feels piercing, sharp, or uncomfortable, stop
+          immediately and lower the volume.
+        </Text>
+      </SafetyPanel>
 
-      <Text style={styles.sectionLabel}>NOT MEDICAL ADVICE</Text>
-      <Text style={styles.safetyBody}>
-        Simply Ambient is a wellness and mindfulness tool. It is not a medical device
-        and is not intended to diagnose, treat, cure, or prevent any disease, mental
-        health condition, or physiological state. Frequencies, breathwork, chakras,
-        horoscopes, mantras, mudras, and AI reflections in this app are presented for
-        contemplative and educational use only. They are not a substitute for
-        professional medical, psychological, or psychiatric care.
-      </Text>
+      <SafetyPanel number="02" title="Know your body" accent="#E0A470">
+        <Text style={styles.safetyBody}>
+          Simply Ambient is a wellness and mindfulness tool, not a medical device or
+          a substitute for professional medical, psychological, or psychiatric care.
+          Its practices are presented for contemplative and educational use only.
+        </Text>
+        <Text style={styles.safetyMiniHeading}>TALK WITH A PHYSICIAN FIRST</Text>
+        {[
+          'Pregnancy',
+          'A pacemaker',
+          'A history of seizures or epilepsy',
+          'A heart condition',
+          'Proneness to dissociation',
+          'Medication that affects the nervous system',
+        ].map(item => (
+          <View key={item} style={styles.privacyRow}>
+            <Text style={[styles.privacyCheck, { color: '#E0A470' }]}>•</Text>
+            <Text style={styles.privacyText}>{item}</Text>
+          </View>
+        ))}
+        <Text style={styles.safetyMiniHeading}>STOP AND SEEK CARE</Text>
+        <Text style={styles.safetyBody}>
+          If you notice dizziness, nausea, headache, ringing in the ears, chest pain,
+          panic, or any other unusual symptom. Never use the app while driving,
+          operating machinery, or anywhere focused attention is required.
+        </Text>
+      </SafetyPanel>
 
-      <Text style={styles.sectionLabel}>WHEN NOT TO USE</Text>
-      <Text style={styles.safetyBody}>
-        Talk with a physician first if any of these apply:
-      </Text>
-      {[
-        'Pregnancy',
-        'A pacemaker',
-        'A history of seizures or epilepsy',
-        'A heart condition',
-        'Proneness to dissociation',
-        'Medication that affects the nervous system',
-      ].map(item => (
-        <View key={item} style={styles.privacyRow}>
-          <Text style={[styles.privacyCheck, { color: '#9aa0b4' }]}>•</Text>
-          <Text style={styles.privacyText}>{item}</Text>
-        </View>
-      ))}
-      <Text style={[styles.safetyBody, { marginTop: 10 }]}>
-        Stop and seek care if you notice:
-      </Text>
-      {[
-        'Dizziness',
-        'Nausea',
-        'Headache',
-        'Ringing in the ears',
-        'Chest pain',
-        'Panic',
-        'Any other unusual symptom',
-      ].map(item => (
-        <View key={item} style={styles.privacyRow}>
-          <Text style={[styles.privacyCheck, { color: '#9aa0b4' }]}>•</Text>
-          <Text style={styles.privacyText}>{item}</Text>
-        </View>
-      ))}
-      <Text style={[styles.safetyBody, { marginTop: 10 }]}>
-        Do not use this app while driving, operating machinery, or in any context
-        where focused attention is required.
-      </Text>
+      <SafetyPanel number="03" title="Your data, plainly" accent="#9DC7AC">
+        <Text style={styles.safetyBody}>
+          Journals, mood, manifestations, and profile stay on this device. Horoscopes
+          send only sign and period. Crash reports contain device/app diagnostics, not
+          journals. AI Insights sends only sources you toggle on and only after you tap
+          analyse. Feedback travels through a simple mail relay to the developer.
+        </Text>
+      </SafetyPanel>
 
-      <Text style={styles.sectionLabel}>YOUR DATA</Text>
-      <Text style={styles.safetyBody}>
-        All journal data (mood, gratitude, rants, manifestations, profile) is stored
-        only on this device. Fetching a horoscope sends only your sign and the period.
-        If the app crashes, an anonymous diagnostic (device model, OS and app version,
-        stack trace) is sent so the bug can be fixed; your journals stay out of it.
-        Beyond that, data leaves the device only when you explicitly tap an analyse
-        button on the AI Insights page, in which case the sources you have toggled on
-        are sent to Google Gemini using your own API key. You control which sources
-        are shared. Messages you send from the Feedback page travel through a mail
-        relay (formsubmit.co) to reach the developer.
-      </Text>
+      <SafetyPanel number="04" title="Terms of use" accent="#9AA0B4">
+        <Text style={styles.safetyBody}>
+          This app is provided “as is” without warranty. Use it at your own risk. By
+          using Simply Ambient you accept that the developer is not liable for direct
+          or indirect harm, including hearing damage, arising from use. If you do not
+          agree, do not use the app.
+        </Text>
+      </SafetyPanel>
 
-      <Text style={styles.sectionLabel}>NO WARRANTY</Text>
-      <Text style={styles.safetyBody}>
-        This app is provided "as is" without warranty of any kind. Use is at your own
-        risk. By using Simply Ambient you acknowledge these terms and accept that the
-        developer is not liable for any direct or indirect harm, including hearing
-        damage, that may arise from use of the app. If you do not agree, do not use
-        the app.
-      </Text>
-
-      <Text style={[styles.sectionSub, { marginTop: 18 }]}>
+      <Text style={styles.safetyClosing}>
         This app should always feel gentle. If it ever does not, pause and rest.
       </Text>
-    </>
+    </View>
   );
 }
 
@@ -2338,6 +2768,7 @@ function LinkConfirmModal({ url, onClose }: { url: string | null; onClose: () =>
               onPress={onClose}
               style={styles.linkConfirmCancelBtn}
               accessibilityLabel="Cancel"
+              accessibilityRole="button"
             >
               <Text style={styles.linkConfirmCancelText}>Cancel</Text>
             </TouchableOpacity>
@@ -2349,6 +2780,7 @@ function LinkConfirmModal({ url, onClose }: { url: string | null; onClose: () =>
               }}
               style={styles.linkConfirmOpenBtn}
               accessibilityLabel="Open link in browser"
+              accessibilityRole="link"
             >
               <Text style={styles.linkConfirmOpenText}>Open</Text>
             </TouchableOpacity>
@@ -2400,6 +2832,32 @@ function SettingsPage({
     <AmbientPageShell accent="#d9b35c">
       <SubHeader title="Settings" accent="#d9b35c" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
+        <GlowCard accent={singleColor ?? '#8F97DE'} style={styles.settingsPreview}>
+          <LinearGradient
+            colors={
+              singleColor
+                ? [singleColor, singleColor, '#080919']
+                : ['#8F97DE88', '#B39BE044', '#0A1320']
+            }
+            locations={[0, 0.52, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.settingsPreviewOrbLarge} />
+          <View style={styles.settingsPreviewOrbSmall} />
+          <View style={styles.settingsPreviewCopy}>
+            <Text style={styles.settingsPreviewKicker}>YOUR ATMOSPHERE</Text>
+            <Text style={styles.settingsPreviewTitle}>
+              {on
+                ? SINGLE_COLOR_CHOICES.find(c => c.hex === singleColor)?.name ?? 'Still color'
+                : 'Moves with the sound'}
+            </Text>
+            <Text style={styles.settingsPreviewHint}>{on ? 'Held still' : 'Frequency-responsive'}</Text>
+          </View>
+          <View style={styles.settingsPreviewStatus}>
+            <Text style={styles.settingsPreviewStatusText}>{on ? 'STILL' : 'LIVE'}</Text>
+          </View>
+        </GlowCard>
+
         <Text style={styles.sectionLabel}>BACKGROUND</Text>
         <Text style={styles.sectionSub}>
           The backdrop normally shifts color with the active frequency band.
@@ -2552,6 +3010,18 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
     <AmbientPageShell accent="#9aa0b4">
       <SubHeader title="Safety & Disclaimer" accent="#9aa0b4" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
+        <GlowCard accent="#9DC7AC" style={styles.safetyHero}>
+          <View style={styles.safetyShieldWrap}>
+            <ShieldCheck size={32} color="#9DC7AC" weight="duotone" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.safetyHeroKicker}>THE THREE THINGS TO REMEMBER</Text>
+            <Text style={styles.safetyHeroTitle}>Low volume. Stop if it hurts. Stay present.</Text>
+            <Text style={styles.safetyHeroCopy}>
+              Never listen while driving or doing anything that needs your full attention.
+            </Text>
+          </View>
+        </GlowCard>
         <SafetyContent />
 
         <Text style={styles.sectionLabel}>PRIVACY POLICY</Text>
@@ -2592,6 +3062,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
           onPress={() => setConfirmWipe(true)}
           style={styles.wipeBtn}
           accessibilityLabel="Wipe all data on this device"
+          accessibilityRole="button"
         >
           <Text style={styles.wipeBtnText}>WIPE ALL DATA</Text>
         </TouchableOpacity>
@@ -2619,6 +3090,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
                 onPress={() => setConfirmWipe(false)}
                 style={styles.linkConfirmCancelBtn}
                 accessibilityLabel="Cancel wipe"
+                accessibilityRole="button"
               >
                 <Text style={styles.linkConfirmCancelText}>Cancel</Text>
               </TouchableOpacity>
@@ -2627,6 +3099,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
                 onPress={wipeAllData}
                 style={[styles.linkConfirmOpenBtn, { backgroundColor: '#E07A66' }]}
                 accessibilityLabel="Confirm wipe all data"
+                accessibilityRole="button"
               >
                 <Text style={styles.linkConfirmOpenText}>WIPE</Text>
               </TouchableOpacity>
@@ -2745,21 +3218,28 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
   return (
     <AmbientPageShell accent="#D68097">
       <SubHeader title="Feedback" accent="#D68097" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.subBody, subBodyPad]}
+        showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
+      >
         <Text style={styles.sectionLabel}>MESSAGE TYPE</Text>
-        <View style={styles.notifPills}>
+        <View style={styles.feedbackStampRow}>
           {MESSAGE_KINDS.map(k => (
             <TouchableOpacity
               key={k.id}
               onPress={() => setKind(k.id)}
               style={[
-                styles.notifPill,
+                styles.feedbackStamp,
                 kind === k.id && { borderColor: '#D68097', backgroundColor: '#D6809722' },
               ]}
               accessibilityRole="radio"
               accessibilityState={{ selected: kind === k.id }}
             >
-              <Text style={[styles.notifPillText, kind === k.id && { color: '#fff' }]}>
+              <Text style={[styles.feedbackStampMark, kind === k.id && { color: '#D68097' }]}>
+                {k.id === 'feedback' ? '♡' : k.id === 'idea' ? '✦' : '!'}
+              </Text>
+              <Text style={[styles.feedbackStampText, kind === k.id && { color: '#fff' }]}>
                 {k.label}
               </Text>
             </TouchableOpacity>
@@ -2771,9 +3251,16 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
           Delivered to the developer through a simple mail relay. If that fails,
           your mail app opens with everything pre-filled.
         </Text>
-        <GlowCard accent="#D68097" style={{ marginTop: 10 }}>
+        <GlowCard accent="#D68097" style={styles.feedbackPostcard}>
+          <View style={styles.feedbackPostcardTop}>
+            <Text style={styles.feedbackPostcardFrom}>A NOTE FOR SIMPLY AMBIENT</Text>
+            <View style={styles.feedbackPostmark}>
+              <Text style={styles.feedbackPostmarkText}>SA</Text>
+            </View>
+          </View>
           <TextInput
             style={styles.bugSubjectInput}
+            accessibilityLabel="Message subject"
             placeholder="Subject"
             placeholderTextColor="#ffffff77"
             value={subject}
@@ -2783,6 +3270,7 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
           <View style={styles.bugInputDivider} />
           <TextInput
             style={[styles.rantInput, { minHeight: 140 }]}
+            accessibilityLabel="Message body"
             placeholder={
               kind === 'bug'
                 ? 'Describe what happened, what you expected, and what device you’re on…'
@@ -2825,11 +3313,14 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
           disabled={sending}
           style={[styles.bugSendBtn, sending && { opacity: 0.5 }]}
           activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Send this note"
+          accessibilityState={{ disabled: sending }}
         >
           {sending ? (
             <ActivityIndicator color="#0B0B1F" />
           ) : (
-            <Text style={styles.bugSendText}>SEND</Text>
+            <Text style={styles.bugSendText}>Send this note  →</Text>
           )}
         </TouchableOpacity>
         {sentInline ? (
@@ -2881,7 +3372,7 @@ function SunSignCard({
 }) {
   return (
     <GlowCard accent="#B39BE0" style={[styles.sunSignCard, { padding: 14 }]}>
-      <Text style={[styles.sunSignGlyph, { color: sign.color }]}>{sign.glyph}</Text>
+      <Text style={[styles.sunSignGlyph, { color: sign.color }]}>{sign.glyph + '\uFE0E'}</Text>
       <View style={{ flex: 1 }}>
         <Text style={styles.compatName}>{sign.name}</Text>
         <Text style={styles.compatMeta}>{sign.element} · {sign.qualities}</Text>
@@ -2894,7 +3385,13 @@ function SunSignCard({
   );
 }
 
-function ProfilePage({ onBack }: { onBack: () => void }) {
+function ProfilePage({
+  onBack,
+  onProfileChange,
+}: {
+  onBack: () => void;
+  onProfileChange?: (profile: Profile) => void;
+}) {
   const subBodyPad = useSubBodyPad();
   const [profile, setProfile] = useState<Profile>({});
   const [answers, setAnswers] = useState<Array<0 | 1 | null>>([null, null, null, null]);
@@ -2913,6 +3410,7 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
 
   function persist(next: Profile) {
     setProfile(next);
+    onProfileChange?.(next);
     AsyncStorage.setItem(STORAGE_PROFILE, JSON.stringify(next)).catch(() => {});
   }
 
@@ -2947,48 +3445,85 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
   return (
     <AmbientPageShell accent="#B39BE0">
       <SubHeader title="Profile" accent="#B39BE0" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>YOU</Text>
+      <ScrollView
+        contentContainerStyle={[styles.subBody, subBodyPad]}
+        showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
+      >
+        <GlowCard accent="#B39BE0" style={styles.identityAtlas}>
+          <View style={styles.identityCrest}>
+            <LinearGradient
+              colors={['#B39BE044', '#B39BE010']}
+              style={StyleSheet.absoluteFill}
+            />
+            <Text style={styles.identityInitial}>
+              {profile.name?.trim()?.charAt(0).toUpperCase() || sunSign?.glyph || '·'}
+            </Text>
+          </View>
+          <View style={styles.identityCopy}>
+            <Text style={styles.identityKicker}>YOUR PRIVATE ATLAS</Text>
+            <Text style={styles.identityName}>{profile.name?.trim() || 'Begin with your name'}</Text>
+            <View style={styles.identityTokens}>
+              <Text style={styles.identityToken}>{sunSign?.name ?? 'SUN · OPEN'}</Text>
+              <Text style={styles.identityToken}>{profile.mbti ?? 'TYPE · OPEN'}</Text>
+            </View>
+          </View>
+        </GlowCard>
+
+        <Text style={styles.sectionLabel}>YOUR COORDINATES</Text>
         <Text style={styles.sectionSub}>
           Used for your natal chart and compatibility. Stored only on this device.
         </Text>
 
-        <Text style={styles.fieldLabel}>Name</Text>
-        <TextInput
-          style={styles.fieldInput}
-          placeholder="Your name"
-          placeholderTextColor="#ffffff77"
-          value={profile.name ?? ''}
-          onChangeText={t => update('name', t)}
-          maxLength={60}
-        />
-        <Text style={styles.fieldLabel}>Birth date</Text>
-        <TextInput
-          style={styles.fieldInput}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor="#ffffff77"
-          value={profile.birthDate ?? ''}
-          onChangeText={t => update('birthDate', t)}
-          maxLength={10}
-        />
-        <Text style={styles.fieldLabel}>Birth time (optional, for natal chart)</Text>
-        <TextInput
-          style={styles.fieldInput}
-          placeholder="HH:MM"
-          placeholderTextColor="#ffffff77"
-          value={profile.birthTime ?? ''}
-          onChangeText={t => update('birthTime', t)}
-          maxLength={5}
-        />
-        <Text style={styles.fieldLabel}>Birth location</Text>
-        <TextInput
-          style={styles.fieldInput}
-          placeholder="City, country"
-          placeholderTextColor="#ffffff77"
-          value={profile.birthLocation ?? ''}
-          onChangeText={t => update('birthLocation', t)}
-          maxLength={120}
-        />
+        <GlowCard accent="#B39BE0" quiet style={styles.profileCoordinates}>
+          <Text style={styles.fieldLabel}>Name</Text>
+          <TextInput
+            style={styles.fieldInput}
+            accessibilityLabel="Your name"
+            placeholder="Your name"
+            placeholderTextColor="#ffffff77"
+            value={profile.name ?? ''}
+            onChangeText={t => update('name', t)}
+            maxLength={60}
+          />
+          <View style={styles.profileFieldRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>Birth date</Text>
+              <TextInput
+                style={styles.fieldInput}
+                accessibilityLabel="Your birth date"
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#ffffff77"
+                value={profile.birthDate ?? ''}
+                onChangeText={t => update('birthDate', t)}
+                maxLength={10}
+              />
+            </View>
+            <View style={{ width: 96 }}>
+              <Text style={styles.fieldLabel}>Birth time</Text>
+              <TextInput
+                style={styles.fieldInput}
+                accessibilityLabel="Your birth time"
+                placeholder="HH:MM"
+                placeholderTextColor="#ffffff77"
+                value={profile.birthTime ?? ''}
+                onChangeText={t => update('birthTime', t)}
+                maxLength={5}
+              />
+            </View>
+          </View>
+          <Text style={styles.fieldLabel}>Birth location</Text>
+          <TextInput
+            style={styles.fieldInput}
+            accessibilityLabel="Your birth location"
+            placeholder="City, country"
+            placeholderTextColor="#ffffff77"
+            value={profile.birthLocation ?? ''}
+            onChangeText={t => update('birthLocation', t)}
+            maxLength={120}
+          />
+          <Text style={styles.profilePrivacyLine}>LOCKED TO THIS DEVICE · NO ACCOUNT</Text>
+        </GlowCard>
 
         {sunSign ? (
           <SunSignCard sign={sunSign} caption="Your sun sign, from your birth date." />
@@ -3012,6 +3547,9 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
                   key={idx}
                   activeOpacity={0.85}
                   onPress={() => setAnswer(i, idx as 0 | 1)}
+                  accessibilityRole="radio"
+                  accessibilityLabel={`${q.q} ${q.options[idx]}`}
+                  accessibilityState={{ selected: active }}
                   style={[
                     styles.mbtiOption,
                     active && { borderColor: '#B39BE0', backgroundColor: '#B39BE022' },
@@ -3060,6 +3598,60 @@ function ProfilePage({ onBack }: { onBack: () => void }) {
 // astro-seek's free natal chart calculator.
 const NATAL_CALCULATOR_URL = 'https://horoscopes.astro-seek.com/birth-chart-horoscope-online';
 
+function NatalWheel({ sign }: { sign: Zodiac | null }) {
+  const size = 236;
+  const center = size / 2;
+  const ticks = Array.from({ length: 12 }, (_, i) => {
+    const angle = (i * Math.PI * 2) / 12 - Math.PI / 2;
+    const inner = 91;
+    const outer = 104;
+    return {
+      x1: center + Math.cos(angle) * inner,
+      y1: center + Math.sin(angle) * inner,
+      x2: center + Math.cos(angle) * outer,
+      y2: center + Math.sin(angle) * outer,
+    };
+  });
+  const accent = sign?.color ?? '#B39BE0';
+
+  return (
+    <GlowCard accent={accent} style={styles.natalWheelCard}>
+      <Text style={styles.natalWheelKicker}>THE SKY, HONESTLY KNOWN</Text>
+      <View style={styles.natalWheelWrap}>
+        <Svg width={size} height={size}>
+          <Circle cx={center} cy={center} r={105} fill="none" stroke={accent + '42'} strokeWidth={1} />
+          <Circle cx={center} cy={center} r={78} fill="none" stroke={accent + '26'} strokeWidth={1} />
+          <Circle cx={center} cy={center} r={51} fill={accent + '0D'} stroke={accent + '34'} strokeWidth={1} />
+          {ticks.map((tick, i) => (
+            <Line
+              key={i}
+              {...tick}
+              stroke={i === 0 && sign ? accent : 'rgba(255,255,255,0.20)'}
+              strokeWidth={i === 0 && sign ? 3 : 1}
+            />
+          ))}
+          <Line x1={center} y1={13} x2={center} y2={40} stroke={accent + '55'} strokeWidth={1} />
+          <Line x1={center} y1={196} x2={center} y2={223} stroke={accent + '30'} strokeWidth={1} />
+          <Line x1={13} y1={center} x2={40} y2={center} stroke={accent + '30'} strokeWidth={1} />
+          <Line x1={196} y1={center} x2={223} y2={center} stroke={accent + '30'} strokeWidth={1} />
+        </Svg>
+        <View style={styles.natalWheelCenter}>
+          <Text style={[styles.natalWheelGlyph, { color: accent }]}>
+            {sign ? sign.glyph + '\uFE0E' : '·'}
+          </Text>
+          <Text style={styles.natalWheelSign}>{sign?.name ?? 'Sun unknown'}</Text>
+          <Text style={styles.natalWheelMeta}>{sign ? `${sign.element} · SUN SIGN` : 'ADD A BIRTH DATE'}</Text>
+        </View>
+      </View>
+      <Text style={styles.natalWheelCaption}>
+        {sign
+          ? 'Only your Sun is highlighted here. Planets and houses require a full chart calculation.'
+          : 'This wheel stays unfilled until your birth date gives us one honest point: your Sun sign.'}
+      </Text>
+    </GlowCard>
+  );
+}
+
 function NatalChartPage({ onBack }: { onBack: () => void }) {
   const subBodyPad = useSubBodyPad();
   const [profile, setProfile] = useState<Profile>({});
@@ -3078,16 +3670,7 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
     <AmbientPageShell accent="#B39BE0">
       <SubHeader title="Natal Chart" accent="#B39BE0" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
-        {sunSign ? (
-          <>
-            <Text style={styles.sectionLabel}>YOUR SUN SIGN</Text>
-            <SunSignCard
-              sign={sunSign}
-              showIntention
-              caption="Your Sun sign, computed from your birth date on this device."
-            />
-          </>
-        ) : null}
+        <NatalWheel sign={sunSign} />
 
         <Text style={styles.sectionLabel}>YOUR BIRTH DETAILS</Text>
         {profile.name?.trim() || profile.birthDate ? (
@@ -3202,10 +3785,14 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
           Frequencies tab. The sleep timer there can end a step for you.
         </Text>
         {SAMPLE_ROUTINES.map(r => (
-          <View
+          <GlowCard
             key={r.id}
-            style={[styles.routineCard, { borderColor: '#9DC7AC26' }]}
+            accent={r.color}
+            quiet
+            style={styles.routineCard}
           >
+            <Text style={[styles.routineBackdropGlyph, { color: r.color + '24' }]}>△</Text>
+            <Text style={[styles.routineEyebrow, { color: r.color }]}>SESSION PATH</Text>
             <View style={styles.routineTitleRow}>
               <Text style={[styles.routineName, { color: r.color }]}>{r.name}</Text>
               <Text style={styles.routineTotal}>
@@ -3213,14 +3800,19 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
               </Text>
             </View>
             <Text style={styles.routineDesc}>{r.description}</Text>
-            {r.steps.map((s, i) => (
-              <View key={i} style={styles.routineStep}>
-                <Text style={[styles.routineStepNum, { color: r.color }]}>{i + 1}</Text>
-                <Text style={styles.routineStepLabel}>{s.label}</Text>
-                <Text style={styles.routineStepTime}>{s.minutes} min</Text>
-              </View>
-            ))}
-          </View>
+            <View style={styles.routinePath}>
+              <View style={[styles.routinePathLine, { backgroundColor: r.color + '3A' }]} />
+              {r.steps.map((s, i) => (
+                <View key={i} style={styles.routineStep}>
+                  <View style={[styles.routineStepNode, { borderColor: r.color, backgroundColor: r.color + '22' }]}>
+                    <Text style={[styles.routineStepNum, { color: r.color }]}>{i + 1}</Text>
+                  </View>
+                  <Text style={styles.routineStepLabel}>{s.label}</Text>
+                  <Text style={styles.routineStepTime}>{s.minutes} min</Text>
+                </View>
+              ))}
+            </View>
+          </GlowCard>
         ))}
         <Text style={styles.notifHint}>
           Saved custom routines and automatic step changes are on the roadmap. See Support for
@@ -3269,24 +3861,34 @@ function SoundscapesPage({
         key={s.id}
         activeOpacity={0.85}
         onPress={() => onToggleSoundscape(s.id)}
+        accessibilityRole="button"
+        accessibilityLabel={`${active ? 'Stop' : 'Play'} ${s.name}. ${s.blurb}`}
+        accessibilityState={{ selected: active }}
         style={[
           styles.soundscapeCard,
+          { borderColor: s.color + '32' },
           active && {
             borderColor: s.color,
             backgroundColor: s.color + '18',
           },
         ]}
       >
-        <View style={[styles.soundscapeGlyphBox, { backgroundColor: s.color + '22', borderColor: s.color }]}>
-          <s.Icon size={22} color={s.color} weight="duotone" />
+        <LinearGradient
+          colors={[s.color + '22', 'rgba(25,26,48,0.94)', 'rgba(13,14,31,0.98)']}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.soundscapeTileTop}>
+          <View style={[styles.soundscapeGlyphBox, { backgroundColor: s.color + '22', borderColor: s.color + '77' }]}>
+            <s.Icon size={22} color={s.color} weight="duotone" />
+          </View>
+          <Text style={[styles.soundscapeSoon, active && { color: s.color, borderColor: s.color }]}>
+            {active ? 'STOP' : 'PLAY'}
+          </Text>
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={styles.soundscapeTileCopy}>
           <Text style={styles.soundscapeName}>{s.name}</Text>
-          <Text style={styles.soundscapeBlurb}>{s.blurb}</Text>
+          <Text style={styles.soundscapeBlurb} numberOfLines={2}>{s.blurb}</Text>
         </View>
-        <Text style={[styles.soundscapeSoon, active && { color: s.color }]}>
-          {active ? 'STOP' : 'PLAY'}
-        </Text>
       </TouchableOpacity>
     );
   };
@@ -3297,11 +3899,17 @@ function SoundscapesPage({
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>NATURAL AMBIENCE</Text>
         <Text style={styles.sectionSub}>
-          A soft ambient layer under your binaural tones, generated on your device.
+          A soft ambient layer under your binaural tones, built in and available offline.
           It follows you through the app in the mini player.
         </Text>
 
-        <GlowCard accent="#8FB8DE" style={{ padding: 14, marginBottom: 12 }}>
+        <GlowCard accent="#8FB8DE" style={styles.soundscapeHero}>
+          <View style={styles.soundscapeScene} pointerEvents="none">
+            <View style={styles.soundscapeMoon} />
+            <View style={[styles.soundscapeWave, { top: 52, width: '78%', opacity: 0.7 }]} />
+            <View style={[styles.soundscapeWave, { top: 62, width: '91%', opacity: 0.45 }]} />
+            <View style={[styles.soundscapeWave, { top: 72, width: '68%', opacity: 0.25 }]} />
+          </View>
           <View style={styles.soundscapeTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.soundscapeActiveLabel}>CURRENT</Text>
@@ -3351,10 +3959,10 @@ function SoundscapesPage({
         </GlowCard>
 
         <Text style={styles.sectionLabel}>NATURE</Text>
-        {natureScapes.map(renderCard)}
+        <View style={styles.soundscapeGrid}>{natureScapes.map(renderCard)}</View>
 
         <Text style={styles.sectionLabel}>STEADY NOISE</Text>
-        {noiseScapes.map(renderCard)}
+        <View style={styles.soundscapeGrid}>{noiseScapes.map(renderCard)}</View>
       </ScrollView>
     </AmbientPageShell>
   );
@@ -3436,7 +4044,31 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
   return (
     <AmbientPageShell accent="#D8A0B0">
       <SubHeader title="Compatibility" accent="#D8A0B0" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
+      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} automaticallyAdjustKeyboardInsets>
+        <GlowCard accent="#D8A0B0" style={styles.compatOrbitCard}>
+          <Text style={styles.compatOrbitKicker}>TWO ORBITS · ONE MEETING PLACE</Text>
+          <View style={styles.compatOrbitRow}>
+            <View style={[styles.compatOrbit, styles.compatOrbitSelf, { borderColor: selfSign?.color ?? '#B39BE0' }]}>
+              <Text style={[styles.compatOrbitGlyph, { color: selfSign?.color ?? '#B39BE0' }]}>
+                {selfSign ? selfSign.glyph + '\uFE0E' : '·'}
+              </Text>
+              <Text style={styles.compatOrbitName}>{self.name?.trim() || 'You'}</Text>
+            </View>
+            <View style={[styles.compatOrbit, styles.compatOrbitPartner, { borderColor: partnerSign?.color ?? '#D8A0B0' }]}>
+              <Text style={[styles.compatOrbitGlyph, { color: partnerSign?.color ?? '#D8A0B0' }]}>
+                {partnerSign ? partnerSign.glyph + '\uFE0E' : '?'}
+              </Text>
+              <Text style={styles.compatOrbitName}>{partner.name?.trim() || 'Them'}</Text>
+            </View>
+            <View style={styles.compatOrbitJoin}><Text style={styles.compatOrbitJoinText}>☌</Text></View>
+          </View>
+          <Text style={styles.compatOrbitHint}>
+            {selfSign && partnerSign
+              ? `${selfSign.element} meets ${partnerSign.element}. Your reflection is ready below.`
+              : 'Add two birth dates to reveal a simple element reflection.'}
+          </Text>
+        </GlowCard>
+
         <Text style={styles.sectionLabel}>YOUR PROFILE</Text>
         {self.name || self.birthDate ? (
           <View style={styles.compatCard}>
@@ -3456,42 +4088,54 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
 
         <Text style={styles.sectionLabel}>OTHER PERSON</Text>
         <Text style={styles.sectionSub}>Their birth details, stored only on this device.</Text>
-        <Text style={styles.fieldLabel}>Birth date (needed for the match)</Text>
-        <TextInput
-          style={styles.fieldInput}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor="#ffffff77"
-          value={partner.birthDate ?? ''}
-          onChangeText={t => updatePartner('birthDate', t)}
-          maxLength={10}
-        />
-        <Text style={styles.fieldLabel}>Name</Text>
-        <TextInput
-          style={styles.fieldInput}
-          placeholder="Their name"
-          placeholderTextColor="#ffffff77"
-          value={partner.name ?? ''}
-          onChangeText={t => updatePartner('name', t)}
-          maxLength={60}
-        />
-        <Text style={styles.fieldLabel}>Birth time (optional, saved for the full chart later)</Text>
-        <TextInput
-          style={styles.fieldInput}
-          placeholder="HH:MM"
-          placeholderTextColor="#ffffff77"
-          value={partner.birthTime ?? ''}
-          onChangeText={t => updatePartner('birthTime', t)}
-          maxLength={5}
-        />
-        <Text style={styles.fieldLabel}>Birth location (optional, saved for the full chart later)</Text>
-        <TextInput
-          style={styles.fieldInput}
-          placeholder="City, country"
-          placeholderTextColor="#ffffff77"
-          value={partner.birthLocation ?? ''}
-          onChangeText={t => updatePartner('birthLocation', t)}
-          maxLength={120}
-        />
+        <GlowCard accent="#D8A0B0" quiet style={styles.profileCoordinates}>
+          <Text style={styles.fieldLabel}>Birth date · needed for the match</Text>
+          <TextInput
+            style={styles.fieldInput}
+            accessibilityLabel="Other person's birth date"
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor="#ffffff77"
+            value={partner.birthDate ?? ''}
+            onChangeText={t => updatePartner('birthDate', t)}
+            maxLength={10}
+          />
+          <Text style={styles.fieldLabel}>Name</Text>
+          <TextInput
+            style={styles.fieldInput}
+            accessibilityLabel="Other person's name"
+            placeholder="Their name"
+            placeholderTextColor="#ffffff77"
+            value={partner.name ?? ''}
+            onChangeText={t => updatePartner('name', t)}
+            maxLength={60}
+          />
+          <View style={styles.profileFieldRow}>
+            <View style={{ width: 96 }}>
+              <Text style={styles.fieldLabel}>Birth time</Text>
+              <TextInput
+                style={styles.fieldInput}
+                accessibilityLabel="Other person's birth time"
+                placeholder="HH:MM"
+                placeholderTextColor="#ffffff77"
+                value={partner.birthTime ?? ''}
+                onChangeText={t => updatePartner('birthTime', t)}
+                maxLength={5}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fieldLabel}>Birth location</Text>
+              <TextInput
+                style={styles.fieldInput}
+                accessibilityLabel="Other person's birth location"
+                placeholder="City, country"
+                placeholderTextColor="#ffffff77"
+                value={partner.birthLocation ?? ''}
+                onChangeText={t => updatePartner('birthLocation', t)}
+                maxLength={120}
+              />
+            </View>
+          </View>
+        </GlowCard>
         {hasPartnerData ? (
           <TouchableOpacity
             onPress={clearPartner}
@@ -3511,7 +4155,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
               <View style={styles.compatSignsRow}>
                 <View style={styles.compatSignCol}>
                   <Text style={[styles.compatPairGlyph, { color: selfSign.color }]}>
-                    {selfSign.glyph}
+                    {selfSign.glyph + '\uFE0E'}
                   </Text>
                   <Text style={styles.compatName}>{selfSign.name}</Text>
                   <Text style={styles.compatMeta}>{selfSign.element}</Text>
@@ -3519,7 +4163,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
                 <Text style={styles.compatPairJoin}>+</Text>
                 <View style={styles.compatSignCol}>
                   <Text style={[styles.compatPairGlyph, { color: partnerSign.color }]}>
-                    {partnerSign.glyph}
+                    {partnerSign.glyph + '\uFE0E'}
                   </Text>
                   <Text style={styles.compatName}>{partnerSign.name}</Text>
                   <Text style={styles.compatMeta}>{partnerSign.element}</Text>
@@ -3775,7 +4419,11 @@ function InsightsPage({
   return (
     <AmbientPageShell accent="#8FB8DE">
       <SubHeader title="AI Insights" accent="#8FB8DE" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.subBody, subBodyPad]}
+        showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets
+      >
         {!hasKey ? (
           <>
             <GlowCard accent="#8FB8DE" style={{ marginTop: 16, padding: 22, alignItems: 'center' }}>
@@ -3800,7 +4448,15 @@ function InsightsPage({
           </>
         ) : null}
 
-        <Text style={styles.sectionLabel}>GEMINI API KEY</Text>
+        <GlowCard accent="#8FB8DE" quiet style={styles.aiIngredientsTray}>
+        <View style={styles.aiIngredientsHeading}>
+          <View>
+            <Text style={styles.aiIngredientsKicker}>INGREDIENTS FOR A READING</Text>
+            <Text style={styles.aiIngredientsTitle}>You decide what enters the room</Text>
+          </View>
+          <Text style={styles.aiIngredientsGlyph}>⌁</Text>
+        </View>
+        <Text style={[styles.sectionLabel, { marginTop: 18 }]}>GEMINI API KEY</Text>
         {hasKey ? (
           <View style={styles.settingRow}>
             <View style={{ flex: 1, paddingRight: 12 }}>
@@ -3829,6 +4485,7 @@ function InsightsPage({
         {!hasKey || keyInputOpen ? (
           <TextInput
             style={[styles.fieldInput, hasKey && { marginTop: 10 }]}
+            accessibilityLabel="Gemini API key"
             placeholder="paste your key here"
             placeholderTextColor="#ffffff77"
             value={keyDraft}
@@ -3924,6 +4581,7 @@ function InsightsPage({
         {!hasTarot ? (
           <Text style={styles.notifHint}>Draw a card in Horoscopes first.</Text>
         ) : null}
+        </GlowCard>
 
         {errorMsg ? <Text style={styles.notifWarn}>{errorMsg}</Text> : null}
 
@@ -3980,6 +4638,8 @@ function InsightsPage({
                 activeOpacity={0.85}
                 onPress={() => setConfirmOpenLink(false)}
                 style={styles.linkConfirmCancelBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
               >
                 <Text style={styles.linkConfirmCancelText}>Cancel</Text>
               </TouchableOpacity>
@@ -3990,6 +4650,8 @@ function InsightsPage({
                   Linking.openURL(GEMINI_KEY_URL).catch(() => {});
                 }}
                 style={styles.linkConfirmOpenBtn}
+                accessibilityRole="link"
+                accessibilityLabel="Open Google AI Studio in browser"
               >
                 <Text style={styles.linkConfirmOpenText}>Open</Text>
               </TouchableOpacity>
@@ -4006,102 +4668,240 @@ function InsightsPage({
 // ===========================================================================
 
 const styles = StyleSheet.create({
-  headerWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 14 },
+  headerWrap: { paddingHorizontal: 22, paddingTop: 10, paddingBottom: 16 },
+  hubBrandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   ambience: {
-    color: '#fff',
+    color: '#F8F5FF',
     fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 38, letterSpacing: 2.5,
-    textAlign: 'center', lineHeight: 44,
+    fontSize: 20, letterSpacing: 1.2,
+    lineHeight: 26,
   },
   title: {
-    color: '#ffffff99', fontSize: 10, fontWeight: '400',
-    letterSpacing: 4, textTransform: 'uppercase', marginTop: 2,
+    color: '#B9B7CA', fontSize: 8.5, fontWeight: '700',
+    letterSpacing: 2.3,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.13)',
+    borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
   },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
-  dividerLine: { width: 28, height: 1, backgroundColor: 'rgba(255,255,255,0.35)' },
-  subtitle: {
-    color: '#ffffffaa', fontSize: 10, letterSpacing: 4,
-    marginHorizontal: 14, fontStyle: 'italic',
+  hubHeadline: {
+    color: '#FFFFFF',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 39, lineHeight: 38, letterSpacing: -0.4,
+    marginTop: 20,
+  },
+  hubIntro: {
+    color: '#A6A6B9', fontSize: 12.5, lineHeight: 18,
+    marginTop: 8, maxWidth: 300,
   },
 
   // Hub
-  hubSection: {
-    color: '#ffffff77', fontSize: 10, letterSpacing: 3, fontWeight: '700',
-    marginTop: 18, marginBottom: 8, marginLeft: 4,
+  hubScrollContent: { paddingHorizontal: 20, paddingBottom: 130 },
+  hubHeroCard: { padding: 18, minHeight: 250 },
+  hubHeroTopline: { flexDirection: 'row', alignItems: 'center' },
+  hubLiveDot: {
+    width: 6, height: 6, borderRadius: 3, marginRight: 8,
+    backgroundColor: '#9DC7AC',
+    shadowColor: '#9DC7AC', shadowOpacity: 0.8, shadowRadius: 6,
   },
+  hubHeroGreeting: { color: '#C3C1D0', fontSize: 9, fontWeight: '800', letterSpacing: 2 },
+  hubHeroMain: { flexDirection: 'row', alignItems: 'center', marginTop: 17 },
+  hubHeroTitle: {
+    color: '#FBF9FF', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 29, lineHeight: 32, letterSpacing: 0.2,
+  },
+  hubHeroCopy: { color: '#ADACBE', fontSize: 11.5, lineHeight: 17, marginTop: 5, paddingRight: 10 },
+  hubWeatherOrb: {
+    width: 60, height: 60, borderRadius: 30,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(143,184,222,0.35)',
+    backgroundColor: 'rgba(143,184,222,0.10)',
+  },
+  hubHeroAction: {
+    minHeight: 46, borderRadius: 16, backgroundColor: '#AEB5F0',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 15, marginTop: 18,
+    shadowColor: '#8F97DE', shadowOpacity: 0.25, shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  hubHeroActionText: { color: '#0B0B1F', fontSize: 12.5, fontWeight: '700' },
+  hubPrivacyStrip: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    marginTop: 16, paddingTop: 14,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  hubPrivacyText: { color: '#7F8095', fontSize: 7.5, fontWeight: '800', letterSpacing: 1.4 },
+  hubPrivacyDot: { width: 2, height: 2, borderRadius: 1, backgroundColor: '#77798F', marginHorizontal: 9 },
   tileGrid: {
     flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between',
   },
   tile: {
-    width: '48.6%',
-    backgroundColor: 'rgba(255,255,255,0.045)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    borderRadius: 18,
-    paddingVertical: 14, paddingHorizontal: 10,
-    marginBottom: 10,
-    alignItems: 'center',
+    position: 'relative', overflow: 'hidden',
+    backgroundColor: '#17182E',
+    borderWidth: 1, borderRadius: 22,
+    padding: 14, marginBottom: 10,
+    shadowOpacity: 0.10, shadowRadius: 12, shadowOffset: { width: 0, height: 7 },
+    elevation: 3,
   },
-  tileGlyphWrap: { height: 28, justifyContent: 'center' },
-  tileGlyph: { fontSize: 21, fontWeight: '600' },
-  tileLabel: { color: '#fff', fontSize: 13, fontWeight: '600', marginTop: 6, letterSpacing: 0.2 },
+  tileHalf: { width: '48.5%', minHeight: 150, alignItems: 'flex-start' },
+  tileWide: {
+    width: '100%', minHeight: 92,
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 16, paddingHorizontal: 15,
+  },
+  tileFeature: {
+    width: '100%', minHeight: 138,
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 18, paddingHorizontal: 17,
+  },
+  tileAura: {
+    position: 'absolute', width: 130, height: 130, borderRadius: 65,
+    right: -58, top: -68,
+  },
+  tileGlyphWrap: {
+    width: 44, height: 44, borderRadius: 16, borderWidth: 1,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  tileGlyph: { fontSize: 23, fontWeight: '600' },
+  tileCopy: { marginTop: 13 },
+  tileCopyHorizontal: { marginTop: 0, marginLeft: 13, paddingRight: 8 },
+  tileKicker: { fontSize: 8, fontWeight: '800', letterSpacing: 1.5, marginBottom: 5 },
+  tileLabel: { color: '#FAF8FF', fontSize: 14, fontWeight: '600', letterSpacing: 0.1 },
+  tileLabelFeature: {
+    fontFamily: 'CormorantGaramond_500Medium', fontSize: 24, lineHeight: 27, fontWeight: '500',
+  },
   tileSub: {
-    color: '#ffffff70', fontSize: 10, lineHeight: 14,
-    textAlign: 'center', marginTop: 3, minHeight: 28,
+    color: '#9797AA', fontSize: 10.5, lineHeight: 15,
+    marginTop: 4,
   },
-  tileBadge: {
-    position: 'absolute', top: 8, right: 10,
-    fontSize: 9, fontWeight: '800', letterSpacing: 0.8,
+  tileSubLeft: { fontSize: 11.5, lineHeight: 17, maxWidth: 250 },
+  tileBadgeWrap: {
+    position: 'absolute', top: 10, right: 10, zIndex: 3,
+    borderWidth: 1, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3,
+  },
+  tileBadge: { fontSize: 8, fontWeight: '800', letterSpacing: 0.8 },
+  tileArrow: {
+    width: 31, height: 31, borderRadius: 16, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center', marginLeft: 5,
+    backgroundColor: 'rgba(255,255,255,0.035)',
   },
   pulseRow: {
     flexDirection: 'row', gap: 8,
-    paddingHorizontal: 20, marginBottom: 6,
+    marginTop: 14, paddingTop: 13,
+    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
   },
   pulseChip: {
     flex: 1, alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.045)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
-    borderRadius: 14, paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.035)',
+    borderRadius: 12, paddingVertical: 7,
   },
-  pulseNum: { fontSize: 16, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  pulseCap: { color: '#9aa0b4', fontSize: 8, letterSpacing: 1.4, fontWeight: '700', marginTop: 2 },
+  pulseNum: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  pulseCap: { color: '#85869A', fontSize: 7, letterSpacing: 1.1, fontWeight: '700', marginTop: 2 },
 
 
   // Sub-page
-  subHeader: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 12, paddingTop: 6, paddingBottom: 2,
+  subHeaderCompact: {
+    minHeight: 44, flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 12, paddingVertical: 4,
   },
+  subBackBtnCompact: {
+    width: 34, height: 34, borderRadius: 12, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  subCompactCopy: { flex: 1, paddingHorizontal: 10 },
+  subCompactMode: { fontSize: 7, fontWeight: '800', letterSpacing: 1.4 },
+  subCompactTitle: {
+    color: '#F8F6FC', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 19, lineHeight: 20, marginTop: -1,
+  },
+  subHeader: {
+    paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10,
+  },
+  subNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  subBrand: { color: '#77788D', fontSize: 8.5, fontWeight: '800', letterSpacing: 2.2 },
+  subNavDot: { width: 6, height: 6, borderRadius: 3, opacity: 0.9 },
+  subHeroRow: { flexDirection: 'row', alignItems: 'center', marginTop: 17, minHeight: 108 },
+  subHeroCopy: { flex: 1, paddingRight: 12 },
+  subModeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 7 },
+  subModeLine: { width: 18, height: 2, borderRadius: 1, marginRight: 8 },
+  subMode: { fontSize: 9, fontWeight: '800', letterSpacing: 2.1 },
+  subHeaderSubtitle: { color: '#9B9CAF', fontSize: 11.5, lineHeight: 17, marginTop: 5, maxWidth: 255 },
+  subGlyphOrbit: {
+    width: 78, height: 78, borderRadius: 39,
+    borderWidth: 1, overflow: 'hidden',
+    alignItems: 'center', justifyContent: 'center',
+    transform: [{ rotate: '-8deg' }],
+  },
+  subGlyphInner: {
+    width: 52, height: 52, borderRadius: 26, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  subGlyph: { fontSize: 26, transform: [{ rotate: '8deg' }] },
   subBackBtn: {
-    width: 36, height: 36, borderRadius: 18,
+    width: 38, height: 38, borderRadius: 14, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
   },
   subTitle: {
-    flex: 1,
-    color: '#fff',
+    color: '#FCFAFF',
     fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 24,
-    letterSpacing: 1,
-    textAlign: 'center',
+    fontSize: 34, lineHeight: 35,
+    letterSpacing: 0.1,
   },
-  subBody: { paddingHorizontal: 20, paddingTop: 4 },
+  subBody: { paddingHorizontal: 20, paddingTop: 6, flexGrow: 1 },
+  pageClosing: {
+    marginTop: 'auto', paddingTop: 30, paddingBottom: 4,
+    flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center',
+  },
+  pageClosingLine: { width: 28, height: 1 },
+  pageClosingGlyph: { fontSize: 15, marginHorizontal: 10 },
+  pageClosingLabel: {
+    width: '100%', color: '#6F7083', fontSize: 7.5, fontWeight: '800',
+    letterSpacing: 1.5, textAlign: 'center', marginTop: 7,
+  },
 
   // Section rhythm: every section starts with this label; the baked-in
   // margins keep spacing consistent without inline overrides.
   sectionLabel: {
-    color: '#ffffff77', fontSize: 10, letterSpacing: 2, fontWeight: '700',
-    marginTop: 24, marginBottom: 8,
+    color: '#9293A8', fontSize: 9, letterSpacing: 2.3, fontWeight: '800',
+    marginTop: 28, marginBottom: 9,
   },
   sectionSub: {
-    color: '#ffffffB0', fontSize: 12,
-    marginBottom: 10, lineHeight: 18,
+    color: '#B8B7C5', fontSize: 12.5,
+    marginBottom: 12, lineHeight: 19,
   },
   emptyText: { color: '#ffffff77', fontSize: 12, lineHeight: 18, marginTop: 4 },
 
   safetyBody: {
-    color: '#ffffffcc',
-    fontSize: 13,
-    lineHeight: 20,
+    color: '#C5C4D1',
+    fontSize: 12.5,
+    lineHeight: 19,
     marginBottom: 4,
+  },
+  safetyHero: {
+    padding: 18, marginTop: 8,
+    flexDirection: 'row', alignItems: 'flex-start',
+  },
+  safetyShieldWrap: {
+    width: 54, height: 54, borderRadius: 18, marginRight: 14,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#9DC7AC55', backgroundColor: '#9DC7AC12',
+  },
+  safetyHeroKicker: { color: '#9DC7AC', fontSize: 8, fontWeight: '800', letterSpacing: 1.4 },
+  safetyHeroTitle: {
+    color: '#F7F5FC', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 20, lineHeight: 23, marginTop: 5,
+  },
+  safetyHeroCopy: { color: '#9697AA', fontSize: 10.5, lineHeight: 15, marginTop: 5 },
+  safetyPanelStack: { marginTop: 16, gap: 11 },
+  safetyPanel: { padding: 17 },
+  safetyPanelHeading: { flexDirection: 'row', alignItems: 'center', marginBottom: 11 },
+  safetyPanelNumber: { fontSize: 9, fontWeight: '800', letterSpacing: 1.5, marginRight: 10 },
+  safetyPanelTitle: {
+    color: '#F7F5FC', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 20, lineHeight: 23,
+  },
+  safetyMiniHeading: { color: '#E0A470', fontSize: 8, fontWeight: '800', letterSpacing: 1.4, marginTop: 14, marginBottom: 5 },
+  safetyClosing: {
+    color: '#A3A4B5', fontFamily: 'CormorantGaramond_500Medium_Italic',
+    fontSize: 17, textAlign: 'center', lineHeight: 23, marginVertical: 10,
   },
   wipeBtn: {
     marginTop: 12,
@@ -4119,6 +4919,24 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   // Affirmations
+  affirmTalisman: {
+    minHeight: 310, paddingHorizontal: 24, paddingVertical: 22,
+    alignItems: 'center', justifyContent: 'center', marginTop: 8,
+  },
+  affirmSunOuter: {
+    position: 'absolute', top: 36,
+    width: 190, height: 190, borderRadius: 95,
+    borderWidth: 1, borderColor: 'rgba(157,199,172,0.16)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  affirmSunInner: {
+    width: 126, height: 126, borderRadius: 63,
+    borderWidth: 1, borderColor: 'rgba(157,199,172,0.25)',
+    backgroundColor: 'rgba(157,199,172,0.045)',
+  },
+  affirmDate: { color: '#9DC7AC', fontSize: 8.5, fontWeight: '800', letterSpacing: 1.8 },
+  affirmRule: { width: 28, height: 1, backgroundColor: '#9DC7AC66', marginVertical: 17 },
+  affirmCarry: { color: '#838598', fontSize: 10.5, marginTop: 13, fontStyle: 'italic' },
   bigAffirmCard: {
     backgroundColor: 'rgba(255,255,255,0.045)',
     borderRadius: 18, padding: 22,
@@ -4129,7 +4947,7 @@ const styles = StyleSheet.create({
   bigAffirmText: {
     color: '#fff',
     fontFamily: 'CormorantGaramond_500Medium_Italic',
-    fontSize: 22, lineHeight: 32,
+    fontSize: 25, lineHeight: 34,
     textAlign: 'center',
   },
   bigRefreshBtn: {
@@ -4138,11 +4956,12 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#9DC7AC',
   },
-  bigRefreshText: { color: '#0B0B1F', fontSize: 11, fontWeight: '700', letterSpacing: 2 },
+  bigRefreshText: { color: '#0B0B1F', fontSize: 11, fontWeight: '700', letterSpacing: 0.4 },
 
   notifPills: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   notifPill: {
-    paddingHorizontal: 14, paddingVertical: 6,
+    minHeight: 44, justifyContent: 'center',
+    paddingHorizontal: 14, paddingVertical: 9,
     borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
     backgroundColor: 'rgba(255,255,255,0.04)',
   },
@@ -4151,13 +4970,36 @@ const styles = StyleSheet.create({
   notifWarn: { color: '#E0A470', fontSize: 12, marginTop: 8, lineHeight: 18 },
 
   // Mood
-  moodRow: { flexDirection: 'row', gap: 6 },
-  moodBtn: {
-    flex: 1, alignItems: 'center', paddingVertical: 12,
-    borderRadius: 14, borderWidth: 1,
+  moodHeroHeading: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+    marginBottom: 20,
   },
-  moodValue: { fontSize: 20, fontWeight: '700' },
-  moodLabel: { fontSize: 10, letterSpacing: 1, fontWeight: '600', marginTop: 2 },
+  moodHeroKicker: { color: '#8FB8DE', fontSize: 8.5, fontWeight: '800', letterSpacing: 1.8 },
+  moodHeroPrompt: {
+    color: '#F8F6FF', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 22, lineHeight: 25, marginTop: 4,
+  },
+  moodHeroStatus: {
+    color: '#85869A', fontSize: 7.5, fontWeight: '800', letterSpacing: 1.2,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5,
+  },
+  moodRow: { flexDirection: 'row', gap: 7, position: 'relative', paddingTop: 4 },
+  moodHorizonLine: {
+    position: 'absolute', left: 20, right: 20, top: 28,
+    height: 1, backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  moodBtn: {
+    flex: 1, minHeight: 66, alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 9, borderRadius: 24, borderWidth: 1,
+    position: 'relative', overflow: 'visible',
+  },
+  moodActiveHalo: {
+    position: 'absolute', left: -4, right: -4, top: -4, bottom: -4,
+    borderRadius: 28, borderWidth: 1,
+  },
+  moodValue: { fontSize: 19, fontWeight: '700' },
+  moodLabel: { fontSize: 8.5, letterSpacing: 0.7, fontWeight: '700', marginTop: 2 },
 
   graphCard: {
     backgroundColor: 'rgba(0,0,0,0.30)',
@@ -4186,6 +5028,29 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   swatchCheck: { color: '#d9b35c', fontSize: 14, fontWeight: '700' },
+  settingsPreview: { minHeight: 190, marginTop: 8, padding: 18, justifyContent: 'flex-end' },
+  settingsPreviewOrbLarge: {
+    position: 'absolute', width: 170, height: 170, borderRadius: 85,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', right: -48, top: -78,
+  },
+  settingsPreviewOrbSmall: {
+    position: 'absolute', width: 92, height: 92, borderRadius: 46,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', right: 2, top: -28,
+  },
+  settingsPreviewCopy: { maxWidth: 220 },
+  settingsPreviewKicker: { color: '#E9D9A6', fontSize: 8, fontWeight: '800', letterSpacing: 1.8 },
+  settingsPreviewTitle: {
+    color: '#FFF', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 28, lineHeight: 30, marginTop: 4,
+  },
+  settingsPreviewHint: { color: '#D4D2DE', fontSize: 10.5, marginTop: 4 },
+  settingsPreviewStatus: {
+    position: 'absolute', right: 15, bottom: 15,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.28)',
+    borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
+    backgroundColor: 'rgba(8,9,25,0.28)',
+  },
+  settingsPreviewStatusText: { color: '#FFF', fontSize: 8, fontWeight: '800', letterSpacing: 1.4 },
 
   calCard: {
     backgroundColor: 'rgba(255,255,255,0.045)',
@@ -4247,6 +5112,28 @@ const styles = StyleSheet.create({
   moodHistoryLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 1 },
 
   // Gratitude
+  journalSheet: { marginTop: 10, paddingTop: 16 },
+  journalSheetHeading: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18,
+  },
+  journalSheetKicker: { color: '#E0A470', fontSize: 8, fontWeight: '800', letterSpacing: 1.7 },
+  journalSheetDate: {
+    color: '#F2E9DB', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 20, marginTop: 2,
+  },
+  journalFlower: { color: '#E0A470', fontSize: 28, opacity: 0.7 },
+  journalRule: { height: 1, marginHorizontal: 18, marginTop: 12, backgroundColor: '#E0A47038' },
+  journalInput: { minHeight: 150, fontFamily: 'CormorantGaramond_500Medium', fontSize: 18, lineHeight: 27 },
+  gratitudeSlip: {
+    borderColor: 'rgba(224,164,112,0.24)',
+    backgroundColor: 'rgba(224,164,112,0.065)',
+    paddingVertical: 15, paddingHorizontal: 14,
+  },
+  gratitudeQuote: {
+    color: '#E0A47088', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 25, lineHeight: 24, marginRight: 7,
+  },
   gratInput: {
     color: '#fff', fontSize: 15,
     backgroundColor: 'rgba(255,255,255,0.05)',
@@ -4280,6 +5167,37 @@ const styles = StyleSheet.create({
     minHeight: 150, textAlignVertical: 'top',
     paddingHorizontal: 16, paddingVertical: 14,
   },
+  releaseSheet: { marginTop: 8, minHeight: 260, paddingTop: 16 },
+  releaseSheetTop: {
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16,
+  },
+  releaseCloudMark: { flexDirection: 'row', alignItems: 'center', marginRight: 9 },
+  releaseCloudDot: { height: 5, borderRadius: 3, backgroundColor: '#D68097' },
+  releaseSheetMeta: { color: '#D68097', fontSize: 8, fontWeight: '800', letterSpacing: 1.4 },
+  releaseCount: { marginLeft: 'auto', color: '#77788E', fontSize: 7.5, fontWeight: '700', letterSpacing: 1 },
+  releaseRule: { height: 1, marginHorizontal: 16, marginTop: 13, backgroundColor: '#D6809733' },
+  releaseInput: {
+    minHeight: 200, fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 19, lineHeight: 28, paddingTop: 18,
+  },
+  releasePromptLabel: { color: '#8B8C9F', fontSize: 8, fontWeight: '800', letterSpacing: 1.5, marginTop: 15 },
+  releasePrivacyBar: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(214,128,151,0.18)',
+    backgroundColor: 'rgba(214,128,151,0.055)', borderRadius: 14,
+    paddingHorizontal: 12, paddingVertical: 10, marginTop: 12,
+  },
+  releasePrivacyText: { flex: 1, color: '#9293A6', fontSize: 10.5, lineHeight: 15, marginLeft: 8 },
+  releaseNote: {
+    position: 'relative', overflow: 'hidden',
+    borderColor: 'rgba(214,128,151,0.22)',
+    backgroundColor: 'rgba(214,128,151,0.055)',
+    paddingVertical: 14, paddingHorizontal: 14,
+  },
+  releaseNoteFold: {
+    position: 'absolute', right: -12, top: -12, width: 30, height: 30,
+    backgroundColor: 'rgba(214,128,151,0.18)', transform: [{ rotate: '45deg' }],
+  },
   rantChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   rantActionsRow: {
     flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center',
@@ -4288,6 +5206,26 @@ const styles = StyleSheet.create({
   rantLetGoText: { color: '#ffffff88', fontSize: 12, letterSpacing: 1 },
 
   manifestCheck: { paddingRight: 12, paddingTop: 1 },
+  manifestComposerTop: {
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 16,
+  },
+  manifestSeed: {
+    width: 44, height: 44, borderRadius: 22, marginRight: 12,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#B39BE066', backgroundColor: '#B39BE014',
+  },
+  manifestSeedGlyph: { color: '#B39BE0', fontSize: 22 },
+  manifestComposerKicker: { color: '#B39BE0', fontSize: 8, fontWeight: '800', letterSpacing: 1.6 },
+  manifestComposerHint: { color: '#8F90A4', fontSize: 10.5, lineHeight: 15, marginTop: 3 },
+  manifestOrbitItem: {
+    position: 'relative', overflow: 'hidden',
+    borderColor: 'rgba(179,155,224,0.24)', paddingLeft: 16,
+  },
+  manifestArrived: { borderColor: 'rgba(217,190,122,0.34)', backgroundColor: 'rgba(217,190,122,0.07)' },
+  manifestOrbitLine: {
+    position: 'absolute', left: 0, top: 8, bottom: 8, width: 2,
+    borderRadius: 1, backgroundColor: '#B39BE055',
+  },
   manifestCheckBox: {
     width: 22, height: 22, borderRadius: 6,
     borderWidth: 1.5, borderColor: '#B39BE099',
@@ -4304,6 +5242,14 @@ const styles = StyleSheet.create({
     textAlign: 'center', marginTop: 14,
   },
   groundStepCard: { alignItems: 'center', paddingVertical: 26, paddingHorizontal: 20 },
+  groundCompass: {
+    position: 'absolute', top: 16, alignSelf: 'center',
+    width: 230, height: 230, alignItems: 'center', justifyContent: 'center', opacity: 0.9,
+  },
+  groundRing: { position: 'absolute', borderRadius: 999, borderWidth: 1 },
+  groundRingOuter: { width: 220, height: 220 },
+  groundRingMiddle: { width: 164, height: 164 },
+  groundRingInner: { width: 108, height: 108 },
   groundStepLabel: {
     color: '#ffffff66', fontSize: 10, letterSpacing: 2, fontWeight: '700',
     marginBottom: 8,
@@ -4324,6 +5270,12 @@ const styles = StyleSheet.create({
 
   // Support (the hero surface itself is a GlowCard now)
   supportEmoji: { fontSize: 44, marginBottom: 8 },
+  supportSeal: {
+    width: 58, height: 58, borderRadius: 29, marginBottom: 13,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#D9BE7A66', backgroundColor: '#D9BE7A12',
+  },
+  supportKicker: { color: '#D9BE7A', fontSize: 8.5, fontWeight: '800', letterSpacing: 1.8, marginBottom: 7 },
   supportHeadline: {
     color: '#fff',
     fontFamily: 'CormorantGaramond_500Medium',
@@ -4338,7 +5290,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14, paddingHorizontal: 30,
     borderRadius: 999, backgroundColor: '#d9b35c',
   },
-  supportBtnText: { color: '#0B0B1F', fontWeight: '800', letterSpacing: 3, fontSize: 13 },
+  supportBtnText: { color: '#0B0B1F', fontWeight: '800', letterSpacing: 0.3, fontSize: 13 },
   supportFootnote: {
     color: '#ffffff77', fontSize: 12,
     textAlign: 'center', marginTop: 16, lineHeight: 18,
@@ -4355,17 +5307,34 @@ const styles = StyleSheet.create({
   },
   roadmapTitle: { color: '#fff', fontSize: 14, fontWeight: '600' },
   roadmapBlurb: { color: '#ffffffaa', fontSize: 12, marginTop: 2, lineHeight: 17 },
+  roadmapGroup: {
+    marginTop: 14, paddingHorizontal: 15, paddingBottom: 5,
+    borderRadius: 20, borderWidth: 1, borderColor: 'rgba(217,179,92,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.025)',
+  },
+  roadmapGroupHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  roadmapGroupCount: {
+    color: '#D9BE7A', fontSize: 9, fontWeight: '800',
+    borderWidth: 1, borderColor: '#D9BE7A44', borderRadius: 999,
+    minWidth: 24, textAlign: 'center', paddingVertical: 3,
+  },
 
   // Routines
   routineCard: {
-    backgroundColor: 'rgba(255,255,255,0.045)',
-    borderRadius: 18, padding: 14, marginBottom: 10,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    padding: 17, marginBottom: 12, minHeight: 190,
   },
+  routineBackdropGlyph: {
+    position: 'absolute', right: -15, top: -38,
+    fontSize: 170, lineHeight: 190, transform: [{ rotate: '8deg' }],
+  },
+  routineEyebrow: { fontSize: 8, fontWeight: '800', letterSpacing: 1.7, marginBottom: 7 },
   routineTitleRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
-  routineName: { fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
+  routineName: {
+    fontFamily: 'CormorantGaramond_500Medium', fontSize: 24, lineHeight: 27,
+    fontWeight: '500', letterSpacing: 0.1,
+  },
   // Small caps microlabel, same pill idiom as soundscapeSoon.
   routineTotal: {
     color: '#ffffff66', fontSize: 9, letterSpacing: 1.5, fontWeight: '700',
@@ -4373,14 +5342,18 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.20)', borderRadius: 999,
   },
   routineDesc: { color: '#ffffffaa', fontSize: 12, marginTop: 4, lineHeight: 17, marginBottom: 10 },
+  routinePath: { position: 'relative', marginTop: 3 },
+  routinePathLine: { position: 'absolute', left: 15, top: 23, bottom: 23, width: 1 },
   routineStep: {
     flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 6,
-    borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)',
+    paddingVertical: 8,
+  },
+  routineStepNode: {
+    width: 31, height: 31, borderRadius: 16, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center', marginRight: 11,
   },
   routineStepNum: {
-    width: 24, fontSize: 14, fontWeight: '700',
-    textAlign: 'center', marginRight: 10,
+    fontSize: 11, fontWeight: '800', textAlign: 'center',
   },
   routineStepLabel: { flex: 1, color: '#ffffffdd', fontSize: 13 },
   routineStepTime: { color: '#ffffff88', fontSize: 12 },
@@ -4395,6 +5368,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   soundscapeTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  soundscapeHero: { padding: 16, paddingTop: 104, marginBottom: 12, minHeight: 210 },
+  soundscapeScene: {
+    position: 'absolute', top: 0, left: 0, right: 0, height: 94,
+    backgroundColor: 'rgba(143,184,222,0.06)', overflow: 'hidden',
+  },
+  soundscapeMoon: {
+    position: 'absolute', width: 48, height: 48, borderRadius: 24,
+    right: 28, top: 13, borderWidth: 1, borderColor: '#8FB8DE55',
+    backgroundColor: '#8FB8DE15',
+  },
+  soundscapeWave: {
+    position: 'absolute', left: -8, height: 34, borderRadius: 999,
+    borderTopWidth: 1, borderTopColor: '#8FB8DE55', transform: [{ rotate: '-3deg' }],
+  },
   soundscapeActiveLabel: {
     color: '#ffffff80',
     fontSize: 10,
@@ -4416,18 +5403,21 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   soundscapeCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.045)',
-    borderRadius: 14, padding: 12, marginBottom: 8,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)',
+    width: '48.5%', minHeight: 146,
+    backgroundColor: '#17182E', overflow: 'hidden',
+    borderRadius: 20, padding: 13, marginBottom: 10,
+    borderWidth: 1,
   },
+  soundscapeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  soundscapeTileTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  soundscapeTileCopy: { marginTop: 14 },
   soundscapeGlyphBox: {
     width: 40, height: 40, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center',
-    marginRight: 12, borderWidth: 1,
+    borderWidth: 1,
   },
   soundscapeName: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  soundscapeBlurb: { color: '#ffffff88', fontSize: 12, marginTop: 2 },
+  soundscapeBlurb: { color: '#9293A6', fontSize: 10.5, lineHeight: 15, marginTop: 4 },
   soundscapeSoon: {
     color: '#ffffff66', fontSize: 9, letterSpacing: 1.5, fontWeight: '700',
     paddingHorizontal: 8, paddingVertical: 3,
@@ -4436,6 +5426,30 @@ const styles = StyleSheet.create({
 
   // Bug: borderless inputs that live inside one GlowCard. The subject is a
   // single-line variant of the rantInput idiom; a hairline keeps them apart.
+  feedbackStampRow: { flexDirection: 'row', gap: 9 },
+  feedbackStamp: {
+    flex: 1, minHeight: 70, borderRadius: 16, borderWidth: 1,
+    borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  feedbackStampMark: {
+    color: '#7F8092', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 22, lineHeight: 23,
+  },
+  feedbackStampText: { color: '#9B9CAF', fontSize: 9.5, fontWeight: '700', marginTop: 3 },
+  feedbackPostcard: { marginTop: 10, paddingTop: 13 },
+  feedbackPostcardTop: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingBottom: 10,
+  },
+  feedbackPostcardFrom: { color: '#D68097', fontSize: 8, fontWeight: '800', letterSpacing: 1.5 },
+  feedbackPostmark: {
+    width: 32, height: 38, borderWidth: 1, borderColor: '#D6809766',
+    borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center',
+    transform: [{ rotate: '4deg' }], backgroundColor: '#D6809712',
+  },
+  feedbackPostmarkText: { color: '#D68097', fontSize: 9, fontWeight: '800', letterSpacing: 1 },
   bugSubjectInput: {
     color: '#fff', fontSize: 14.5,
     paddingHorizontal: 16, paddingVertical: 14,
@@ -4445,10 +5459,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   bugSendBtn: {
-    paddingVertical: 13, borderRadius: 999, marginTop: 16,
+    paddingVertical: 15, borderRadius: 17, marginTop: 16,
     backgroundColor: '#D68097', alignItems: 'center',
+    shadowColor: '#D68097', shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
   },
-  bugSendText: { color: '#0B0B1F', fontWeight: '700', letterSpacing: 2, fontSize: 14 },
+  bugSendText: { color: '#0B0B1F', fontWeight: '700', letterSpacing: 0.2, fontSize: 14 },
   bugAppInfoPreview: { color: '#ffffff77', fontSize: 11, marginTop: 3 },
   bugAppInfoHint: { color: '#ffffff66', fontSize: 11, lineHeight: 16, marginTop: 8 },
 
@@ -4464,9 +5479,40 @@ const styles = StyleSheet.create({
   fieldLabel: { color: '#ffffff80', fontSize: 11, letterSpacing: 1, fontWeight: '600', marginTop: 12, marginBottom: 6 },
   fieldInput: {
     color: '#fff', fontSize: 14,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(7,8,23,0.34)',
+    borderRadius: 13, paddingHorizontal: 13, paddingVertical: 11,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.11)',
+  },
+  identityAtlas: {
+    minHeight: 150, marginTop: 8, padding: 18,
+    flexDirection: 'row', alignItems: 'center',
+  },
+  identityCrest: {
+    width: 88, height: 88, borderRadius: 44, overflow: 'hidden',
+    borderWidth: 1, borderColor: '#B39BE055',
+    alignItems: 'center', justifyContent: 'center', marginRight: 16,
+  },
+  identityInitial: {
+    color: '#F7F3FF', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 42, lineHeight: 48,
+  },
+  identityCopy: { flex: 1 },
+  identityKicker: { color: '#B39BE0', fontSize: 8, fontWeight: '800', letterSpacing: 1.6 },
+  identityName: {
+    color: '#FAF8FF', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 23, lineHeight: 26, marginTop: 4,
+  },
+  identityTokens: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  identityToken: {
+    color: '#999AAD', fontSize: 7.5, fontWeight: '800', letterSpacing: 1,
+    borderWidth: 1, borderColor: 'rgba(179,155,224,0.28)',
+    borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4,
+  },
+  profileCoordinates: { padding: 16 },
+  profileFieldRow: { flexDirection: 'row', gap: 10 },
+  profilePrivacyLine: {
+    color: '#77788D', fontSize: 7.5, fontWeight: '800', letterSpacing: 1.3,
+    textAlign: 'center', marginTop: 14,
   },
 
   // MBTI
@@ -4493,6 +5539,25 @@ const styles = StyleSheet.create({
   mbtiResultBlurb: { color: '#ffffffcc', fontSize: 12, marginTop: 4, textAlign: 'center' },
 
   // Compatibility
+  compatOrbitCard: { padding: 18, alignItems: 'center', marginTop: 8 },
+  compatOrbitKicker: { color: '#D8A0B0', fontSize: 8.5, fontWeight: '800', letterSpacing: 1.7 },
+  compatOrbitRow: { width: 250, height: 150, alignItems: 'center', justifyContent: 'center', marginTop: 5 },
+  compatOrbit: {
+    position: 'absolute', width: 112, height: 112, borderRadius: 56,
+    borderWidth: 1, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(20,21,42,0.78)',
+  },
+  compatOrbitSelf: { left: 26 },
+  compatOrbitPartner: { right: 26 },
+  compatOrbitGlyph: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 30, lineHeight: 33 },
+  compatOrbitName: { color: '#DAD8E4', fontSize: 10.5, fontWeight: '600', marginTop: 3, maxWidth: 80 },
+  compatOrbitJoin: {
+    width: 42, height: 42, borderRadius: 21, zIndex: 2,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#D8A0B066', backgroundColor: '#191A31',
+  },
+  compatOrbitJoinText: { color: '#D8A0B0', fontSize: 18 },
+  compatOrbitHint: { color: '#999AAD', fontSize: 10.5, lineHeight: 15, textAlign: 'center', maxWidth: 270 },
   compatCard: {
     backgroundColor: 'rgba(255,255,255,0.045)',
     borderRadius: 14, padding: 14,
@@ -4508,18 +5573,29 @@ const styles = StyleSheet.create({
   // Sun-sign payoff card (Profile, Natal Chart) and the element pairing
   // result (Compatibility).
   sunSignCard: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
-  sunSignGlyph: { fontSize: 42, marginRight: 16 },
+  sunSignGlyph: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 42, marginRight: 16 },
   sunSignIntention: {
     color: '#ffffffcc', fontSize: 12, fontStyle: 'italic',
     marginTop: 6, lineHeight: 17,
   },
   sunSignCaption: { color: '#ffffff66', fontSize: 11, marginTop: 8, lineHeight: 15 },
+  natalWheelCard: { alignItems: 'center', paddingVertical: 18, paddingHorizontal: 16, marginTop: 8 },
+  natalWheelKicker: { color: '#B39BE0', fontSize: 8.5, fontWeight: '800', letterSpacing: 1.8 },
+  natalWheelWrap: { width: 236, height: 236, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
+  natalWheelCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  natalWheelGlyph: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 42, lineHeight: 46 },
+  natalWheelSign: {
+    color: '#FAF8FF', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 18, lineHeight: 20,
+  },
+  natalWheelMeta: { color: '#8B8C9F', fontSize: 7, fontWeight: '800', letterSpacing: 1, marginTop: 2 },
+  natalWheelCaption: { color: '#9293A6', fontSize: 10.5, lineHeight: 15, textAlign: 'center', maxWidth: 280 },
   compatSignsRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly',
     marginBottom: 12,
   },
   compatSignCol: { alignItems: 'center', flex: 1 },
-  compatPairGlyph: { fontSize: 36 },
+  compatPairGlyph: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 36 },
   compatPairJoin: { color: '#ffffff55', fontSize: 18, paddingHorizontal: 6 },
   compatReflection: { color: '#ffffffcc', fontSize: 13, lineHeight: 20 },
   compatComingSoon: {
@@ -4532,6 +5608,14 @@ const styles = StyleSheet.create({
   compatComingText: { color: '#ffffffaa', fontSize: 12, lineHeight: 17 },
 
   // AI Insights
+  aiIngredientsTray: { padding: 16, marginTop: 18 },
+  aiIngredientsHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  aiIngredientsKicker: { color: '#8FB8DE', fontSize: 8, fontWeight: '800', letterSpacing: 1.6 },
+  aiIngredientsTitle: {
+    color: '#F5F3FB', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 19, lineHeight: 22, marginTop: 3,
+  },
+  aiIngredientsGlyph: { color: '#8FB8DE', fontSize: 30, opacity: 0.75 },
   aiBtn: {
     paddingVertical: 13, borderRadius: 999, marginTop: 10, alignItems: 'center',
   },
