@@ -3338,6 +3338,7 @@ function FrequenciesView(props: FreqViewProps) {
           title="Shape the signal"
           accent={beatColor}
           centerBrand
+          brandFirst
         />
       </View>
 

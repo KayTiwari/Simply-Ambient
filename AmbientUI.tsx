@@ -24,6 +24,7 @@ export function AmbientVeil({
   strength = 'standard',
   active = false,
   motionHz = 0,
+  accentTransitionMs = 620,
 }: {
   accent: string;
   children: React.ReactNode;
@@ -31,6 +32,7 @@ export function AmbientVeil({
   strength?: 'light' | 'standard' | 'deep';
   active?: boolean;
   motionHz?: number;
+  accentTransitionMs?: number;
 }) {
   const reveal = useRef(new Animated.Value(0)).current;
   const accentFade = useRef(new Animated.Value(1)).current;
@@ -56,19 +58,26 @@ export function AmbientVeil({
 
   useEffect(() => {
     if (accent === displayAccent) return;
+    if (reduceMotion) {
+      accentFade.stopAnimation();
+      accentFade.setValue(1);
+      setPreviousAccent(null);
+      setDisplayAccent(accent);
+      return;
+    }
     setPreviousAccent(displayAccent);
     setDisplayAccent(accent);
     accentFade.stopAnimation();
     accentFade.setValue(0);
     Animated.timing(accentFade, {
       toValue: 1,
-      duration: 620,
+      duration: accentTransitionMs,
       easing: Easing.inOut(Easing.sin),
       useNativeDriver: true,
     }).start(({ finished }) => {
       if (finished) setPreviousAccent(null);
     });
-  }, [accent, accentFade, displayAccent]);
+  }, [accent, accentFade, accentTransitionMs, displayAccent, reduceMotion]);
 
   useEffect(() => {
     ambientMotion.stopAnimation();
@@ -194,6 +203,7 @@ export function EditorialHeader({
   accent,
   compact = false,
   centerBrand = false,
+  brandFirst = false,
 }: {
   mode: string;
   title: string;
@@ -201,13 +211,32 @@ export function EditorialHeader({
   accent: string;
   compact?: boolean;
   centerBrand?: boolean;
+  brandFirst?: boolean;
 }) {
   return (
     <View style={[shared.header, compact && shared.headerCompact]}>
       <View style={[shared.brandRow, centerBrand && shared.brandRowCentered]}>
-        <Text style={[shared.brand, centerBrand && shared.brandCentered]}>Simply Ambient</Text>
+        <Text
+          accessibilityRole={brandFirst ? 'header' : undefined}
+          style={[
+            shared.brand,
+            centerBrand && shared.brandCentered,
+            brandFirst && shared.brandPrimary,
+          ]}
+        >
+          Simply Ambient
+        </Text>
       </View>
-      <Text accessibilityRole="header" style={[shared.pageTitle, compact && shared.pageTitleCompact]}>{title}</Text>
+      <Text
+        accessibilityRole="header"
+        style={[
+          shared.pageTitle,
+          compact && shared.pageTitleCompact,
+          brandFirst && shared.pageTitleSecondary,
+        ]}
+      >
+        {title}
+      </Text>
       {subtitle ? (
         <View style={shared.subtitleRow}>
           <View style={[shared.subtitleRule, { backgroundColor: accent }]} />
@@ -386,6 +415,11 @@ const shared = StyleSheet.create({
     letterSpacing: 1.2,
   },
   brandCentered: { textAlign: 'center' },
+  brandPrimary: {
+    fontSize: 36,
+    lineHeight: 41,
+    letterSpacing: 1.5,
+  },
   pageTitle: {
     color: '#FFFDFE',
     fontFamily: 'CormorantGaramond_500Medium',
@@ -395,6 +429,12 @@ const shared = StyleSheet.create({
     marginTop: 17,
   },
   pageTitleCompact: { fontSize: 38, lineHeight: 40, marginTop: 12 },
+  pageTitleSecondary: {
+    fontSize: 30,
+    lineHeight: 34,
+    marginTop: 10,
+    color: 'rgba(255,253,254,0.88)',
+  },
   subtitleRow: { flexDirection: 'row', alignItems: 'flex-start', marginTop: 9 },
   subtitleRule: { width: 24, height: 2, borderRadius: 1, marginTop: 8, marginRight: 10 },
   pageSubtitle: { color: '#C2C0CF', fontSize: 12.5, lineHeight: 18, flex: 1, maxWidth: 330 },
