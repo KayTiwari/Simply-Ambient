@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Animated,
   BackHandler,
@@ -27,9 +28,10 @@ import {
   ArrowsClockwise,
   X,
   Plus,
+  Play,
   PushPin,
+  Stop,
   Waveform,
-  Smiley,
   CloudLightning,
   Coffee,
   ShieldCheck,
@@ -51,6 +53,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
 import { openStoreListing } from './lib/rateApp';
 import { ZODIAC, type Zodiac } from './lib/content';
+import {
+  MORE_HEADER_TO_PAGE_ID,
+  MORE_PAGE_META,
+  isPinnableMorePage,
+  type MorePageId,
+  type PinnableMorePageId,
+} from './moreNavigation';
 
 // The store the current platform rates on. The app ships on Google Play
 // today; a future iOS build gets truthful copy for free.
@@ -128,13 +137,14 @@ type Props = {
   soundscapeVolume: number;
   onToggleSoundscape: (id: string) => void;
   onChangeSoundscapeVolume: (v: number) => void;
-  // App owns and persists this preference using the existing navbar shortcut
-  // mechanism; More only presents the control where Soundscapes is managed.
-  soundscapesInNav: boolean;
-  onToggleSoundscapesInNav: (next: boolean) => void;
+  // App owns and persists the compact shortcuts; More exposes the same pin
+  // affordance in every eligible room header.
+  pinnedMorePages: PinnableMorePageId[];
+  onTogglePinnedMorePage: (id: PinnableMorePageId, next: boolean) => void;
+  onClearPinnedMorePages: () => void;
   // Deep link from elsewhere in the app (e.g. the mini player opening the
   // Soundscapes page). Set to a sub-page id, consumed via the handler.
-  requestedPage?: Exclude<SubPage, null> | 'hub' | null;
+  requestedPage?: MorePageId | 'hub' | null;
   onRequestedPageHandled?: () => void;
   onPageChange?: (page: SubPage) => void;
   // "Single app color" setting: null = animated band transitions.
@@ -155,24 +165,14 @@ type SoundscapeOption = {
   color: string;
 };
 
-type SubPage =
-  | null
-  | 'profile'
-  | 'compatibility'
-  | 'natal'
-  | 'insights'
-  | 'affirmations'
-  | 'mood'
-  | 'gratitude'
-  | 'rant'
-  | 'manifestation'
-  | 'routines'
-  | 'soundscapes'
-  | 'grounding'
-  | 'support'
-  | 'safety'
-  | 'settings'
-  | 'bug';
+type SubPage = MorePageId | null;
+
+type PinnedMorePagesContextValue = {
+  pinnedMorePages: PinnableMorePageId[];
+  onTogglePinnedMorePage: (id: PinnableMorePageId, next: boolean) => void;
+};
+
+const PinnedMorePagesContext = React.createContext<PinnedMorePagesContextValue | null>(null);
 
 const STORAGE_PROFILE = '@simply_ambient_profile_v1';
 const STORAGE_PARTNER = '@simply_ambient_partner_v1';
@@ -195,6 +195,7 @@ type Profile = {
 
 const MOOD_COLORS = ['#E07A66', '#FF8A38', '#D9BE7A', '#9DC7AC', '#8FB8DE'];
 const MOOD_LABELS = ['Low', 'Off', 'OK', 'Good', 'Great'];
+const MOOD_FACE_DESCRIPTIONS = ['unhappy', 'subdued', 'neutral', 'softly happy', 'delighted'];
 
 // Defensive accessors. If storage is corrupted and a mood value is outside
 // 1..5, render a placeholder rather than "undefined".
@@ -205,6 +206,64 @@ function moodLabel(value: number): string {
 function moodColor(value: number): string {
   const idx = Math.max(1, Math.min(5, Math.round(value))) - 1;
   return MOOD_COLORS[idx];
+}
+
+function MoodFace({
+  value,
+  color,
+  size = 38,
+  announce = true,
+}: {
+  value: number | null;
+  color: string;
+  size?: number;
+  announce?: boolean;
+}) {
+  const level = value == null ? 3 : Math.max(1, Math.min(5, Math.round(value)));
+  const description = value == null
+    ? 'No mood selected yet, neutral face'
+    : `Mood ${level} of 5, ${MOOD_FACE_DESCRIPTIONS[level - 1]} face`;
+
+  return (
+    <View
+      pointerEvents="none"
+      accessible={announce}
+      accessibilityRole={announce ? 'image' : undefined}
+      accessibilityLabel={announce ? description : undefined}
+      importantForAccessibility={announce ? 'yes' : 'no-hide-descendants'}
+      style={{ width: size, height: size }}
+    >
+      <Svg width={size} height={size} viewBox="0 0 48 48">
+        <Circle cx={24} cy={24} r={20} fill={color + '0F'} stroke={color} strokeWidth={1.6} />
+        {level === 5 ? (
+          <>
+            <Path d="M12.5 19 C15 15.5 18.5 15.5 21 19" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />
+            <Path d="M27 19 C29.5 15.5 33 15.5 35.5 19" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />
+          </>
+        ) : (
+          <>
+            <Circle cx={16.5} cy={19.5} r={level === 2 ? 1.5 : 1.8} fill={color} />
+            <Circle cx={31.5} cy={19.5} r={level === 2 ? 1.5 : 1.8} fill={color} />
+          </>
+        )}
+        {level === 1 ? (
+          <>
+            <Line x1={12.5} y1={16} x2={19.5} y2={17.5} stroke={color} strokeWidth={1.3} strokeLinecap="round" />
+            <Line x1={28.5} y1={17.5} x2={35.5} y2={16} stroke={color} strokeWidth={1.3} strokeLinecap="round" />
+            <Path d="M14 35 C18.5 27 29.5 27 34 35" fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" />
+          </>
+        ) : level === 2 ? (
+          <Path d="M15 33 C20 29.5 28 29.5 33 32" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />
+        ) : level === 3 ? (
+          <Line x1={16} y1={31.5} x2={32} y2={31.5} stroke={color} strokeWidth={2} strokeLinecap="round" />
+        ) : level === 4 ? (
+          <Path d="M14.5 29 C18.5 36.5 29.5 36.5 33.5 29" fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" />
+        ) : (
+          <Path d="M13.5 28.5 C17 40 31 40 34.5 28.5 C29 31 19 31 13.5 28.5 Z" fill={color + '24'} stroke={color} strokeWidth={2.2} strokeLinejoin="round" />
+        )}
+      </Svg>
+    </View>
+  );
 }
 
 // True when two timestamps fall on the same local calendar day. Mood is
@@ -295,8 +354,9 @@ export default function MoreView({
   soundscapeVolume,
   onToggleSoundscape,
   onChangeSoundscapeVolume,
-  soundscapesInNav,
-  onToggleSoundscapesInNav,
+  pinnedMorePages,
+  onTogglePinnedMorePage,
+  onClearPinnedMorePages,
   requestedPage,
   onRequestedPageHandled,
   onPageChange,
@@ -451,7 +511,7 @@ export default function MoreView({
     setStreak(0);
     setProfileName(null);
     setIntent(null);
-    onToggleSoundscapesInNav(false);
+    onClearPinnedMorePages();
     onChangeSingleColor(null);
     onChangeNotifPref('off');
     // Notification prefs were part of the wipe, so stop their schedules too.
@@ -460,23 +520,84 @@ export default function MoreView({
     }
   }
 
-  // Slide-over navigation
+  // More-page navigation. Individual rooms stay in the same mounted layer;
+  // only their opacity and a tiny vertical settle change between destinations.
   const [page, setPage] = useState<SubPage>(null);
   const [pageHistory, setPageHistory] = useState<Array<Exclude<SubPage, null>>>([]);
-  const slide = useRef(new Animated.Value(0)).current;
+  const hubReveal = useRef(new Animated.Value(1)).current;
+  const pageReveal = useRef(new Animated.Value(0)).current;
   const transitionToken = useRef(0);
+  const transitionDestination = useRef<'hub' | 'page'>('hub');
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [pageTransitioning, setPageTransitioning] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(enabled => { if (active) setReduceMotion(enabled); })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
+
+  // If the preference changes during a transition, finish at the destination
+  // that was already requested instead of reviving the page being dismissed.
+  useEffect(() => {
+    if (!reduceMotion) return;
+    transitionToken.current += 1;
+    hubReveal.stopAnimation();
+    pageReveal.stopAnimation();
+    if (transitionDestination.current === 'hub') {
+      hubReveal.setValue(1);
+      pageReveal.setValue(0);
+      setPage(null);
+      setPageHistory([]);
+    } else {
+      hubReveal.setValue(0);
+      pageReveal.setValue(1);
+    }
+    setPageTransitioning(false);
+  }, [hubReveal, pageReveal, reduceMotion]);
 
   function animateOpen() {
+    transitionDestination.current = 'page';
     transitionToken.current += 1;
-    slide.stopAnimation();
-    Animated.timing(slide, {
-      toValue: 1, duration: 280,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
+    const myToken = transitionToken.current;
+    hubReveal.stopAnimation();
+    pageReveal.stopAnimation();
+    if (reduceMotion) {
+      hubReveal.setValue(0);
+      pageReveal.setValue(1);
+      setPageTransitioning(false);
+      return;
+    }
+
+    // Reset only the page layer: switching between two More rooms gets its
+    // own quiet entrance without flashing the hub behind it.
+    setPageTransitioning(true);
+    pageReveal.setValue(0);
+    Animated.parallel([
+      Animated.timing(hubReveal, {
+        toValue: 0, duration: 170,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(pageReveal, {
+        toValue: 1, duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (!finished || myToken !== transitionToken.current) return;
+      setPageTransitioning(false);
+    });
   }
 
   function open(p: Exclude<SubPage, null>) {
+    if (page === p && transitionDestination.current === 'page') return;
     animateOpen();
     if (page === p) return;
     if (page !== null) {
@@ -491,6 +612,10 @@ export default function MoreView({
   // External destinations (navbar and mini player) behave like roots, not
   // nested More links: Back always returns to the hub.
   function openRoot(p: Exclude<SubPage, null>) {
+    if (page === p && transitionDestination.current === 'page') {
+      setPageHistory([]);
+      return;
+    }
     animateOpen();
     setPageHistory([]);
     setPage(p);
@@ -498,8 +623,7 @@ export default function MoreView({
 
   function close() {
     if (pageHistory.length > 0) {
-      transitionToken.current += 1;
-      slide.stopAnimation();
+      animateOpen();
       const previous = pageHistory[pageHistory.length - 1];
       setPageHistory(history => history.slice(0, -1));
       setPage(previous);
@@ -510,18 +634,36 @@ export default function MoreView({
 
   function closeToHub() {
     if (page === null) return;
+    transitionDestination.current = 'hub';
     transitionToken.current += 1;
     const myToken = transitionToken.current;
-    slide.stopAnimation();
+    hubReveal.stopAnimation();
+    pageReveal.stopAnimation();
     setPageHistory([]);
-    Animated.timing(slide, {
-      toValue: 0, duration: 240,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: true,
-    }).start(({ finished }) => {
+    if (reduceMotion) {
+      hubReveal.setValue(1);
+      pageReveal.setValue(0);
+      setPage(null);
+      setPageTransitioning(false);
+      return;
+    }
+    setPageTransitioning(true);
+    Animated.parallel([
+      Animated.timing(pageReveal, {
+        toValue: 0, duration: 170,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(hubReveal, {
+        toValue: 1, duration: 210,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
       if (!finished || myToken !== transitionToken.current) return;
       setPage(null);
       setPageHistory([]);
+      setPageTransitioning(false);
     });
   }
 
@@ -547,28 +689,29 @@ export default function MoreView({
     }
   }, [requestedPage]);
 
-  // Live dimensions, so browser resizes and rotations keep the slide-over
-  // offset correct (a module-level Dimensions.get snapshot would go stale).
-  const { width: screenW } = useWindowDimensions();
-  const slideDistance = Math.min(screenW, 480);
-  const subTranslateX = slide.interpolate({ inputRange: [0, 1], outputRange: [slideDistance, 0] });
-  const hubScale = slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0.97] });
-  // The slide-over is translucent so the global ambient field remains alive.
-  // Fade the hub fully to avoid its cards ghosting through the page veil.
-  const hubOpacity = slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const pageSettleY = pageReveal.interpolate({ inputRange: [0, 1], outputRange: [8, 0] });
 
   const today = new Date();
   const moodToday = moodLog.find(
     m => new Date(m.ts).toDateString() === today.toDateString(),
   );
+  const pinnedPagesContext = useMemo(() => ({
+    pinnedMorePages,
+    onTogglePinnedMorePage,
+  }), [onTogglePinnedMorePage, pinnedMorePages]);
 
   return (
+    <PinnedMorePagesContext.Provider value={pinnedPagesContext}>
     <View style={{ flex: 1 }}>
       <Animated.View
         pointerEvents={page === null ? 'auto' : 'none'}
+        // React Native Web does not currently emit an aria-hidden attribute
+        // for accessibilityElementsHidden, so make the web accessibility-tree
+        // boundary explicit while the faded hub remains mounted underneath.
+        aria-hidden={page !== null}
         accessibilityElementsHidden={page !== null}
         importantForAccessibility={page === null ? 'auto' : 'no-hide-descendants'}
-        style={{ flex: 1, transform: [{ scale: hubScale }], opacity: hubOpacity }}
+        style={{ flex: 1, opacity: hubReveal }}
       >
         <Hub
           notifPref={notifPref}
@@ -586,9 +729,19 @@ export default function MoreView({
 
       {page !== null && (
         <Animated.View
+          pointerEvents={pageTransitioning ? 'none' : 'auto'}
+          // Keep the arriving/departing room out of the web accessibility tree
+          // until its short visual transition has finished.
+          aria-hidden={pageTransitioning}
+          accessibilityElementsHidden={pageTransitioning}
+          importantForAccessibility={pageTransitioning ? 'no-hide-descendants' : 'auto'}
           style={[
             StyleSheet.absoluteFill,
-            { transform: [{ translateX: subTranslateX }], backgroundColor: 'transparent' },
+            {
+              opacity: pageReveal,
+              transform: [{ translateY: pageSettleY }],
+              backgroundColor: 'transparent',
+            },
           ]}
         >
           {/* Moonlit base so sub-pages sit on layered depth instead of one
@@ -638,8 +791,6 @@ export default function MoreView({
               soundscapeVolume={soundscapeVolume}
               onToggleSoundscape={onToggleSoundscape}
               onChangeSoundscapeVolume={onChangeSoundscapeVolume}
-              soundscapesInNav={soundscapesInNav}
-              onToggleSoundscapesInNav={onToggleSoundscapesInNav}
             />
           )}
           {page === 'affirmations' && (
@@ -714,6 +865,7 @@ export default function MoreView({
         </Animated.View>
       )}
     </View>
+    </PinnedMorePagesContext.Provider>
   );
 }
 
@@ -758,7 +910,7 @@ function Hub({
   onOpen,
 }: HubProps) {
   // Weekly insights, derived from the parent's live state. The Hub stays
-  // mounted underneath the slide-over sub-pages, so a one-shot storage read
+  // mounted underneath the softly fading sub-pages, so a one-shot storage read
   // here would go stale as soon as the user logs an entry.
   // Mood averages over the past 7 days, trend against the 7 days before.
   const weekly = useMemo(() => {
@@ -810,6 +962,7 @@ function Hub({
     : intent
       ? intentionCopy[intent]
       : 'Start with a five-second check-in, then choose only what feels useful.';
+  const heroMoodColor = moodToday ? moodColor(moodToday.value) : '#8FB8DE';
 
   return (
     <AmbientPageShell accent={ambientAccent}>
@@ -837,12 +990,13 @@ function Hub({
               <Text style={styles.hubHeroTitle}>{heroTitle}</Text>
               <Text style={styles.hubHeroCopy}>{heroCopy}</Text>
             </View>
-            <View style={styles.hubMoodOrb}>
-              <Smiley
-                size={32}
-                weight="duotone"
-                color={moodToday ? moodColor(moodToday.value) : '#8FB8DE'}
-              />
+            <View
+              style={[
+                styles.hubMoodOrb,
+                { borderColor: heroMoodColor + '66', backgroundColor: heroMoodColor + '12' },
+              ]}
+            >
+              <MoodFace value={moodToday?.value ?? null} color={heroMoodColor} size={38} />
             </View>
           </View>
           <TouchableOpacity
@@ -977,7 +1131,7 @@ function Hub({
               accent="#8FB8DE"
               label="Soundscapes"
               kicker="BUILT IN · OFFLINE"
-              sub="Rain, ocean, forest, fire, stream, and white noise."
+              sub="13 offline layers: rain, ocean, night air, distant thunder, travel hum, fire, and steady noise."
               variant="wide"
               onPress={() => onOpen('soundscapes')}
             />
@@ -1259,8 +1413,47 @@ function SubHeader({
     mode: 'SIMPLY AMBIENT',
     glyph: '·',
   };
+  const pinContext = React.useContext(PinnedMorePagesContext);
+  const pageId = MORE_HEADER_TO_PAGE_ID[title];
+  const pinMeta = pageId ? MORE_PAGE_META[pageId] : null;
+  const pinnablePageId = pageId && isPinnableMorePage(pageId) ? pageId : null;
+  const pinned = pinnablePageId
+    ? pinContext?.pinnedMorePages.includes(pinnablePageId) ?? false
+    : false;
   const { height } = useWindowDimensions();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  const renderPinAction = () => {
+    if (!pinContext || !pinnablePageId || !pinMeta) {
+      return <View style={[styles.subNavDot, { backgroundColor: accent }]} />;
+    }
+    return (
+      <TouchableOpacity
+        onPress={() => pinContext.onTogglePinnedMorePage(pinnablePageId, !pinned)}
+        activeOpacity={0.78}
+        accessibilityRole="switch"
+        accessibilityLabel={`${pinned ? 'Unpin' : 'Pin'} ${pinMeta.label} ${pinned ? 'from' : 'to'} the app navbar`}
+        accessibilityHint={pinned
+          ? `${pinMeta.label} will remain available in More.`
+          : `Adds a ${pinMeta.shortLabel} shortcut to the navbar.`}
+        // RN Web keeps the switch role but does not currently forward the
+        // checked member of accessibilityState to the required ARIA state.
+        aria-checked={pinned}
+        accessibilityState={{ checked: pinned }}
+        style={[
+          styles.subPinBtn,
+          { borderColor: pinMeta.accent + (pinned ? '88' : '38') },
+          pinned && { backgroundColor: pinMeta.accent + '18' },
+        ]}
+      >
+        <PushPin
+          size={18}
+          weight={pinned ? 'fill' : 'regular'}
+          color={pinned ? pinMeta.accent : '#AAA9B8'}
+        />
+      </TouchableOpacity>
+    );
+  };
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -1292,7 +1485,7 @@ function SubHeader({
           <Text style={[styles.subCompactMode, { color: accent }]}>{presentation.mode}</Text>
           <Text style={styles.subCompactTitle} numberOfLines={1}>{presentation.displayTitle}</Text>
         </View>
-        <View style={[styles.subNavDot, { backgroundColor: accent }]} />
+        {renderPinAction()}
       </View>
     );
   }
@@ -1311,7 +1504,7 @@ function SubHeader({
           <CaretLeft size={20} color={accent} weight="regular" />
         </TouchableOpacity>
         <Text style={styles.subBrand}>SIMPLY AMBIENT</Text>
-        <View style={[styles.subNavDot, { backgroundColor: accent }]} />
+        {renderPinAction()}
       </View>
 
       <View style={styles.subHeroRow}>
@@ -1483,6 +1676,8 @@ function MoodPage({
   const moodToday = moodLog.find(
     m => new Date(m.ts).toDateString() === today.toDateString(),
   );
+  const todayMoodValue = moodToday?.value ?? null;
+  const todayMoodColor = todayMoodValue == null ? '#8FB8DE' : moodColor(todayMoodValue);
 
   // Day selected on the calendar for retroactive logging, behind a
   // disclosure row so the page leads with today.
@@ -1569,13 +1764,23 @@ function MoodPage({
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
         <GlowCard accent="#8FB8DE" style={{ padding: 16, marginTop: 12 }}>
           <View style={styles.moodHeroHeading}>
-            <View>
+            <View style={styles.moodHeroCopy}>
               <Text style={styles.moodHeroKicker}>TODAY’S MOOD</Text>
               <Text style={styles.moodHeroPrompt}>
                 {moodToday ? `Feeling ${moodLabel(moodToday.value).toLowerCase()}` : 'How do you feel right now?'}
               </Text>
             </View>
-            <Text style={styles.moodHeroStatus}>{moodToday ? 'CHECKED IN' : '5 SECONDS'}</Text>
+            <View style={styles.moodHeroAside}>
+              <View
+                style={[
+                  styles.moodHeroFaceOrb,
+                  { borderColor: todayMoodColor + '66', backgroundColor: todayMoodColor + '12' },
+                ]}
+              >
+                <MoodFace value={todayMoodValue} color={todayMoodColor} size={44} />
+              </View>
+              <Text style={styles.moodHeroStatus}>{moodToday ? 'CHECKED IN' : '5 SECONDS'}</Text>
+            </View>
           </View>
           <View style={styles.moodRow}>
             {[1, 2, 3, 4, 5].map(v => {
@@ -1589,7 +1794,7 @@ function MoodPage({
                     notify('Noted', `Logged as ${MOOD_LABELS[v - 1]} for today.`);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={`Mood ${v}, ${MOOD_LABELS[v - 1]}`}
+                  accessibilityLabel={`Mood ${v} of 5, ${MOOD_FACE_DESCRIPTIONS[v - 1]}, ${MOOD_LABELS[v - 1]}`}
                   accessibilityState={{ selected: active }}
                   style={[
                     styles.moodBtn,
@@ -1602,9 +1807,19 @@ function MoodPage({
                   {active ? (
                     <View style={[styles.moodActiveHalo, { borderColor: MOOD_COLORS[v - 1] + '55' }]} />
                   ) : null}
-                  <Text style={[styles.moodValue, { color: MOOD_COLORS[v - 1] }]}>{v}</Text>
-                  <Text style={[styles.moodLabel, { color: active ? MOOD_COLORS[v - 1] : '#ffffff88' }]}>
-                    {MOOD_LABELS[v - 1]}
+                  <MoodFace
+                    value={v}
+                    color={MOOD_COLORS[v - 1]}
+                    size={25}
+                    announce={false}
+                  />
+                  <Text
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.78}
+                    style={[styles.moodLabel, { color: active ? MOOD_COLORS[v - 1] : '#ffffff88' }]}
+                  >
+                    {v} · {MOOD_LABELS[v - 1]}
                   </Text>
                 </TouchableOpacity>
               );
@@ -3893,6 +4108,134 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
 //   Soundscapes
 // ===========================================================================
 
+function solidAccent(color: string): string {
+  return /^#[0-9a-f]{8}$/i.test(color) ? color.slice(0, 7) : color;
+}
+
+function SoundscapeScene({ soundscape }: { soundscape: SoundscapeOption | null }) {
+  const id = soundscape?.id ?? 'idle';
+  const color = solidAccent(soundscape?.color ?? '#8FB8DE');
+  const SceneIcon = soundscape?.Icon ?? Waveform;
+
+  const pattern = (() => {
+    switch (id) {
+      case 'rain':
+        return <>
+          {[18, 50, 82, 114, 146, 178, 210, 242, 274].map((x, index) => (
+            <Line key={x} x1={x} y1={-8 + (index % 3) * 13} x2={x - 15} y2={38 + (index % 3) * 13} />
+          ))}
+        </>;
+      case 'ocean':
+        return <>
+          <Path d="M-10 38 C35 15 70 58 118 35 S205 14 256 38 S320 51 344 28" />
+          <Path d="M-18 60 C26 38 66 79 112 57 S202 37 250 61 S319 72 344 50" />
+          <Path d="M-12 79 C31 61 68 92 116 76 S207 59 257 78 S320 86 344 68" />
+        </>;
+      case 'forest':
+        return <>
+          <Path d="M18 88 L48 25 L78 88 Z M66 88 L100 12 L134 88 Z M126 88 L154 32 L182 88 Z M174 88 L211 18 L248 88 Z" />
+          <Line x1={0} y1={88} x2={320} y2={88} />
+        </>;
+      case 'stream':
+        return <>
+          <Path d="M-14 78 C42 42 64 88 116 54 S190 24 232 52 S286 73 336 34" />
+          <Path d="M-12 87 C41 55 71 96 121 65 S189 39 228 63 S287 83 338 48" />
+          {[54, 132, 212, 276].map((x, index) => (
+            <Circle key={x} cx={x} cy={69 - (index % 2) * 16} r={3 + (index % 2)} />
+          ))}
+        </>;
+      case 'fire':
+        return <>
+          <Path d="M128 88 C105 67 123 49 143 37 C140 56 153 58 158 30 C184 55 191 74 174 88 Z" />
+          <Path d="M146 88 C136 75 146 66 158 56 C158 69 169 71 168 84 L166 88 Z" />
+          {[80, 112, 202, 234, 263].map((x, index) => (
+            <Circle key={x} cx={x} cy={62 - (index % 3) * 15} r={1.8 + (index % 2)} />
+          ))}
+        </>;
+      case 'breeze':
+        return <>
+          <Path d="M-16 28 C42 7 75 42 129 22 S220 5 276 25 C296 32 310 27 330 16" />
+          <Path d="M18 52 C66 33 105 65 153 48 S232 31 286 48" />
+          <Path d="M-10 76 C34 60 73 85 118 72 S194 56 239 72" />
+        </>;
+      case 'night':
+        return <>
+          <Path d="M240 15 A25 25 0 1 0 262 55 A20 20 0 1 1 240 15 Z" />
+          {[35, 72, 112, 159, 205, 288].map((x, index) => (
+            <Circle key={x} cx={x} cy={18 + (index % 3) * 21} r={index % 2 ? 1.4 : 2} />
+          ))}
+        </>;
+      case 'thunder':
+        return <>
+          <Path d="M30 48 C39 30 60 31 68 42 C76 24 107 27 112 46 C129 43 141 53 139 66 H27 C19 57 22 50 30 48 Z" />
+          <Path d="M83 55 L66 78 H80 L71 94 L101 68 H86 L99 55 Z" />
+          <Line x1={172} y1={27} x2={300} y2={27} />
+          <Line x1={190} y1={45} x2={278} y2={45} />
+        </>;
+      case 'cabin':
+        return <>
+          <Path d="M35 11 C20 11 13 27 13 47 C13 69 21 84 37 84 H118 C134 84 142 69 142 47 C142 27 134 11 118 11 Z" />
+          <Path d="M42 22 C32 22 27 33 27 48 C27 63 33 73 43 73 H110 C121 73 127 63 127 48 C127 33 121 22 110 22 Z" />
+          <Path d="M34 61 L78 47 L119 52 L73 66 Z" />
+          <Line x1={174} y1={29} x2={300} y2={29} />
+          <Line x1={190} y1={48} x2={278} y2={48} />
+          <Line x1={168} y1={67} x2={306} y2={67} />
+        </>;
+      case 'train':
+        return <>
+          <Line x1={50} y1={94} x2={135} y2={28} />
+          <Line x1={270} y1={94} x2={185} y2={28} />
+          <Line x1={77} y1={79} x2={243} y2={79} />
+          <Line x1={94} y1={65} x2={226} y2={65} />
+          <Line x1={111} y1={52} x2={209} y2={52} />
+          <Line x1={124} y1={41} x2={196} y2={41} />
+          <Path d="M142 18 H178 L185 34 H135 Z" />
+        </>;
+      case 'white':
+      case 'pink':
+      case 'brown':
+        return <>
+          <Path d="M-8 30 C18 6 40 54 68 30 S117 8 145 31 S195 54 224 29 S276 8 332 34" />
+          <Path d="M-8 52 C22 30 42 76 72 52 S120 31 151 54 S199 75 230 51 S280 31 332 56" />
+          <Path d="M-8 74 C23 56 44 91 75 73 S124 55 155 75 S204 91 235 72 S284 56 332 78" />
+        </>;
+      default:
+        return <>
+          <Path d="M-12 36 C35 15 74 55 122 34 S211 15 260 37 S313 48 340 30" />
+          <Path d="M-12 68 C35 48 74 86 122 66 S211 47 260 69 S313 80 340 62" />
+        </>;
+    }
+  })();
+
+  return (
+    <View style={[styles.soundscapeScene, { backgroundColor: color + '0D' }]} pointerEvents="none">
+      <LinearGradient
+        colors={[color + '24', color + '08', 'transparent']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <Svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 320 94"
+        preserveAspectRatio="none"
+        style={styles.soundscapePattern}
+        stroke={color + '70'}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      >
+        {pattern}
+      </Svg>
+      <View style={[styles.soundscapeSceneIcon, { borderColor: color + '55', backgroundColor: color + '16' }]}>
+        <SceneIcon size={28} color={color} weight="duotone" />
+      </View>
+    </View>
+  );
+}
+
 function SoundscapesPage({
   onBack,
   soundscapes,
@@ -3901,8 +4244,6 @@ function SoundscapesPage({
   soundscapeVolume,
   onToggleSoundscape,
   onChangeSoundscapeVolume,
-  soundscapesInNav,
-  onToggleSoundscapesInNav,
 }: {
   onBack: () => void;
   soundscapes: SoundscapeOption[];
@@ -3911,18 +4252,18 @@ function SoundscapesPage({
   soundscapeVolume: number;
   onToggleSoundscape: (id: string) => void;
   onChangeSoundscapeVolume: (v: number) => void;
-  soundscapesInNav: boolean;
-  onToggleSoundscapesInNav: (next: boolean) => void;
 }) {
   const subBodyPad = useSubBodyPad();
-  const activeName = activeSoundscapeId
-    ? soundscapes.find(s => s.id === activeSoundscapeId)?.name ?? 'Ambient layer'
-    : 'No layer selected';
+  const activeSoundscape = activeSoundscapeId
+    ? soundscapes.find(s => s.id === activeSoundscapeId) ?? null
+    : null;
+  const activeName = activeSoundscape?.name ?? 'No layer selected';
+  const heroAccent = solidAccent(activeSoundscape?.color ?? '#8FB8DE');
 
   // Two families, rendered under their own section labels.
-  const NATURE_IDS = ['rain', 'ocean', 'forest', 'stream', 'fire'];
+  const NATURE_IDS = ['rain', 'ocean', 'forest', 'stream', 'fire', 'breeze', 'night', 'thunder'];
   const natureScapes = soundscapes.filter(s => NATURE_IDS.includes(s.id));
-  const noiseScapes = soundscapes.filter(s => !NATURE_IDS.includes(s.id));
+  const steadyScapes = soundscapes.filter(s => !NATURE_IDS.includes(s.id));
 
   const renderCard = (s: SoundscapeOption) => {
     const active = activeSoundscapeId === s.id && isSoundscapePlaying;
@@ -3973,16 +4314,11 @@ function SoundscapesPage({
           It follows you through the app in the mini player.
         </Text>
 
-        <GlowCard accent="#8FB8DE" style={styles.soundscapeHero}>
-          <View style={styles.soundscapeScene} pointerEvents="none">
-            <View style={styles.soundscapeMoon} />
-            <View style={[styles.soundscapeWave, { top: 52, width: '78%', opacity: 0.7 }]} />
-            <View style={[styles.soundscapeWave, { top: 62, width: '91%', opacity: 0.45 }]} />
-            <View style={[styles.soundscapeWave, { top: 72, width: '68%', opacity: 0.25 }]} />
-          </View>
+        <GlowCard accent={heroAccent} style={styles.soundscapeHero}>
+          <SoundscapeScene soundscape={activeSoundscape} />
           <View style={styles.soundscapeTopRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.soundscapeActiveLabel}>CURRENT</Text>
+              <Text style={[styles.soundscapeActiveLabel, { color: heroAccent }]}>CURRENT</Text>
               <Text style={styles.soundscapeActiveName}>{activeName}</Text>
               <Text style={styles.soundscapeActiveMeta}>
                 {activeSoundscapeId
@@ -3991,54 +4327,40 @@ function SoundscapesPage({
               </Text>
             </View>
             <View style={styles.soundscapeHeroActions}>
-              <TouchableOpacity
-                onPress={() => onToggleSoundscapesInNav(!soundscapesInNav)}
-                activeOpacity={0.78}
-                accessibilityRole="button"
-                accessibilityLabel={soundscapesInNav
-                  ? 'Unpin Soundscapes from the app navbar'
-                  : 'Pin Soundscapes to the app navbar'}
-                accessibilityHint={soundscapesInNav
-                  ? 'Soundscapes will remain available in More.'
-                  : 'Adds a Soundscapes shortcut to the navbar.'}
-                accessibilityState={{ checked: soundscapesInNav }}
-                style={[
-                  styles.soundscapePinBtn,
-                  soundscapesInNav && styles.soundscapePinBtnActive,
-                ]}
-              >
-                <PushPin
-                  size={18}
-                  weight={soundscapesInNav ? 'fill' : 'regular'}
-                  color={soundscapesInNav ? '#8FB8DE' : '#AAA9B8'}
-                />
-              </TouchableOpacity>
               {activeSoundscapeId ? (
                 <TouchableOpacity
                   onPress={() => onToggleSoundscape(activeSoundscapeId)}
                   activeOpacity={0.85}
                   accessibilityRole="button"
-                  accessibilityLabel={isSoundscapePlaying ? 'Pause the soundscape' : 'Play the soundscape'}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityLabel={isSoundscapePlaying ? 'Stop the soundscape' : 'Play the soundscape'}
+                  style={[
+                    styles.soundscapeHeroTransport,
+                    {
+                      borderColor: heroAccent + '70',
+                      backgroundColor: heroAccent + '14',
+                    },
+                  ]}
                 >
-                  <Text style={styles.soundscapeSoon}>
-                    {isSoundscapePlaying ? 'PAUSE' : 'PLAY'}
-                  </Text>
+                  {isSoundscapePlaying ? (
+                    <Stop size={18} color={heroAccent} weight="fill" />
+                  ) : (
+                    <Play size={19} color={heroAccent} weight="fill" />
+                  )}
                 </TouchableOpacity>
               ) : null}
             </View>
           </View>
           {activeSoundscapeId ? (
             <View style={{ marginTop: 14 }}>
-              <Text style={styles.soundscapeVolLabel}>VOLUME · {Math.round(soundscapeVolume * 100)}%</Text>
+              <Text style={[styles.soundscapeVolLabel, { color: heroAccent }]}>VOLUME · {Math.round(soundscapeVolume * 100)}%</Text>
               <Slider
                 style={{ width: '100%', height: 34 }}
                 minimumValue={0}
                 maximumValue={1}
                 value={soundscapeVolume}
-                minimumTrackTintColor="#8FB8DE"
+                minimumTrackTintColor={heroAccent}
                 maximumTrackTintColor="rgba(255,255,255,0.12)"
-                thumbTintColor="#8FB8DE"
+                thumbTintColor={heroAccent}
                 onValueChange={onChangeSoundscapeVolume}
                 accessibilityLabel="Soundscape volume"
                 accessibilityValue={{
@@ -4055,8 +4377,8 @@ function SoundscapesPage({
         <Text style={styles.sectionLabel}>NATURE</Text>
         <View style={styles.soundscapeGrid}>{natureScapes.map(renderCard)}</View>
 
-        <Text style={styles.sectionLabel}>STEADY NOISE</Text>
-        <View style={styles.soundscapeGrid}>{noiseScapes.map(renderCard)}</View>
+        <Text style={styles.sectionLabel}>STEADY & RHYTHMIC</Text>
+        <View style={styles.soundscapeGrid}>{steadyScapes.map(renderCard)}</View>
       </ScrollView>
     </AmbientPageShell>
   );
@@ -4912,6 +5234,11 @@ const styles = StyleSheet.create({
   subNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   subBrand: { color: '#77788D', fontSize: 8.5, fontWeight: '800', letterSpacing: 2.2 },
   subNavDot: { width: 6, height: 6, borderRadius: 3, opacity: 0.9 },
+  subPinBtn: {
+    width: 44, height: 44, borderRadius: 22, borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center', justifyContent: 'center',
+  },
   subHeroRow: { flexDirection: 'row', alignItems: 'center', marginTop: 17, minHeight: 108 },
   subHeroCopy: { flex: 1, paddingRight: 12 },
   subModeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 7 },
@@ -5065,8 +5392,14 @@ const styles = StyleSheet.create({
 
   // Mood
   moodHeroHeading: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     marginBottom: 20,
+  },
+  moodHeroCopy: { flex: 1, paddingRight: 8 },
+  moodHeroAside: { alignItems: 'center', marginLeft: 6 },
+  moodHeroFaceOrb: {
+    width: 52, height: 52, borderRadius: 26, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
   },
   moodHeroKicker: { color: '#8FB8DE', fontSize: 8.5, fontWeight: '800', letterSpacing: 1.8 },
   moodHeroPrompt: {
@@ -5076,7 +5409,7 @@ const styles = StyleSheet.create({
   moodHeroStatus: {
     color: '#85869A', fontSize: 7.5, fontWeight: '800', letterSpacing: 1.2,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5,
+    borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5, marginTop: 5,
   },
   moodRow: { flexDirection: 'row', gap: 7, position: 'relative', paddingTop: 4 },
   moodBtn: {
@@ -5089,7 +5422,7 @@ const styles = StyleSheet.create({
     borderRadius: 28, borderWidth: 1,
   },
   moodValue: { fontSize: 19, fontWeight: '700' },
-  moodLabel: { fontSize: 8.5, letterSpacing: 0.7, fontWeight: '700', marginTop: 2 },
+  moodLabel: { fontSize: 7.5, letterSpacing: 0.2, fontWeight: '700', marginTop: 3 },
 
   graphCard: {
     backgroundColor: 'rgba(0,0,0,0.30)',
@@ -5477,28 +5810,20 @@ const styles = StyleSheet.create({
   },
   soundscapeTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   soundscapeHeroActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  soundscapePinBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+  soundscapeHeroTransport: {
+    width: 44, height: 44, borderRadius: 22, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
-  },
-  soundscapePinBtnActive: {
-    borderColor: '#8FB8DE88', backgroundColor: '#8FB8DE18',
   },
   soundscapeHero: { padding: 16, paddingTop: 104, marginBottom: 12, minHeight: 210 },
   soundscapeScene: {
-    position: 'absolute', top: 0, left: 0, right: 0, height: 94,
-    backgroundColor: 'rgba(143,184,222,0.06)', overflow: 'hidden',
+    position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
+    overflow: 'hidden',
   },
-  soundscapeMoon: {
-    position: 'absolute', width: 48, height: 48, borderRadius: 24,
-    right: 28, top: 13, borderWidth: 1, borderColor: '#8FB8DE55',
-    backgroundColor: '#8FB8DE15',
-  },
-  soundscapeWave: {
-    position: 'absolute', left: -8, height: 34, borderRadius: 999,
-    borderTopWidth: 1, borderTopColor: '#8FB8DE55', transform: [{ rotate: '-3deg' }],
+  soundscapePattern: { ...StyleSheet.absoluteFillObject, opacity: 0.48 },
+  soundscapeSceneIcon: {
+    position: 'absolute', width: 50, height: 50, borderRadius: 25,
+    right: 22, top: 16, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
   },
   soundscapeActiveLabel: {
     color: '#ffffff80',

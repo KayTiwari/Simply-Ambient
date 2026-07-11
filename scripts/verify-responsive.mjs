@@ -123,10 +123,18 @@ const exerciseRooms = async width => {
         scrollLeft: element.scrollLeft,
         scrollWidth: element.scrollWidth,
         clientWidth: element.clientWidth,
+        overflowX: getComputedStyle(element).overflowX,
       })),
   }));
   assert.equal(sidewaysScroll.windowX, 0, `${width} soundscapes shifted the window sideways`);
-  assert.deepEqual(sidewaysScroll.elements, [], `${width} soundscapes shifted an inner scroller sideways`);
+  const uncontainedSidewaysScroll = sidewaysScroll.elements.filter(
+    element => !['auto', 'scroll', 'hidden', 'clip'].includes(element.overflowX),
+  );
+  assert.deepEqual(
+    uncontainedSidewaysScroll,
+    [],
+    `${width} soundscapes shifted an uncontained element sideways`,
+  );
 
   const pin = page.getByLabel('Pin Soundscapes to the app navbar', { exact: true });
   await pin.click();

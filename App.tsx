@@ -47,6 +47,11 @@ import {
   WaveSquare,
   WaveSine,
   WaveTriangle,
+  Wind,
+  MoonStars,
+  CloudLightning,
+  AirplaneTilt,
+  Train,
   Play,
   Pause,
   type IconProps,
@@ -93,6 +98,12 @@ import ChakrasView from './ChakrasView';
 import HoroscopesView from './HoroscopesView';
 import MoreView, { type NotifPref } from './MoreView';
 import OnboardingView from './OnboardingView';
+import {
+  MORE_PAGE_META,
+  isPinnableMorePage,
+  type MorePageId,
+  type PinnableMorePageId,
+} from './moreNavigation';
 import {
   AmbientSurface,
   AmbientVeil,
@@ -451,7 +462,20 @@ type TuningPreset = {
   origin: 'solfeggio' | 'natural' | 'cosmic' | 'archaeo' | 'scientific';
 };
 
-type SoundscapeKey = 'rain' | 'ocean' | 'forest' | 'stream' | 'fire' | 'white' | 'pink' | 'brown';
+type SoundscapeKey =
+  | 'rain'
+  | 'ocean'
+  | 'forest'
+  | 'stream'
+  | 'fire'
+  | 'white'
+  | 'pink'
+  | 'brown'
+  | 'breeze'
+  | 'night'
+  | 'thunder'
+  | 'cabin'
+  | 'train';
 
 type Soundscape = {
   id: SoundscapeKey;
@@ -470,6 +494,11 @@ const SOUNDSCAPES: Soundscape[] = [
   { id: 'white',  name: 'White Noise',    blurb: 'Even masking for busy rooms and brittle silence.',          color: '#ffffffcc', Icon: WaveSquare },
   { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer masking with less edge than white noise.',           color: '#E0BFCB',   Icon: WaveSine },
   { id: 'brown',  name: 'Brown Noise',    blurb: 'Low, dense, and grounding for a heavy nervous system.',     color: '#8A6B4A',   Icon: WaveTriangle },
+  { id: 'breeze', name: 'Night Breeze',   blurb: 'A soft, low-passed current that rises and settles slowly.',  color: '#A7C7C1',   Icon: Wind },
+  { id: 'night',  name: 'Summer Night',   blurb: 'Quiet night air with crickets softened into the distance.', color: '#AFA6DA',   Icon: MoonStars },
+  { id: 'thunder', name: 'Distant Thunder', blurb: 'A misty rain bed with low rumbles far beyond the room.',   color: '#8897B8',   Icon: CloudLightning },
+  { id: 'cabin',  name: 'Airplane Cabin', blurb: 'Steady low cabin air for private focus while everything moves.', color: '#9FB4C7', Icon: AirplaneTilt },
+  { id: 'train',  name: 'Night Train',    blurb: 'Muted rail sway and low motion for a slow journey inward.',  color: '#B3A2C2',   Icon: Train },
 ];
 
 const BUNDLED_SOUNDSCAPES: Partial<Record<SoundscapeKey, number>> = {
@@ -490,6 +519,11 @@ const SOUNDSCAPE_GAIN: Record<SoundscapeKey, number> = {
   white: 0.24,
   pink: 0.62,
   brown: 0.62,
+  breeze: 0.42,
+  night: 0.38,
+  thunder: 0.42,
+  cabin: 0.40,
+  train: 0.44,
 };
 
 function effectiveSoundscapeVolume(kind: SoundscapeKey, volume: number) {
@@ -863,8 +897,22 @@ function buildSoundscapeWav(kind: SoundscapeKey): string {
   let rainDropRight = 0;
   let fireCrackle = 0;
   let firePop = 0;
+  let breezeLow = 0;
+  let thunderLow = 0;
+  let cabinLow = 0;
+  let trainLow = 0;
 
-  return buildStereoWav(kind === 'fire' ? 6 : 2, (t, i) => {
+  const loopSeconds = kind === 'thunder'
+    ? 12
+    : kind === 'night'
+      ? 8
+      : kind === 'fire' || kind === 'breeze' || kind === 'train'
+        ? 6
+        : kind === 'cabin'
+          ? 4
+          : 2;
+
+  return buildStereoWav(loopSeconds, (t, i) => {
     const white = rnd();
     pink = pink * 0.92 + white * 0.08;
     brown = Math.max(-1, Math.min(1, brown + white * 0.025));
@@ -909,6 +957,62 @@ function buildSoundscapeWav(kind: SoundscapeKey): string {
         const sparkLeft = fireCrackle * 0.22 + firePop * 0.18;
         const sparkRight = fireCrackle * 0.15 + firePop * 0.24;
         return [(flame + sparkLeft) * panLeft, (flame * 0.88 + sparkRight) * panRight];
+      }
+      case 'breeze': {
+        // Pink and brown noise pass through a very slow one-pole filter, then
+        // an integral six-second swell keeps both the texture and loop seam soft.
+        breezeLow = breezeLow * 0.9985 + (pink * 0.62 + brown * 0.38) * 0.0015;
+        const swell = 0.78
+          - Math.cos(twoPi * t / 6) * 0.14
+          + Math.sin(twoPi * t / 3) * 0.06;
+        const air = (pink * 0.052 + brown * 0.026 + breezeLow * 0.34) * swell;
+        return [air * panLeft, (air * 0.94 + breezeLow * 0.015) * panRight];
+      }
+      case 'night': {
+        // Raised sine gates have zero slope as they open and close, keeping
+        // the distant cricket calls rounded rather than click-like.
+        const gateLeft = Math.pow(Math.max(0, Math.sin(twoPi * 0.5 * t)), 6);
+        const gateRight = Math.pow(Math.max(0, Math.sin(twoPi * 0.375 * t + Math.PI * 0.35)), 6);
+        const cricketLeft = Math.sin(twoPi * 2780 * t + Math.sin(twoPi * 4 * t) * 0.65);
+        const cricketRight = Math.sin(twoPi * 2460 * t + Math.sin(twoPi * 3 * t) * 0.55);
+        const nightBed = pink * 0.052 + brown * 0.014;
+        return [
+          nightBed + cricketLeft * gateLeft * 0.018,
+          nightBed * 0.92 + cricketRight * gateRight * 0.016,
+        ];
+      }
+      case 'thunder': {
+        // One distant rumble per twelve-second loop, shaped with a raised
+        // cosine so it arrives and leaves without a transient.
+        thunderLow = thunderLow * 0.997 + (brown * 0.75 + pink * 0.25) * 0.003;
+        const distance = Math.abs(t - 5.4);
+        const rumbleEnvelope = distance < 2.35
+          ? 0.5 + 0.5 * Math.cos(Math.PI * distance / 2.35)
+          : 0;
+        const rumble = rumbleEnvelope * (
+          thunderLow * 0.16
+          + Math.sin(twoPi * 31 * t) * 0.055
+          + Math.sin(twoPi * 43 * t + 0.8) * 0.026
+        );
+        const mist = pink * 0.058 + rain * 0.042 + brown * 0.018;
+        return [mist + rumble, mist * 0.91 + rumble * 0.86];
+      }
+      case 'cabin': {
+        cabinLow = cabinLow * 0.9975 + (pink * 0.7 + brown * 0.3) * 0.0025;
+        const drift = 0.88 + Math.sin(twoPi * 0.25 * t) * 0.07;
+        const body = (
+          Math.sin(twoPi * 56 * t) * 0.032
+          + Math.sin(twoPi * 112 * t + 0.35) * 0.011
+        ) * drift;
+        const hum = pink * 0.045 + cabinLow * 0.18;
+        return [hum + body, hum * 0.94 + body * 0.90];
+      }
+      case 'train': {
+        trainLow = trainLow * 0.9965 + (brown * 0.78 + pink * 0.22) * 0.0035;
+        const railSway = Math.sin(twoPi * 2 * t) * 0.025
+          + Math.sin(twoPi * 4 * t + 0.45) * 0.007;
+        const rumble = trainLow * 0.25 + brown * 0.038 + pink * 0.022;
+        return [rumble + railSway, rumble * 0.93 - railSway * 0.72];
       }
       case 'pink':
         return [pink * 0.24 * panLeft, pink * 0.22 * panRight];
@@ -1030,6 +1134,10 @@ class WebSoundscapeEngine {
   private rainDropRight = 0;
   private fireCrackle = 0;
   private firePop = 0;
+  private breezeLow = 0;
+  private thunderLow = 0;
+  private cabinLow = 0;
+  private trainLow = 0;
   private media: any = null;
   private mediaSource: string | null = null;
 
@@ -1074,8 +1182,10 @@ class WebSoundscapeEngine {
         const right = event.outputBuffer.getChannelData(1);
         for (let i = 0; i < left.length; i++) {
           const [l, r] = this.nextSample(ctx.sampleRate);
-          left[i] = l;
-          right[i] = r;
+          // Last-line peak guard for generated scenes. Normal output stays
+          // well below this ceiling; an unlucky random walk can never spike.
+          left[i] = Math.max(-0.82, Math.min(0.82, l));
+          right[i] = Math.max(-0.82, Math.min(0.82, r));
         }
       };
       processor.connect(gain);
@@ -1167,6 +1277,61 @@ class WebSoundscapeEngine {
       }
       case 'fire':
         return [flame + this.fireCrackle * 0.22 + this.firePop * 0.18, flame * 0.88 + this.fireCrackle * 0.15 + this.firePop * 0.24];
+      case 'breeze': {
+        this.breezeLow = this.breezeLow * 0.9985
+          + (this.pink * 0.62 + this.brown * 0.38) * 0.0015;
+        const swell = 0.78
+          - Math.cos(twoPi * t / 6) * 0.14
+          + Math.sin(twoPi * t / 3) * 0.06;
+        const air = (this.pink * 0.052 + this.brown * 0.026 + this.breezeLow * 0.34) * swell;
+        return [air, air * 0.94 + this.breezeLow * 0.015];
+      }
+      case 'night': {
+        const gateLeft = Math.pow(Math.max(0, Math.sin(twoPi * 0.5 * t)), 6);
+        const gateRight = Math.pow(Math.max(0, Math.sin(twoPi * 0.375 * t + Math.PI * 0.35)), 6);
+        const cricketLeft = Math.sin(twoPi * 2780 * t + Math.sin(twoPi * 4 * t) * 0.65);
+        const cricketRight = Math.sin(twoPi * 2460 * t + Math.sin(twoPi * 3 * t) * 0.55);
+        const nightBed = this.pink * 0.052 + this.brown * 0.014;
+        return [
+          nightBed + cricketLeft * gateLeft * 0.018,
+          nightBed * 0.92 + cricketRight * gateRight * 0.016,
+        ];
+      }
+      case 'thunder': {
+        this.thunderLow = this.thunderLow * 0.997
+          + (this.brown * 0.75 + this.pink * 0.25) * 0.003;
+        const cyclePosition = t % 13;
+        const distance = Math.abs(cyclePosition - 5.7);
+        const rumbleEnvelope = distance < 2.45
+          ? 0.5 + 0.5 * Math.cos(Math.PI * distance / 2.45)
+          : 0;
+        const rumble = rumbleEnvelope * (
+          this.thunderLow * 0.16
+          + Math.sin(twoPi * 31 * t) * 0.055
+          + Math.sin(twoPi * 43 * t + 0.8) * 0.026
+        );
+        const mist = this.pink * 0.058 + this.rain * 0.042 + this.brown * 0.018;
+        return [mist + rumble, mist * 0.91 + rumble * 0.86];
+      }
+      case 'cabin': {
+        this.cabinLow = this.cabinLow * 0.9975
+          + (this.pink * 0.7 + this.brown * 0.3) * 0.0025;
+        const drift = 0.88 + Math.sin(twoPi * 0.25 * t) * 0.07;
+        const body = (
+          Math.sin(twoPi * 56 * t) * 0.032
+          + Math.sin(twoPi * 112 * t + 0.35) * 0.011
+        ) * drift;
+        const hum = this.pink * 0.045 + this.cabinLow * 0.18;
+        return [hum + body, hum * 0.94 + body * 0.90];
+      }
+      case 'train': {
+        this.trainLow = this.trainLow * 0.9965
+          + (this.brown * 0.78 + this.pink * 0.22) * 0.0035;
+        const railSway = Math.sin(twoPi * 2 * t) * 0.025
+          + Math.sin(twoPi * 4 * t + 0.45) * 0.007;
+        const rumble = this.trainLow * 0.25 + this.brown * 0.038 + this.pink * 0.022;
+        return [rumble + railSway, rumble * 0.93 - railSway * 0.72];
+      }
       case 'pink':
         return [this.pink * 0.24, this.pink * 0.22];
       case 'brown':
@@ -1413,6 +1578,8 @@ type Tab = 'frequencies' | 'breath' | 'chakras' | 'horoscopes' | 'more';
 
 const STORAGE_KEY_NOTIF = '@simply_ambient_notif_pref_v1';
 const STORAGE_KEY_SINGLE_COLOR = '@simply_ambient_single_color_v1';
+const STORAGE_KEY_PINNED_MORE_PAGES = '@simply_ambient_pinned_more_pages_v1';
+// Read only for the one-time migration into the ordered registry-backed list.
 const STORAGE_KEY_NAV_SOUNDSCAPES = '@simply_ambient_nav_soundscapes_v1';
 // The day's affirmation, stored as JSON {date: 'YYYY-MM-DD' local, text} so
 // one phrase holds for the whole day across launches and hub previews.
@@ -1426,14 +1593,36 @@ function localDateKey(d: Date = new Date()): string {
   return `${d.getFullYear()}-${m}-${day}`;
 }
 
+function parsePinnedMorePages(raw: string | null): PinnableMorePageId[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const seen = new Set<PinnableMorePageId>();
+    const pages: PinnableMorePageId[] = [];
+    parsed.forEach(value => {
+      if (typeof value !== 'string' || !isPinnableMorePage(value) || seen.has(value)) return;
+      seen.add(value);
+      pages.push(value);
+    });
+    return pages;
+  } catch {
+    return [];
+  }
+}
+
 function AppContent() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('frequencies');
-  const [soundscapesInNav, setSoundscapesInNav] = useState(false);
-  const soundscapesPinTouched = useRef(false);
-  const [moreActivePage, setMoreActivePage] = useState<string | null>(null);
-  // Deep link into a More sub-page (the mini player opens Soundscapes there).
-  const [morePageRequest, setMorePageRequest] = useState<'soundscapes' | 'hub' | null>(null);
+  const [pinnedMorePages, setPinnedMorePages] = useState<PinnableMorePageId[]>([]);
+  const pinnedMorePagesRef = useRef<PinnableMorePageId[]>([]);
+  // Prevent an async launch read from overwriting a pin action made while
+  // storage is still hydrating.
+  const pinnedMorePagesTouched = useRef(false);
+  const [newlyPinnedMorePage, setNewlyPinnedMorePage] = useState<PinnableMorePageId | null>(null);
+  const [moreActivePage, setMoreActivePage] = useState<MorePageId | null>(null);
+  // Deep links into any More room; `hub` returns from a room to More's index.
+  const [morePageRequest, setMorePageRequest] = useState<MorePageId | 'hub' | null>(null);
   const tabFade = useRef(new Animated.Value(1)).current;
   const lastTab = useRef<Tab>(tab);
 
@@ -1461,11 +1650,23 @@ function AppContent() {
     AsyncStorage.getItem(STORAGE_KEY_SINGLE_COLOR).then(v => {
       if (v) setSingleColor(v);
     }).catch(() => {});
-    AsyncStorage.getItem(STORAGE_KEY_NAV_SOUNDSCAPES)
-      .then(v => {
-        if (!soundscapesPinTouched.current) setSoundscapesInNav(v === '1');
-      })
-      .catch(() => {});
+    Promise.all([
+      AsyncStorage.getItem(STORAGE_KEY_PINNED_MORE_PAGES),
+      AsyncStorage.getItem(STORAGE_KEY_NAV_SOUNDSCAPES),
+    ]).then(([storedPins, legacySoundscapes]) => {
+      if (pinnedMorePagesTouched.current) return;
+
+      const migrated = storedPins == null && legacySoundscapes === '1';
+      const next = storedPins == null
+        ? (migrated ? ['soundscapes' as const] : [])
+        : parsePinnedMorePages(storedPins);
+      pinnedMorePagesRef.current = next;
+      setPinnedMorePages(next);
+
+      if (migrated && !pinnedMorePagesTouched.current) {
+        AsyncStorage.setItem(STORAGE_KEY_PINNED_MORE_PAGES, JSON.stringify(next)).catch(() => {});
+      }
+    }).catch(() => {});
     // One of the rate-prompt gate counters (see lib/rateGate.ts).
     recordAppOpen().catch(() => {});
   }, []);
@@ -1473,11 +1674,33 @@ function AppContent() {
   // "Single app color": when set, the backdrop is pinned to this flat color
   // instead of the band-driven animated palettes.
   const [singleColor, setSingleColor] = useState<string | null>(null);
-  function setSoundscapesPinned(next: boolean) {
-    soundscapesPinTouched.current = true;
-    setSoundscapesInNav(next);
-    if (next) AsyncStorage.setItem(STORAGE_KEY_NAV_SOUNDSCAPES, '1').catch(() => {});
-    else AsyncStorage.removeItem(STORAGE_KEY_NAV_SOUNDSCAPES).catch(() => {});
+
+  function togglePinnedMorePage(id: PinnableMorePageId, next: boolean) {
+    if (!isPinnableMorePage(id)) return;
+    pinnedMorePagesTouched.current = true;
+    const current = pinnedMorePagesRef.current;
+    const alreadyPinned = current.includes(id);
+    if (alreadyPinned === next) return;
+
+    const updated = next
+      ? [...current, id]
+      : current.filter(pageId => pageId !== id);
+    pinnedMorePagesRef.current = updated;
+    setPinnedMorePages(updated);
+    if (next) setNewlyPinnedMorePage(id);
+    else setNewlyPinnedMorePage(previous => previous === id ? null : previous);
+    AsyncStorage.setItem(STORAGE_KEY_PINNED_MORE_PAGES, JSON.stringify(updated)).catch(() => {});
+  }
+
+  function clearPinnedMorePages() {
+    pinnedMorePagesTouched.current = true;
+    pinnedMorePagesRef.current = [];
+    setPinnedMorePages([]);
+    setNewlyPinnedMorePage(null);
+    AsyncStorage.multiRemove([
+      STORAGE_KEY_PINNED_MORE_PAGES,
+      STORAGE_KEY_NAV_SOUNDSCAPES,
+    ]).catch(() => {});
   }
 
   function openMoreHub() {
@@ -1486,8 +1709,9 @@ function AppContent() {
     setTab('more');
   }
 
-  function openSoundscapesFromNav() {
-    setMorePageRequest('soundscapes');
+  function openMorePageFromNav(page: PinnableMorePageId) {
+    setMoreActivePage(page);
+    setMorePageRequest(page);
     setTab('more');
   }
   function setSingleColorPref(c: string | null) {
@@ -2351,8 +2575,9 @@ function AppContent() {
                 soundscapeVolume={soundscapeVolume}
                 onToggleSoundscape={(id) => toggleSoundscape(id as SoundscapeKey)}
                 onChangeSoundscapeVolume={changeSoundscapeVolume}
-                soundscapesInNav={soundscapesInNav}
-                onToggleSoundscapesInNav={setSoundscapesPinned}
+                pinnedMorePages={pinnedMorePages}
+                onTogglePinnedMorePage={togglePinnedMorePage}
+                onClearPinnedMorePages={clearPinnedMorePages}
                 requestedPage={morePageRequest}
                 onRequestedPageHandled={() => setMorePageRequest(null)}
                 onPageChange={setMoreActivePage}
@@ -2398,9 +2623,10 @@ function AppContent() {
             else setTab(nextTab);
           }}
           accent={beatColor}
-          soundscapesInNav={soundscapesInNav}
-          soundscapesActive={soundscapesInNav && tab === 'more' && moreActivePage === 'soundscapes'}
-          onOpenSoundscapes={openSoundscapesFromNav}
+          pinnedMorePages={pinnedMorePages}
+          moreActivePage={moreActivePage}
+          newlyPinnedMorePage={newlyPinnedMorePage}
+          onOpenMorePage={openMorePageFromNav}
         />
       </SafeAreaView>
 
@@ -2666,32 +2892,25 @@ function MiniPlayer({
 
   return (
     <Animated.View
-      style={[
-        styles.miniPlayerDock,
-        {
-          opacity: barOpacity,
-          transform: [{ translateY: barOffset }],
-        },
-      ]}
+      style={{ opacity: barOpacity, transform: [{ translateY: barOffset }] }}
     >
-      <LinearGradient
-        colors={[
-          'rgba(6,8,22,0.56)',
-          'rgba(16,19,38,0.43)',
-          'rgba(5,7,20,0.60)',
-        ]}
-        locations={[0, 0.48, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-      <View style={styles.miniPlayerDockSheen} pointerEvents="none" />
       <View
-        style={[styles.miniPlayer, { borderColor: accent + '66' }]}
+        style={[
+          styles.miniPlayer,
+          {
+            borderColor: accent + '70',
+            backgroundColor: accent + '0D',
+          },
+          Platform.OS === 'web'
+            ? ({
+                backdropFilter: 'blur(26px) saturate(130%)',
+                WebkitBackdropFilter: 'blur(26px) saturate(130%)',
+              } as any)
+            : null,
+        ]}
       >
         <LinearGradient
-          colors={[accent + '20', 'rgba(16,17,37,0.95)', 'rgba(7,8,24,0.97)']}
+          colors={[accent + '24', 'rgba(13,15,32,0.11)', accent + '0A']}
           locations={[0, 0.46, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -2801,57 +3020,198 @@ function MiniPlayer({
   );
 }
 
+const MIN_DISTRIBUTED_TAB_WIDTH = 58;
+const SCROLL_TAB_WIDTH = 72;
+const TAB_BAR_HORIZONTAL_PADDING = 8;
+
 function TabBar({
   tab,
   onChange,
   accent,
-  soundscapesInNav,
-  soundscapesActive,
-  onOpenSoundscapes,
+  pinnedMorePages,
+  moreActivePage,
+  newlyPinnedMorePage,
+  onOpenMorePage,
 }: {
   tab: Tab;
   onChange: (t: Tab) => void;
   accent: string;
-  soundscapesInNav: boolean;
-  soundscapesActive: boolean;
-  onOpenSoundscapes: () => void;
+  pinnedMorePages: PinnableMorePageId[];
+  moreActivePage: MorePageId | null;
+  newlyPinnedMorePage: PinnableMorePageId | null;
+  onOpenMorePage: (page: PinnableMorePageId) => void;
 }) {
-  // Short visible labels remain readable on narrow phones; accessibility
-  // labels keep the full destination names.
-  const { width } = useWindowDimensions();
-  const compact = width / (soundscapesInNav ? 6 : 5) < 82;
+  const { width: windowWidth } = useWindowDimensions();
+  const [viewportWidth, setViewportWidth] = useState(Math.min(windowWidth, 480));
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollXRef = useRef(0);
+  const contentWidthRef = useRef(0);
+  const viewportWidthRef = useRef(viewportWidth);
+
+  const totalItems = 5 + pinnedMorePages.length;
+  const distributedItemWidth = Math.max(
+    0,
+    (viewportWidth - TAB_BAR_HORIZONTAL_PADDING * 2) / totalItems,
+  );
+  const scrollable = distributedItemWidth < MIN_DISTRIBUTED_TAB_WIDTH;
+  const compact = !scrollable && distributedItemWidth < 72;
+  const pinnedPageIsActive = tab === 'more'
+    && moreActivePage != null
+    && isPinnableMorePage(moreActivePage)
+    && pinnedMorePages.includes(moreActivePage);
+  const moreIsActive = tab === 'more' && !pinnedPageIsActive;
+
+  const updateScrollEdges = (offset: number) => {
+    const maxOffset = Math.max(0, contentWidthRef.current - viewportWidthRef.current);
+    const nextLeft = maxOffset > 1 && offset > 3;
+    const nextRight = maxOffset > 1 && offset < maxOffset - 3;
+    setCanScrollLeft(previous => previous === nextLeft ? previous : nextLeft);
+    setCanScrollRight(previous => previous === nextRight ? previous : nextRight);
+  };
+
+  useEffect(() => {
+    viewportWidthRef.current = viewportWidth;
+    if (!scrollable) {
+      scrollXRef.current = 0;
+      contentWidthRef.current = viewportWidth;
+      setCanScrollLeft(false);
+      setCanScrollRight(false);
+      return;
+    }
+
+    // Seed the affordance before the native/web content-size callback lands,
+    // so the right chevron is visible on the first scrollable frame.
+    contentWidthRef.current = totalItems * SCROLL_TAB_WIDTH
+      + TAB_BAR_HORIZONTAL_PADDING * 2;
+    updateScrollEdges(scrollXRef.current);
+  }, [scrollable, totalItems, viewportWidth]);
+
+  useEffect(() => {
+    if (!newlyPinnedMorePage || !scrollable) return;
+    const pinnedIndex = pinnedMorePages.indexOf(newlyPinnedMorePage);
+    if (pinnedIndex < 0) return;
+
+    const frame = requestAnimationFrame(() => {
+      const itemIndex = 4 + pinnedIndex;
+      const itemCenter = TAB_BAR_HORIZONTAL_PADDING
+        + itemIndex * SCROLL_TAB_WIDTH
+        + SCROLL_TAB_WIDTH / 2;
+      const contentWidth = totalItems * SCROLL_TAB_WIDTH
+        + TAB_BAR_HORIZONTAL_PADDING * 2;
+      const maxOffset = Math.max(0, contentWidth - viewportWidthRef.current);
+      const target = Math.max(
+        0,
+        Math.min(maxOffset, itemCenter - viewportWidthRef.current / 2),
+      );
+      scrollRef.current?.scrollTo({ x: target, y: 0, animated: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [newlyPinnedMorePage, pinnedMorePages, scrollable, totalItems]);
+
+  const buttons = (
+    <>
+      <TabButton fixed={scrollable} label="Tones" accessibilityLabel="Frequencies" glyph="∿" compact={compact} active={tab === 'frequencies'} accent={accent} onPress={() => onChange('frequencies')} />
+      <TabButton fixed={scrollable} label="Breathe" accessibilityLabel="Breath" glyph="○" compact={compact} active={tab === 'breath'} accent={accent} onPress={() => onChange('breath')} />
+      <TabButton fixed={scrollable} label="Chakras" glyph="✦" compact={compact} active={tab === 'chakras'} accent={accent} onPress={() => onChange('chakras')} />
+      <TabButton fixed={scrollable} label="Stars" accessibilityLabel="Horoscopes" glyph="☽" compact={compact} active={tab === 'horoscopes'} accent={accent} onPress={() => onChange('horoscopes')} />
+      {pinnedMorePages.map(pageId => {
+        const meta = MORE_PAGE_META[pageId];
+        return (
+          <TabButton
+            key={pageId}
+            fixed={scrollable}
+            label={meta.shortLabel}
+            accessibilityLabel={meta.label}
+            glyph={meta.glyph}
+            compact={compact}
+            active={tab === 'more' && moreActivePage === pageId}
+            accent={meta.accent}
+            onPress={() => onOpenMorePage(pageId)}
+          />
+        );
+      })}
+      <TabButton fixed={scrollable} label="More" glyph="⋯" compact={compact} active={moreIsActive} accent={accent} onPress={() => onChange('more')} />
+    </>
+  );
+
   return (
     <SafeAreaView edges={['bottom']} style={styles.tabBarSafe}>
-      <View style={styles.tabBar}>
-        <TabButton label="Tones"       accessibilityLabel="Frequencies" glyph="∿" compact={compact} active={tab === 'frequencies'} accent={accent} onPress={() => onChange('frequencies')} />
-        <TabButton label="Breathe"     accessibilityLabel="Breath" glyph="○" compact={compact} active={tab === 'breath'}      accent={accent} onPress={() => onChange('breath')} />
-        <TabButton label="Chakras"     glyph="✦" compact={compact} active={tab === 'chakras'}     accent={accent} onPress={() => onChange('chakras')} />
-        <TabButton label="Stars"       accessibilityLabel="Horoscopes" glyph="☽" compact={compact} active={tab === 'horoscopes'}  accent={accent} onPress={() => onChange('horoscopes')} />
-        {soundscapesInNav ? (
-          <TabButton
-            label="Sound"
-            accessibilityLabel="Soundscapes"
-            Icon={Waveform}
-            compact={compact}
-            active={soundscapesActive}
-            accent={accent}
-            onPress={onOpenSoundscapes}
-          />
+      <View
+        style={styles.tabBarViewport}
+        onLayout={event => {
+          const nextWidth = event.nativeEvent.layout.width;
+          viewportWidthRef.current = nextWidth;
+          setViewportWidth(nextWidth);
+          updateScrollEdges(scrollXRef.current);
+        }}
+      >
+        {scrollable ? (
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            accessibilityRole="tablist"
+            accessibilityLabel="App navigation"
+            bounces={false}
+            showsHorizontalScrollIndicator={false}
+            directionalLockEnabled
+            scrollEventThrottle={16}
+            contentContainerStyle={styles.tabBarScrollContent}
+            onContentSizeChange={width => {
+              contentWidthRef.current = width;
+              updateScrollEdges(scrollXRef.current);
+            }}
+            onScroll={event => {
+              const offset = Math.max(0, event.nativeEvent.contentOffset.x);
+              scrollXRef.current = offset;
+              updateScrollEdges(offset);
+            }}
+          >
+            {buttons}
+          </ScrollView>
+        ) : (
+          <View accessibilityRole="tablist" accessibilityLabel="App navigation" style={styles.tabBar}>
+            {buttons}
+          </View>
+        )}
+
+        {scrollable && canScrollLeft ? (
+          <LinearGradient
+            colors={['rgba(6,7,20,0.98)', 'rgba(6,7,20,0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            pointerEvents="none"
+            style={[styles.tabScrollEdge, styles.tabScrollEdgeLeft]}
+          >
+            <Text style={styles.tabScrollChevron}>‹</Text>
+          </LinearGradient>
         ) : null}
-        <TabButton label="More" glyph="⋯" compact={compact} active={tab === 'more' && (!soundscapesInNav || !soundscapesActive)} accent={accent} onPress={() => onChange('more')} />
+        {scrollable && canScrollRight ? (
+          <LinearGradient
+            colors={['rgba(6,7,20,0)', 'rgba(6,7,20,0.98)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            pointerEvents="none"
+            style={[styles.tabScrollEdge, styles.tabScrollEdgeRight]}
+          >
+            <Text style={styles.tabScrollChevron}>›</Text>
+          </LinearGradient>
+        ) : null}
       </View>
     </SafeAreaView>
   );
 }
 
 function TabButton({
-  label, glyph, Icon, compact, active, accent, onPress, accessibilityLabel,
+  label, glyph, Icon, compact, fixed = false, active, accent, onPress, accessibilityLabel,
 }: {
   label: string;
   accessibilityLabel?: string;
   glyph?: string;
   Icon?: React.ComponentType<IconProps>;
   compact: boolean;
+  fixed?: boolean;
   active: boolean;
   accent: string;
   onPress: () => void;
@@ -2861,8 +3221,8 @@ function TabButton({
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.85}
-      style={styles.tabBtn}
-      accessibilityRole="button"
+      style={[styles.tabBtn, fixed && styles.tabBtnFixed]}
+      accessibilityRole="tab"
       accessibilityLabel={`${accessibilityLabel ?? label} tab`}
       accessibilityState={{ selected: active }}
     >
@@ -3989,29 +4349,6 @@ const styles = StyleSheet.create({
   },
 
 
-  miniPlayerDock: {
-    paddingTop: 7,
-    backgroundColor: 'rgba(7,8,24,0.38)',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-    shadowColor: '#000',
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: -5 },
-    elevation: 7,
-    ...(Platform.OS === 'web'
-      ? ({ backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' } as any)
-      : {}),
-  },
-  miniPlayerDockSheen: {
-    position: 'absolute',
-    top: 0,
-    left: 16,
-    right: 16,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
   miniPlayer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -4022,11 +4359,11 @@ const styles = StyleSheet.create({
     minHeight: 76,
     borderRadius: 24,
     borderWidth: 1,
-    backgroundColor: 'rgba(8,8,22,0.94)',
+    backgroundColor: 'rgba(8,8,22,0.12)',
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
   },
@@ -4084,15 +4421,29 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.11)',
   },
+  tabBarViewport: { position: 'relative', overflow: 'hidden' },
   tabBar: {
     flexDirection: 'row',
     paddingTop: 7,
     paddingBottom: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: TAB_BAR_HORIZONTAL_PADDING,
+  },
+  tabBarScrollContent: {
+    flexDirection: 'row',
+    paddingTop: 7,
+    paddingBottom: 6,
+    paddingHorizontal: TAB_BAR_HORIZONTAL_PADDING,
   },
   tabBtn: {
     flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center',
     minHeight: 58, paddingVertical: 3, paddingHorizontal: 2,
+  },
+  tabBtnFixed: {
+    width: SCROLL_TAB_WIDTH,
+    minWidth: SCROLL_TAB_WIDTH,
+    flexBasis: SCROLL_TAB_WIDTH,
+    flexGrow: 0,
+    flexShrink: 0,
   },
   tabGlyph: {
     fontSize: 19,
@@ -4106,6 +4457,25 @@ const styles = StyleSheet.create({
   },
   tabLabel: { fontSize: 10.5, letterSpacing: 0.4, fontWeight: '700' },
   tabLabelCompact: { fontSize: 9.5, letterSpacing: 0 },
+  tabScrollEdge: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 34,
+    zIndex: 4,
+    justifyContent: 'center',
+  },
+  tabScrollEdgeLeft: { left: 0, alignItems: 'flex-start', paddingLeft: 4 },
+  tabScrollEdgeRight: { right: 0, alignItems: 'flex-end', paddingRight: 4 },
+  tabScrollChevron: {
+    color: 'rgba(255,255,255,0.74)',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 24,
+    lineHeight: 26,
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
 
   beatSliderBlock: { width: '100%', marginTop: 10, marginBottom: 4 },
   beatSlider: { width: '100%', height: 30 },

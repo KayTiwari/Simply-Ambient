@@ -13,7 +13,33 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle as SvgCircle, Path as SvgPath } from 'react-native-svg';
-import { ArrowsClockwise } from 'phosphor-react-native';
+import {
+  ArrowsClockwise,
+  BellRinging,
+  BookOpen,
+  Butterfly,
+  Coins,
+  Crown,
+  Eye,
+  Flashlight,
+  FlowerLotus,
+  GlobeHemisphereWest,
+  Heart,
+  Horse,
+  InfinityIcon,
+  Lightning,
+  Link,
+  MagicWand,
+  MoonStars,
+  PersonSimpleTaiChi,
+  Scales,
+  Sparkle,
+  Star,
+  Sun,
+  Sword,
+  Wine,
+  type IconProps,
+} from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MoonDisc, type LunarInfo } from './App';
@@ -97,6 +123,8 @@ function freshnessLabel(ts: number): string {
 }
 
 type Period = 'daily' | 'monthly' | 'yearly';
+const PERIODS: Period[] = ['daily', 'monthly', 'yearly'];
+const PERIOD_ROW_INSET = 4;
 type ReadingMode = 'horoscope' | 'tarot';
 const MODE_SEGMENT_GAP = 6;
 
@@ -145,6 +173,56 @@ const SPREAD_POSITIONS: Record<SpreadSize, string[]> = {
 type DrawnCard = { card: TarotCard; reversed: boolean };
 const drawReversed = () => Math.random() < 1 / 3;
 
+type TarotVisual = {
+  Icon: React.ComponentType<IconProps>;
+  upright: string;
+  reversed: string;
+};
+
+// A compact archetype system keeps every card visually meaningful without
+// shipping a heavy image deck. Major arcana get their own emblem; minor
+// arcana inherit a clear suit symbol. The keyword changes with orientation.
+const MAJOR_TAROT_VISUALS: Record<string, TarotVisual> = {
+  fool: { Icon: Sparkle, upright: 'BEGINNING', reversed: 'HESITATION' },
+  magician: { Icon: MagicWand, upright: 'WILL', reversed: 'MISDIRECTION' },
+  highpriestess: { Icon: Eye, upright: 'INTUITION', reversed: 'DISCONNECT' },
+  empress: { Icon: FlowerLotus, upright: 'NURTURE', reversed: 'DEPLETION' },
+  emperor: { Icon: Crown, upright: 'STRUCTURE', reversed: 'RIGIDITY' },
+  hierophant: { Icon: BookOpen, upright: 'TRADITION', reversed: 'RETHINKING' },
+  lovers: { Icon: Heart, upright: 'ALIGNMENT', reversed: 'DISCORD' },
+  chariot: { Icon: Horse, upright: 'DIRECTION', reversed: 'DRIFT' },
+  strength: { Icon: InfinityIcon, upright: 'COURAGE', reversed: 'SELF-DOUBT' },
+  hermit: { Icon: Flashlight, upright: 'INNER LIGHT', reversed: 'ISOLATION' },
+  wheeloffortune: { Icon: ArrowsClockwise, upright: 'TURNING', reversed: 'RESISTANCE' },
+  justice: { Icon: Scales, upright: 'BALANCE', reversed: 'IMBALANCE' },
+  hangedman: { Icon: PersonSimpleTaiChi, upright: 'SURRENDER', reversed: 'STALLING' },
+  death: { Icon: Butterfly, upright: 'TRANSFORM', reversed: 'RESISTANCE' },
+  temperance: { Icon: Wine, upright: 'HARMONY', reversed: 'EXCESS' },
+  devil: { Icon: Link, upright: 'ATTACHMENT', reversed: 'RELEASE' },
+  tower: { Icon: Lightning, upright: 'UPHEAVAL', reversed: 'AVOIDANCE' },
+  star: { Icon: Star, upright: 'HOPE', reversed: 'DISCOURAGEMENT' },
+  moon: { Icon: MoonStars, upright: 'MYSTERY', reversed: 'CONFUSION' },
+  sun: { Icon: Sun, upright: 'VITALITY', reversed: 'DIMMED JOY' },
+  judgement: { Icon: BellRinging, upright: 'AWAKENING', reversed: 'SELF-DOUBT' },
+  judgment: { Icon: BellRinging, upright: 'AWAKENING', reversed: 'SELF-DOUBT' },
+  world: { Icon: GlobeHemisphereWest, upright: 'COMPLETION', reversed: 'UNFINISHED' },
+};
+
+const SUIT_TAROT_VISUALS: Array<{ match: RegExp; visual: TarotVisual }> = [
+  { match: /\bwands?\b/i, visual: { Icon: MagicWand, upright: 'FIRE · DRIVE', reversed: 'BLOCKED FIRE' } },
+  { match: /\bcups?\b/i, visual: { Icon: Wine, upright: 'WATER · FEELING', reversed: 'EMOTIONAL BLOCK' } },
+  { match: /\bswords?\b/i, visual: { Icon: Sword, upright: 'AIR · CLARITY', reversed: 'INNER CONFLICT' } },
+  { match: /\b(pentacles?|coins?)\b/i, visual: { Icon: Coins, upright: 'EARTH · GROUNDING', reversed: 'MATERIAL BLOCK' } },
+];
+
+function tarotVisualFor(name: string): TarotVisual {
+  const normalized = name.toLowerCase().replace(/^the\s+/, '').replace(/[^a-z]/g, '');
+  const major = MAJOR_TAROT_VISUALS[normalized];
+  if (major) return major;
+  return SUIT_TAROT_VISUALS.find(item => item.match.test(name))?.visual
+    ?? { Icon: Sparkle, upright: 'REFLECTION', reversed: 'RECONSIDER' };
+}
+
 // '1' = the minor arcana are shuffled in; majors are always in the pool.
 const INCLUDE_MINOR_KEY = '@simply_ambient_tarot_minor_v1';
 
@@ -190,6 +268,8 @@ export default function HoroscopesView({
   const contentReveal = useRef(new Animated.Value(1)).current;
   const contentDirection = useRef(1);
   const [period, setPeriod] = useState<Period>('daily');
+  const [periodRowWidth, setPeriodRowWidth] = useState(0);
+  const periodPosition = useRef(new Animated.Value(0)).current;
   // The 12-sign picker is collapsed behind a CHANGE button; a permanent
   // "tap to set your sign" strip reads like onboarding that never ends.
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -230,9 +310,11 @@ export default function HoroscopesView({
     if (!reduceMotion) return;
     modePosition.stopAnimation();
     contentReveal.stopAnimation();
+    periodPosition.stopAnimation();
     modePosition.setValue(readingMode === 'tarot' ? 1 : 0);
     contentReveal.setValue(1);
-  }, [contentReveal, modePosition, readingMode, reduceMotion]);
+    periodPosition.setValue(PERIODS.indexOf(period));
+  }, [contentReveal, modePosition, period, periodPosition, readingMode, reduceMotion]);
 
   const selectReadingMode = (nextMode: ReadingMode) => {
     if (nextMode === readingMode) return;
@@ -268,6 +350,27 @@ export default function HoroscopesView({
         useNativeDriver: true,
       }),
     ]).start();
+  };
+
+  const selectPeriod = (nextPeriod: Period) => {
+    if (nextPeriod === period) return;
+    const nextIndex = PERIODS.indexOf(nextPeriod);
+    setPeriod(nextPeriod);
+    periodPosition.stopAnimation();
+    if (reduceMotion) {
+      periodPosition.setValue(nextIndex);
+      return;
+    }
+    Animated.spring(periodPosition, {
+      toValue: nextIndex,
+      stiffness: 230,
+      damping: 26,
+      mass: 0.82,
+      overshootClamping: true,
+      restDisplacementThreshold: 0.2,
+      restSpeedThreshold: 0.2,
+      useNativeDriver: true,
+    }).start();
   };
 
   // Guards the tarot fetch callbacks against setState after unmount.
@@ -475,6 +578,7 @@ export default function HoroscopesView({
     `An intention for ${yearText}`;
   const modeSegmentWidth = Math.max(0, (modeRowWidth - MODE_SEGMENT_GAP) / 2);
   const modeSegmentTravel = modeSegmentWidth + MODE_SEGMENT_GAP;
+  const periodSegmentWidth = Math.max(0, (periodRowWidth - PERIOD_ROW_INSET * 2) / PERIODS.length);
 
   return (
     <AmbientVeil accent={accent} strength="light" active={toneIsPlaying} motionHz={beatHz}>
@@ -667,24 +771,45 @@ export default function HoroscopesView({
           accent={mySign.color}
         />
 
-        <View style={styles.periodRow} accessibilityRole="tablist">
-          {(['daily', 'monthly', 'yearly'] as Period[]).map(p => {
+        <View
+          style={styles.periodRow}
+          accessibilityRole="tablist"
+          onLayout={event => {
+            const nextWidth = event.nativeEvent.layout.width;
+            setPeriodRowWidth(current => Math.abs(current - nextWidth) > 0.5 ? nextWidth : current);
+          }}
+        >
+          {periodSegmentWidth > 0 ? (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.periodSelectionPill,
+                {
+                  width: periodSegmentWidth,
+                  borderColor: mySign.color + '70',
+                  backgroundColor: mySign.color + '1C',
+                  shadowColor: mySign.color,
+                  transform: [{
+                    translateX: periodPosition.interpolate({
+                      inputRange: [0, 1, 2],
+                      outputRange: [0, periodSegmentWidth, periodSegmentWidth * 2],
+                    }),
+                  }],
+                },
+              ]}
+            />
+          ) : null}
+          {PERIODS.map(p => {
             const active = p === period;
             return (
               <TouchableOpacity
                 key={p}
                 activeOpacity={0.85}
-                onPress={() => setPeriod(p)}
+                onPress={() => selectPeriod(p)}
                 accessibilityRole="tab"
                 accessibilityLabel={`Show ${p} horoscope`}
                 accessibilityState={{ selected: active }}
-                style={[
-                  styles.periodBtn,
-                  active && {
-                    backgroundColor: mySign.color + '1C',
-                    borderColor: mySign.color + '66',
-                  },
-                ]}
+                style={styles.periodBtn}
               >
                 <Text style={[styles.periodText, active && { color: mySign.color }]}>
                   {p.toUpperCase()}
@@ -1041,10 +1166,38 @@ function CardFace({
   compact?: boolean;
   small?: boolean;
 }) {
+  const visual = tarotVisualFor(name);
+  const SymbolIcon = visual.Icon;
+  const symbolColor = reversed ? '#D68097' : '#C9A96B';
+  const symbolSize = small ? 19 : compact ? 26 : 42;
   return (
     <View style={styles.cardShellFace}>
       <View style={[styles.cardInner, { justifyContent: 'space-between', paddingVertical: small ? 8 : 12 }]}>
-        <Text style={[styles.cardOrnament, small && { fontSize: 10 }, reversed && { transform: [{ rotate: '180deg' }] }]}>✦</Text>
+        {!small ? <Text style={styles.cardOrnament}>✦</Text> : null}
+        <View style={styles.cardSymbolBlock}>
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+            style={[
+              styles.cardSymbolSeal,
+              compact && styles.cardSymbolSealCompact,
+              small && styles.cardSymbolSealSmall,
+              {
+                borderColor: symbolColor + '66',
+                backgroundColor: symbolColor + '10',
+                transform: [{ rotate: reversed ? '180deg' : '0deg' }],
+              },
+            ]}
+          >
+            <View style={[styles.cardSymbolOrbit, { borderColor: symbolColor + '35' }]} />
+            <SymbolIcon size={symbolSize} color={symbolColor} weight="duotone" />
+          </View>
+          {!compact ? (
+            <Text style={[styles.cardArchetype, { color: symbolColor }]} numberOfLines={1}>
+              {reversed ? visual.reversed : visual.upright}
+            </Text>
+          ) : null}
+        </View>
         <Text
           style={[
             styles.cardFaceName,
@@ -1202,6 +1355,19 @@ const styles = StyleSheet.create({
     borderRadius: 18, padding: 4,
     marginBottom: 10,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    position: 'relative',
+  },
+  periodSelectionPill: {
+    position: 'absolute',
+    left: PERIOD_ROW_INSET,
+    top: PERIOD_ROW_INSET,
+    bottom: PERIOD_ROW_INSET,
+    borderRadius: 14,
+    borderWidth: 1,
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   periodBtn: {
     flex: 1, minHeight: 42,
@@ -1209,6 +1375,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1, borderColor: 'transparent',
     alignItems: 'center', justifyContent: 'center',
+    zIndex: 1,
   },
   periodText: { color: '#8D8EA0', fontSize: 9.5, letterSpacing: 1.5, fontWeight: '800' },
 
@@ -1318,6 +1485,28 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   cardOrnament: { color: '#C9A96B', fontSize: 14 },
+  cardSymbolBlock: { alignItems: 'center', justifyContent: 'center' },
+  cardSymbolSeal: {
+    width: 70, height: 70, borderRadius: 35,
+    borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  cardSymbolSealCompact: { width: 42, height: 42, borderRadius: 21 },
+  cardSymbolSealSmall: { width: 30, height: 30, borderRadius: 15 },
+  cardSymbolOrbit: {
+    position: 'absolute',
+    width: '76%', height: '76%', borderRadius: 999,
+    borderWidth: 1,
+  },
+  cardArchetype: {
+    maxWidth: 116,
+    color: '#C9A96B',
+    fontSize: 7.5,
+    fontWeight: '900',
+    letterSpacing: 1.35,
+    marginTop: 5,
+    textAlign: 'center',
+  },
   cardFaceName: {
     color: '#fff',
     fontFamily: 'CormorantGaramond_500Medium',
