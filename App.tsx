@@ -24,6 +24,7 @@ import Svg, { Circle as SvgCircle, Path as SvgPath } from 'react-native-svg';
 import { StatusBar } from 'expo-status-bar';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import {
   createAudioPlayer,
   setAudioModeAsync,
@@ -70,7 +71,7 @@ import {
 import { Cinzel_700Bold } from '@expo-google-fonts/cinzel';
 import * as Sentry from '@sentry/react-native';
 
-// Sentry crash reporting. The DSN is a write-only public identifier — safe to
+// Sentry crash reporting. The DSN is a write-only public identifier, safe to
 // commit per Sentry's docs, it is not a secret. (The SENTRY_AUTH_TOKEN used for
 // source-map upload IS secret and lives only in EAS env vars / .env.local.)
 Sentry.init({
@@ -96,7 +97,11 @@ Sentry.init({
 import BreathworkView from './BreathworkView';
 import ChakrasView from './ChakrasView';
 import HoroscopesView from './HoroscopesView';
-import MoreView, { type NotifPref } from './MoreView';
+import MoreView, {
+  type NotifPref,
+  type RoutinePathPayload,
+  type RoutinePathStep,
+} from './MoreView';
 import OnboardingView from './OnboardingView';
 import {
   MORE_PAGE_META,
@@ -508,15 +513,18 @@ const BUNDLED_SOUNDSCAPES: Partial<Record<SoundscapeKey, number>> = {
   stream: require('./assets/soundscapes/trickling-stream.mp3'),
   fire: require('./assets/soundscapes/hearth.mp3'),
   white: require('./assets/soundscapes/white-noise.mp3'),
+  thunder: require('./assets/soundscapes/distant-thunder.mp3'),
 };
 
 const SOUNDSCAPE_GAIN: Record<SoundscapeKey, number> = {
+  // Bundled recordings are level-matched near -34 LUFS at a 100% slider.
+  // Broadband noise receives the lowest gain so switching layers never jolts.
   rain: 0.48,
-  ocean: 0.72,
-  forest: 0.58,
-  stream: 0.62,
-  fire: 0.72,
-  white: 0.24,
+  ocean: 0.51,
+  forest: 0.09,
+  stream: 0.65,
+  fire: 1,
+  white: 0.025,
   pink: 0.62,
   brown: 0.62,
   breeze: 0.42,
@@ -1576,6 +1584,13 @@ function WaveBackgroundAnimated({ band, playing }: { band: BandKey; playing: boo
 
 type Tab = 'frequencies' | 'breath' | 'chakras' | 'horoscopes' | 'more';
 
+type ActiveRoutineSession = {
+  path: RoutinePathPayload;
+  stepIndex: number;
+  startedAt: number;
+  stepEndsAt: number;
+};
+
 const STORAGE_KEY_NOTIF = '@simply_ambient_notif_pref_v1';
 const STORAGE_KEY_SINGLE_COLOR = '@simply_ambient_single_color_v1';
 const STORAGE_KEY_PINNED_MORE_PAGES = '@simply_ambient_pinned_more_pages_v1';
@@ -1614,6 +1629,7 @@ function parsePinnedMorePages(raw: string | null): PinnableMorePageId[] {
 function AppContent() {
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<Tab>('frequencies');
+  const [tabBarHeight, setTabBarHeight] = useState(72 + insets.bottom);
   const [pinnedMorePages, setPinnedMorePages] = useState<PinnableMorePageId[]>([]);
   const pinnedMorePagesRef = useRef<PinnableMorePageId[]>([]);
   // Prevent an async launch read from overwriting a pin action made while
@@ -1760,6 +1776,19 @@ function AppContent() {
   const [notifPref, setNotifPref] = useState<NotifPref>('off');
   const [affirmation, setAffirmation] = useState<string | null>(null);
   const [affLoading, setAffLoading] = useState(false);
+  const [activeRoutine, setActiveRoutine] = useState<ActiveRoutineSession | null>(null);
+  const activeRoutineRef = useRef<ActiveRoutineSession | null>(null);
+  const routineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const routineGenerationRef = useRef(0);
+  const pendingRoutineRef = useRef<RoutinePathPayload | null>(null);
+
+  useEffect(() => {
+    activeRoutineRef.current = activeRoutine;
+  }, [activeRoutine]);
+
+  useEffect(() => () => {
+    if (routineTimerRef.current) clearTimeout(routineTimerRef.current);
+  }, []);
 
   // Sleep timer
   const [sleepMinutes, setSleepMinutes] = useState(0);
@@ -1929,6 +1958,12 @@ function AppContent() {
   const activeSoundscape = activeSoundscapeId
     ? SOUNDSCAPES.find(s => s.id === activeSoundscapeId) ?? null
     : null;
+  const activeRoutineStep = activeRoutine
+    ? orderedRoutineSteps(activeRoutine.path)[activeRoutine.stepIndex] ?? null
+    : null;
+  const activeRoutineFrequency = activeRoutine && activeRoutineStep
+    ? `${activeRoutineStep.bandTarget.charAt(0).toUpperCase()}${activeRoutineStep.bandTarget.slice(1)} · ${activeRoutineStep.targetHz} Hz`
+    : null;
   const beatColor =
     activeBand === 'none' ? '#9aa0b4' :
     activeChakra ? activeChakra.color :
@@ -2039,7 +2074,20 @@ function AppContent() {
     }
   }
 
+  function clearRoutineSchedule() {
+    if (!activeRoutineRef.current && !pendingRoutineRef.current && !routineTimerRef.current) return;
+    routineGenerationRef.current += 1;
+    if (routineTimerRef.current) {
+      clearTimeout(routineTimerRef.current);
+      routineTimerRef.current = null;
+    }
+    activeRoutineRef.current = null;
+    setActiveRoutine(null);
+    pendingRoutineRef.current = null;
+  }
+
   function stopTones() {
+    clearRoutineSchedule();
     tonePlayGenRef.current++;
     if (slideTimeoutRef.current) {
       clearTimeout(slideTimeoutRef.current);
@@ -2064,6 +2112,110 @@ function AppContent() {
     setIsTonePlaying(false);
     setIsToneLoading(false);
   }
+
+  function orderedRoutineSteps(path: RoutinePathPayload): RoutinePathStep[] {
+    return [...path.steps].sort((a, b) => a.order - b.order);
+  }
+
+  function applyRoutineStep(step: RoutinePathStep) {
+    const preset = PRESETS.find(item => item.id === step.presetId);
+    const carrier = preset?.carrier ?? 200;
+    const half = step.targetHz / 2;
+    const l = clampHz(carrier - half);
+    const r = clampHz(carrier + half);
+    setLeftHz(l);
+    setRightHz(r);
+    setActivePresetId(step.presetId);
+    setActiveBand(step.bandTarget);
+    loadAndPlay(l, r);
+  }
+
+  function syncRoutineToClock(
+    path: RoutinePathPayload,
+    startedAt: number,
+    generation: number,
+  ) {
+    if (generation !== routineGenerationRef.current) return;
+    const steps = orderedRoutineSteps(path);
+    if (!steps.length) return;
+
+    const now = Date.now();
+    const elapsed = Math.max(0, now - startedAt);
+    let cumulativeMs = 0;
+    let nextStepIndex = -1;
+    let stepEndsAt = startedAt;
+    for (let index = 0; index < steps.length; index += 1) {
+      cumulativeMs += steps[index].durationMinutes * 60 * 1000;
+      if (elapsed < cumulativeMs) {
+        nextStepIndex = index;
+        stepEndsAt = startedAt + cumulativeMs;
+        break;
+      }
+    }
+
+    if (nextStepIndex < 0) {
+      stopTones();
+      return;
+    }
+
+    const previous = activeRoutineRef.current;
+    const nextSession: ActiveRoutineSession = {
+      path,
+      stepIndex: nextStepIndex,
+      startedAt,
+      stepEndsAt,
+    };
+    activeRoutineRef.current = nextSession;
+    setActiveRoutine(nextSession);
+
+    if (
+      previous?.path.id !== path.id
+      || previous.stepIndex !== nextStepIndex
+      || !stateRef.current.isTonePlaying
+    ) {
+      applyRoutineStep(steps[nextStepIndex]);
+    }
+
+    if (routineTimerRef.current) clearTimeout(routineTimerRef.current);
+    routineTimerRef.current = setTimeout(() => {
+      routineTimerRef.current = null;
+      syncRoutineToClock(path, startedAt, generation);
+    }, Math.max(50, stepEndsAt - Date.now()));
+  }
+
+  function beginRoutine(path: RoutinePathPayload) {
+    if (!path.steps.length) return;
+    if (routineTimerRef.current) clearTimeout(routineTimerRef.current);
+    routineTimerRef.current = null;
+    routineGenerationRef.current += 1;
+    const generation = routineGenerationRef.current;
+    pendingRoutineRef.current = null;
+    setSleepTimer(0);
+    syncRoutineToClock(path, Date.now(), generation);
+  }
+
+  function requestStartRoutine(path: RoutinePathPayload) {
+    if (!audioSafetyAck) {
+      pendingRoutineRef.current = path;
+      setShowAudioSafetyModal(true);
+      return;
+    }
+    beginRoutine(path);
+  }
+
+  function requestStopRoutine() {
+    stopTones();
+  }
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState !== 'active') return;
+      const session = activeRoutineRef.current;
+      if (!session) return;
+      syncRoutineToClock(session.path, session.startedAt, routineGenerationRef.current);
+    });
+    return () => subscription.remove();
+  }, []);
 
   function fadeNativePlayer(player: AudioPlayer | null, target: number, durationMs = 2500) {
     if (!player) return Promise.resolve();
@@ -2129,10 +2281,18 @@ function AppContent() {
   function acknowledgeAudioSafetyAndPlay() {
     setAudioSafetyAck(true);
     setShowAudioSafetyModal(false);
+    const pendingRoutine = pendingRoutineRef.current;
+    if (pendingRoutine) {
+      beginRoutine(pendingRoutine);
+      return;
+    }
     startSession();
   }
 
   function startSession() {
+    if (activeRoutineRef.current) {
+      clearRoutineSchedule();
+    }
     // The background palette follows activeBand, which starts as 'none'
     // (gray) until something sets it. Detect the band from the current pair
     // at session start so the backdrop transitions out of gray on play.
@@ -2168,6 +2328,7 @@ function AppContent() {
   // tuning frequency (within 1 Hz), light up the gold tuning theme; otherwise
   // fall back to the brainwave band derived from the beat.
   function applyDetection(l: number, r: number) {
+    clearRoutineSchedule();
     const carrier = (l + r) / 2;
     const tuning = TUNINGS.find(t => Math.abs(t.hz - carrier) <= 1);
     if (tuning) {
@@ -2242,6 +2403,7 @@ function AppContent() {
   }
 
   function applyBuiltIn(p: BuiltInPreset) {
+    clearRoutineSchedule();
     const half = p.beatHz / 2;
     const l = clampHz(p.carrier - half);
     const r = clampHz(p.carrier + half);
@@ -2253,6 +2415,7 @@ function AppContent() {
   }
 
   function applyUser(p: UserPreset) {
+    clearRoutineSchedule();
     setLeftHz(p.leftHz);
     setRightHz(p.rightHz);
     setActivePresetId(p.id);
@@ -2262,6 +2425,7 @@ function AppContent() {
   }
 
   function applyTuning(t: TuningPreset) {
+    clearRoutineSchedule();
     // Carrier dropped by octaves into a comfortable range, with a 6 Hz theta
     // beat (3 below, 3 above). Octave shifts preserve the musical note, so
     // the symbolic Solfeggio pitch is intact but no longer piercing.
@@ -2276,6 +2440,7 @@ function AppContent() {
   }
 
   function applyChakra(c: Chakra) {
+    clearRoutineSchedule();
     const carrier = comfortableCarrier(c.hz);
     const l = clampHz(carrier - 3);
     const r = clampHz(carrier + 3);
@@ -2287,6 +2452,7 @@ function AppContent() {
   }
 
   function applyDosha(d: Dosha) {
+    clearRoutineSchedule();
     const carrier = comfortableCarrier(d.balanceHz);
     const l = clampHz(carrier - 3);
     const r = clampHz(carrier + 3);
@@ -2575,6 +2741,9 @@ function AppContent() {
                 soundscapeVolume={soundscapeVolume}
                 onToggleSoundscape={(id) => toggleSoundscape(id as SoundscapeKey)}
                 onChangeSoundscapeVolume={changeSoundscapeVolume}
+                activeRoutineId={activeRoutine?.path.id ?? null}
+                onStartRoutine={requestStartRoutine}
+                onStopRoutine={requestStopRoutine}
                 pinnedMorePages={pinnedMorePages}
                 onTogglePinnedMorePage={togglePinnedMorePage}
                 onClearPinnedMorePages={clearPinnedMorePages}
@@ -2590,44 +2759,68 @@ function AppContent() {
           </Animated.View>
         </KeyboardAvoidingView>
 
-        <MiniPlayer
-          visible={isTonePlaying || isToneLoading || isSoundscapePlaying || isBgPlaying || sleepEndsAt != null}
-          title={displayBandName}
-          beat={beat}
-          accent={beatColor}
-          isTonePlaying={isTonePlaying}
-          isToneLoading={isToneLoading}
-          sleepEndsAt={sleepEndsAt}
-          soundscapeName={activeSoundscape?.name ?? null}
-          soundscapePlaying={isSoundscapePlaying}
-          hasSoundscape={activeSoundscapeId != null}
-          onSoundscapePress={() => {
-            if (activeSoundscapeId) {
-              toggleSoundscape(activeSoundscapeId);
-            } else {
-              setMorePageRequest('soundscapes');
-              setTab('more');
+        <View
+          pointerEvents="box-none"
+          style={[styles.miniPlayerOverlay, { bottom: tabBarHeight }]}
+        >
+          <MiniPlayer
+            visible={activeRoutine != null || isTonePlaying || isToneLoading || isSoundscapePlaying || isBgPlaying || sleepEndsAt != null}
+            title={displayBandName}
+            beat={beat}
+            accent={beatColor}
+            isTonePlaying={isTonePlaying}
+            isToneLoading={isToneLoading}
+            sleepEndsAt={sleepEndsAt}
+            soundscapeName={activeSoundscape?.name ?? null}
+            soundscapePlaying={isSoundscapePlaying}
+            routineName={activeRoutine?.path.name ?? null}
+            routineFrequency={activeRoutineFrequency}
+            hasSoundscape={activeSoundscapeId != null}
+            onSoundscapePress={() => {
+              if (activeSoundscapeId) {
+                toggleSoundscape(activeSoundscapeId);
+              } else {
+                setMorePageRequest('soundscapes');
+                setTab('more');
+              }
+            }}
+            hasBg={bgUri != null}
+            bgPlaying={isBgPlaying}
+            onBgPress={toggleBg}
+            onTogglePlay={activeRoutine ? requestStopRoutine : togglePlay}
+            onOpen={() => {
+              if (activeRoutine) {
+                setMorePageRequest('routines');
+                setTab('more');
+              } else {
+                setTab('frequencies');
+              }
+            }}
+            onStopAll={stopEverything}
+          />
+        </View>
+        <View
+          collapsable={false}
+          onLayout={event => {
+            const nextHeight = event.nativeEvent.layout.height;
+            if (nextHeight > 0) {
+              setTabBarHeight(current => Math.abs(current - nextHeight) > 0.5 ? nextHeight : current);
             }
           }}
-          hasBg={bgUri != null}
-          bgPlaying={isBgPlaying}
-          onBgPress={toggleBg}
-          onTogglePlay={togglePlay}
-          onOpen={() => setTab('frequencies')}
-          onStopAll={stopEverything}
-        />
-        <TabBar
-          tab={tab}
-          onChange={nextTab => {
-            if (nextTab === 'more') openMoreHub();
-            else setTab(nextTab);
-          }}
-          accent={beatColor}
-          pinnedMorePages={pinnedMorePages}
-          moreActivePage={moreActivePage}
-          newlyPinnedMorePage={newlyPinnedMorePage}
-          onOpenMorePage={openMorePageFromNav}
-        />
+        >
+          <TabBar
+            tab={tab}
+            onChange={nextTab => {
+              if (nextTab === 'more') openMoreHub();
+              else setTab(nextTab);
+            }}
+            accent={beatColor}
+            pinnedMorePages={pinnedMorePages}
+            moreActivePage={moreActivePage}
+            newlyPinnedMorePage={newlyPinnedMorePage}
+            onOpenMorePage={openMorePageFromNav}
+          />
+        </View>
       </SafeAreaView>
 
       {onboardingChecked && showOnboarding ? (
@@ -2679,7 +2872,10 @@ function AppContent() {
         visible={showAudioSafetyModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowAudioSafetyModal(false)}
+        onRequestClose={() => {
+          pendingRoutineRef.current = null;
+          setShowAudioSafetyModal(false);
+        }}
       >
         <View style={styles.audioSafetyBackdrop}>
           <View style={styles.audioSafetyCard}>
@@ -2697,7 +2893,10 @@ function AppContent() {
             <View style={styles.audioSafetyActions}>
               <TouchableOpacity
                 activeOpacity={0.85}
-                onPress={() => setShowAudioSafetyModal(false)}
+                onPress={() => {
+                  pendingRoutineRef.current = null;
+                  setShowAudioSafetyModal(false);
+                }}
                 style={styles.audioSafetyCancelBtn}
                 accessibilityLabel="Cancel"
               >
@@ -2770,6 +2969,8 @@ function MiniPlayer({
   sleepEndsAt,
   soundscapeName,
   soundscapePlaying,
+  routineName,
+  routineFrequency,
   hasSoundscape,
   onSoundscapePress,
   hasBg,
@@ -2788,6 +2989,8 @@ function MiniPlayer({
   sleepEndsAt: number | null;
   soundscapeName: string | null;
   soundscapePlaying: boolean;
+  routineName: string | null;
+  routineFrequency: string | null;
   hasSoundscape: boolean;
   onSoundscapePress: () => void;
   hasBg: boolean;
@@ -2874,10 +3077,14 @@ function MiniPlayer({
     bgPlaying ? 'Imported audio' : null,
   ].filter((name): name is string => Boolean(name));
   const toneTitle = `${title} · ${beat.toFixed(0)} Hz`;
-  const sessionTitle = isTonePlaying || isToneLoading
-    ? ambientLayers.length ? `${title} + ${ambientLayers.join(' + ')}` : toneTitle
-    : ambientLayers.length ? ambientLayers.join(' + ') : 'Session timer';
-  const sessionMeta = isToneLoading
+  const sessionTitle = routineName ?? (
+    isTonePlaying || isToneLoading
+      ? ambientLayers.length ? `${title} + ${ambientLayers.join(' + ')}` : toneTitle
+      : ambientLayers.length ? ambientLayers.join(' + ') : 'Session timer'
+  );
+  const sessionMeta = routineName && routineFrequency
+    ? routineFrequency
+    : isToneLoading
     ? 'Preparing your tone'
     : timerText && audioIsPlaying
       ? `${isTonePlaying ? `${beat.toFixed(0)} Hz tone` : 'Ambient layer'} · ends in ${timerText}`
@@ -2886,7 +3093,9 @@ function MiniPlayer({
         : isTonePlaying
           ? ambientLayers.length ? `${beat.toFixed(0)} Hz tone with ambience` : 'Pure binaural tone'
           : 'Ambient layer playing';
-  const statusLabel = isToneLoading ? 'PREPARING' : audioIsPlaying ? 'NOW PLAYING' : 'TIMER READY';
+  const statusLabel = routineName
+    ? 'SESSION PATH'
+    : isToneLoading ? 'PREPARING' : audioIsPlaying ? 'NOW PLAYING' : 'TIMER READY';
   const showBgControl = hasBg && (!compactPlayer || (bgPlaying && !soundscapePlaying));
   const showSoundscapeControl = !compactPlayer || soundscapePlaying || !bgPlaying;
 
@@ -2909,6 +3118,15 @@ function MiniPlayer({
             : null,
         ]}
       >
+        {Platform.OS !== 'web' ? (
+          <BlurView
+            intensity={28}
+            tint="dark"
+            experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+        ) : null}
         <LinearGradient
           colors={[accent + '24', 'rgba(13,15,32,0.11)', accent + '0A']}
           locations={[0, 0.46, 1]}
@@ -3995,7 +4213,7 @@ const styles = StyleSheet.create({
   scroll: {
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? 12 : 4,
-    paddingBottom: 24,
+    paddingBottom: 112,
   },
   freqEditorialHeader: { marginHorizontal: -20, paddingTop: 8 },
   freqEnsoWrap: { alignItems: 'center', paddingTop: 12, marginBottom: -2 },
@@ -4350,6 +4568,13 @@ const styles = StyleSheet.create({
   },
 
 
+  miniPlayerOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 180,
+    elevation: 180,
+  },
   miniPlayer: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -18,7 +18,7 @@ export type MorePageId =
 
 export type PinnableMorePageId = Exclude<
   MorePageId,
-  'support' | 'safety' | 'bug' | 'settings'
+  'compatibility' | 'natal' | 'support' | 'safety' | 'bug' | 'settings'
 >;
 
 export const MORE_PAGE_META: Record<MorePageId, {
@@ -42,7 +42,7 @@ export const MORE_PAGE_META: Record<MorePageId, {
     shortLabel: 'Match',
     glyph: '∞',
     accent: '#D8A0B0',
-    pinnable: true,
+    pinnable: false,
     headerTitle: 'Compatibility',
   },
   natal: {
@@ -50,7 +50,7 @@ export const MORE_PAGE_META: Record<MorePageId, {
     shortLabel: 'Natal',
     glyph: '✧',
     accent: '#B39BE0',
-    pinnable: true,
+    pinnable: false,
     headerTitle: 'Natal Chart',
   },
   insights: {

@@ -279,7 +279,7 @@ function TechniqueList({
       onScroll={event => onOffsetChange(event.nativeEvent.contentOffset.y)}
       scrollEventThrottle={16}
       // Clear the ~80px tab bar rendered by App.tsx plus the safe-area inset.
-      contentContainerStyle={{ paddingBottom: insets.bottom + 90, paddingHorizontal: 20 }}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 108, paddingHorizontal: 20 }}
       showsVerticalScrollIndicator={false}
     >
       <EditorialSection
@@ -687,7 +687,7 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
     <ScrollView
       // Clear the ~80px tab bar rendered by App.tsx plus the safe-area inset,
       // so the mudra card at the bottom is never hidden behind the tab icons.
-      contentContainerStyle={[styles.sessionWrap, { paddingBottom: insets.bottom + 90 }]}
+      contentContainerStyle={[styles.sessionWrap, { paddingBottom: insets.bottom + 108 }]}
       showsVerticalScrollIndicator={false}
     >
       <TouchableOpacity
@@ -1267,7 +1267,7 @@ function BreathMandala({
 const styles = StyleSheet.create({
   toneStripWrap: { paddingHorizontal: 20, marginTop: -4, marginBottom: 3 },
 
-  // Practice library — each card reads as a small editorial object rather
+  // Practice library. Each card reads as a small editorial object rather
   // than a row in a settings list.
   cardTouch: { marginBottom: 12, borderRadius: 26 },
   card: {
@@ -1361,7 +1361,7 @@ const styles = StyleSheet.create({
   },
   malaHapticText: { color: '#9B98A8', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
 
-  // Guided session — a slim setup rail feeding one dominant visual chamber.
+  // Guided session. A slim setup rail feeding one dominant visual chamber.
   sessionWrap: { paddingHorizontal: 20 },
   backBtn: {
     alignSelf: 'flex-start', minHeight: 44, paddingVertical: 9, paddingHorizontal: 2,

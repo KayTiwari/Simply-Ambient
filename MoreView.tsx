@@ -52,7 +52,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
 import { openStoreListing } from './lib/rateApp';
-import { ZODIAC, type Zodiac } from './lib/content';
+import { ZODIAC, type BandKey, type Zodiac } from './lib/content';
 import {
   MORE_HEADER_TO_PAGE_ID,
   MORE_PAGE_META,
@@ -124,6 +124,27 @@ type GratEntry = { ts: number; text: string };
 type RantEntry = { ts: number; text: string };
 type ManifestEntry = { ts: number; text: string; manifested: boolean; manifestedAt?: number };
 
+export type RoutinePathId = 'morning-focus' | 'evening-windown' | 'deep-sleep';
+export type RoutineBandTarget = Extract<BandKey, 'delta' | 'theta' | 'alpha' | 'beta'>;
+
+export type RoutinePathStep = {
+  id: string;
+  order: number;
+  presetId: RoutineBandTarget;
+  bandTarget: RoutineBandTarget;
+  targetHz: number;
+  durationMinutes: number;
+};
+
+// This is the App-facing handoff for a future sequencer. More only requests
+// that a path start or stop; App remains the source of truth for whether it is
+// active and is responsible for applying each preset on schedule.
+export type RoutinePathPayload = {
+  id: RoutinePathId;
+  name: string;
+  steps: readonly RoutinePathStep[];
+};
+
 type Props = {
   notifPref: NotifPref;
   onChangeNotifPref: (p: NotifPref) => void;
@@ -137,6 +158,9 @@ type Props = {
   soundscapeVolume: number;
   onToggleSoundscape: (id: string) => void;
   onChangeSoundscapeVolume: (v: number) => void;
+  activeRoutineId?: RoutinePathId | null;
+  onStartRoutine?: (routine: RoutinePathPayload) => void;
+  onStopRoutine?: (routine: RoutinePathPayload) => void;
   // App owns and persists the compact shortcuts; More exposes the same pin
   // affordance in every eligible room header.
   pinnedMorePages: PinnableMorePageId[];
@@ -173,6 +197,12 @@ type PinnedMorePagesContextValue = {
 };
 
 const PinnedMorePagesContext = React.createContext<PinnedMorePagesContextValue | null>(null);
+const ReducedMotionContext = React.createContext(false);
+
+// These rooms remain visible in More as a preview of what is coming, but they
+// are not destinations yet. Keeping the guard next to navigation also makes
+// stale persisted navbar requests harmless.
+const UNAVAILABLE_MORE_PAGES = new Set<MorePageId>(['natal', 'compatibility']);
 
 const STORAGE_PROFILE = '@simply_ambient_profile_v1';
 const STORAGE_PARTNER = '@simply_ambient_partner_v1';
@@ -354,6 +384,9 @@ export default function MoreView({
   soundscapeVolume,
   onToggleSoundscape,
   onChangeSoundscapeVolume,
+  activeRoutineId = null,
+  onStartRoutine,
+  onStopRoutine,
   pinnedMorePages,
   onTogglePinnedMorePage,
   onClearPinnedMorePages,
@@ -597,6 +630,10 @@ export default function MoreView({
   }
 
   function open(p: Exclude<SubPage, null>) {
+    if (UNAVAILABLE_MORE_PAGES.has(p)) {
+      closeToHub();
+      return;
+    }
     if (page === p && transitionDestination.current === 'page') return;
     animateOpen();
     if (page === p) return;
@@ -612,6 +649,10 @@ export default function MoreView({
   // External destinations (navbar and mini player) behave like roots, not
   // nested More links: Back always returns to the hub.
   function openRoot(p: Exclude<SubPage, null>) {
+    if (UNAVAILABLE_MORE_PAGES.has(p)) {
+      closeToHub();
+      return;
+    }
     if (page === p && transitionDestination.current === 'page') {
       setPageHistory([]);
       return;
@@ -683,7 +724,7 @@ export default function MoreView({
   // Honor deep links into a specific sub-page (mini player -> Soundscapes).
   useEffect(() => {
     if (requestedPage) {
-      if (requestedPage === 'hub') closeToHub();
+      if (requestedPage === 'hub' || UNAVAILABLE_MORE_PAGES.has(requestedPage)) closeToHub();
       else openRoot(requestedPage);
       onRequestedPageHandled?.();
     }
@@ -701,6 +742,7 @@ export default function MoreView({
   }), [onTogglePinnedMorePage, pinnedMorePages]);
 
   return (
+    <ReducedMotionContext.Provider value={reduceMotion}>
     <PinnedMorePagesContext.Provider value={pinnedPagesContext}>
     <View style={{ flex: 1 }}>
       <Animated.View
@@ -780,7 +822,12 @@ export default function MoreView({
             />
           )}
           {page === 'routines' && (
-            <RoutinesPage onBack={close} />
+            <RoutinesPage
+              onBack={close}
+              activeRoutineId={activeRoutineId}
+              onStartRoutine={onStartRoutine}
+              onStopRoutine={onStopRoutine}
+            />
           )}
           {page === 'soundscapes' && (
             <SoundscapesPage
@@ -866,6 +913,7 @@ export default function MoreView({
       )}
     </View>
     </PinnedMorePagesContext.Provider>
+    </ReducedMotionContext.Provider>
   );
 }
 
@@ -1156,18 +1204,20 @@ function Hub({
               glyph="☉"
               accent="#D9BE7A"
               label="Natal"
-              sub="Begin with your sun sign"
+              sub="A fuller birth-chart room is being prepared."
+              badge="COMING SOON"
               variant="half"
-              onPress={() => onOpen('natal')}
+              disabled
             />
             <HubTile
               glyph="☌"
               accent="#D8A0B0"
               label="Compatibility"
               kicker="TWO PROFILES"
-              sub="A grounded reflection on how two signs meet."
+              sub="A grounded reflection for two profiles is being prepared."
+              badge="COMING SOON"
               variant="wide"
-              onPress={() => onOpen('compatibility')}
+              disabled
             />
           </View>
         </MoreSectionGroup>
@@ -1198,7 +1248,7 @@ function Hub({
               Icon={Coffee}
               accent="#E0A470"
               label="Support"
-              sub="Help a one-person app grow"
+              sub="Help me keep building"
               variant="half"
               onPress={() => onOpen('support')}
             />
@@ -1218,7 +1268,7 @@ function Hub({
 }
 
 function HubTile({
-  glyph, Icon, accent, label, sub, kicker, badge, badgeColor, variant = 'half', onPress,
+  glyph, Icon, accent, label, sub, kicker, badge, badgeColor, variant = 'half', onPress, disabled = false,
 }: {
   // Either a unicode glyph (kept for spiritual symbols: ensō, flower, sparkle)
   // or a Phosphor icon component (used for utility items: Soundscapes, Bug, etc.)
@@ -1232,7 +1282,8 @@ function HubTile({
   // Optional tint for the badge text; falls back to the section accent.
   badgeColor?: string;
   variant?: 'half' | 'wide' | 'feature';
-  onPress: () => void;
+  onPress?: () => void;
+  disabled?: boolean;
 }) {
   const horizontal = variant === 'wide';
   const feature = variant === 'feature';
@@ -1240,15 +1291,18 @@ function HubTile({
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={onPress}
+      disabled={disabled}
       style={[
         styles.tile,
         variant === 'half' && styles.tileHalf,
         horizontal && styles.tileWide,
         feature && styles.tileFeature,
+        disabled && styles.tileDisabled,
         { borderColor: accent + '32', shadowColor: accent },
       ]}
       accessibilityRole="button"
-      accessibilityLabel={`${label}. ${sub}`}
+      accessibilityLabel={disabled ? `${label}. Coming soon. ${sub}` : `${label}. ${sub}`}
+      accessibilityState={{ disabled }}
     >
       <LinearGradient
         colors={[accent + (feature ? '2D' : '20'), 'rgba(28,29,53,0.94)', 'rgba(14,15,33,0.98)']}
@@ -1264,7 +1318,11 @@ function HubTile({
           <Text style={[styles.tileBadge, { color: badgeColor ?? accent }]}>{badge}</Text>
         </View>
       ) : null}
-      <View style={[styles.tileGlyphWrap, { borderColor: accent + '40', backgroundColor: accent + '12' }]}>
+      <View style={[
+        styles.tileGlyphWrap,
+        { borderColor: accent + '40', backgroundColor: accent + '12' },
+        disabled && !horizontal && styles.tileGlyphDisabledHalf,
+      ]}>
         {Icon ? (
           <Icon size={horizontal ? 20 : 23} weight="duotone" color={accent} />
         ) : (
@@ -1287,7 +1345,7 @@ function HubTile({
           {sub}
         </Text>
       </View>
-      {(horizontal || feature) ? (
+      {!disabled && (horizontal || feature) ? (
         <View style={[styles.tileArrow, { borderColor: accent + '40' }]}>
           <CaretRight size={15} color={accent} weight="bold" />
         </View>
@@ -1343,7 +1401,7 @@ const SUBPAGE_PRESENTATION: Record<string, {
   Support: {
     displayTitle: 'Help It Grow',
     mode: 'SUPPORT',
-    subtitle: 'See what is being built and help shape what comes next.',
+    subtitle: 'See what I’m building and help shape what comes next.',
     glyph: '↟',
   },
   Settings: {
@@ -1398,6 +1456,53 @@ const SUBPAGE_PRESENTATION: Record<string, {
     glyph: '⌁',
   },
 };
+
+// Every More-room hero uses the same quiet medallion motion. Only the inner
+// ring breathes; the outer orbit and its editorial copy stay anchored.
+function BreathingGlyphMedallion({ accent, glyph }: { accent: string; glyph: string }) {
+  const reduceMotion = React.useContext(ReducedMotionContext);
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    scale.stopAnimation();
+    scale.setValue(1);
+    if (reduceMotion) return;
+
+    const breathing = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scale, {
+          toValue: 1.035,
+          duration: 1350,
+          easing: Easing.out(Easing.back(0.72)),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 1,
+          duration: 1650,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    breathing.start();
+    return () => {
+      breathing.stop();
+      scale.stopAnimation();
+      scale.setValue(1);
+    };
+  }, [reduceMotion, scale]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.subGlyphInner,
+        { borderColor: accent + '2E', transform: [{ scale }] },
+      ]}
+    >
+      <Text style={[styles.subGlyph, { color: accent }]}>{glyph}</Text>
+    </Animated.View>
+  );
+}
 
 function SubHeader({
   title,
@@ -1525,9 +1630,7 @@ function SubHeader({
             colors={[accent + '36', accent + '0D']}
             style={StyleSheet.absoluteFill}
           />
-          <View style={[styles.subGlyphInner, { borderColor: accent + '2E' }]}>
-            <Text style={[styles.subGlyph, { color: accent }]}>{presentation.glyph}</Text>
-          </View>
+          <BreathingGlyphMedallion accent={accent} glyph={presentation.glyph} />
         </View>
       </View>
     </View>
@@ -2455,6 +2558,7 @@ function RantPage({
             accessibilityLabel="Private release entry"
             placeholder="What feels loud right now?"
             placeholderTextColor="#ffffff88"
+            selectionColor="#D68097"
             value={text}
             onChangeText={setText}
             multiline
@@ -2728,11 +2832,79 @@ const GROUND_STEPS = [
 
 function GroundingPage({ onBack }: { onBack: () => void }) {
   const subBodyPad = useSubBodyPad();
+  const reduceMotion = React.useContext(ReducedMotionContext);
   // Position in the walk this visit. Ephemeral by design: the state lives
   // in this component, so leaving the page resets the ritual.
   const [step, setStep] = useState(0);
+  const [transitioning, setTransitioning] = useState(false);
+  const stepReveal = useRef(new Animated.Value(1)).current;
+  const transitionToken = useRef(0);
+  const transitioningRef = useRef(false);
+  const pendingStep = useRef<number | null>(null);
   const finished = step >= GROUND_STEPS.length;
   const current = finished ? null : GROUND_STEPS[step];
+  const stepSettleY = stepReveal.interpolate({ inputRange: [0, 1], outputRange: [5, 0] });
+
+  function changeStep(nextStep: number) {
+    const destination = Math.max(0, Math.min(GROUND_STEPS.length, nextStep));
+    if (destination === step || transitioningRef.current) return;
+
+    transitionToken.current += 1;
+    const myToken = transitionToken.current;
+    pendingStep.current = destination;
+    stepReveal.stopAnimation();
+
+    if (reduceMotion) {
+      setStep(destination);
+      stepReveal.setValue(1);
+      pendingStep.current = null;
+      transitioningRef.current = false;
+      setTransitioning(false);
+      return;
+    }
+
+    transitioningRef.current = true;
+    setTransitioning(true);
+    Animated.timing(stepReveal, {
+      toValue: 0,
+      duration: 90,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished: fadedOut }) => {
+      if (!fadedOut || myToken !== transitionToken.current) return;
+      setStep(destination);
+      stepReveal.setValue(0);
+      Animated.timing(stepReveal, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished: settled }) => {
+        if (!settled || myToken !== transitionToken.current) return;
+        pendingStep.current = null;
+        transitioningRef.current = false;
+        setTransitioning(false);
+      });
+    });
+  }
+
+  // If Reduce Motion is enabled mid-transition, finish at the already chosen
+  // step immediately rather than leaving a half-faded card or stale controls.
+  useEffect(() => {
+    if (!reduceMotion) return;
+    transitionToken.current += 1;
+    stepReveal.stopAnimation();
+    if (pendingStep.current !== null) setStep(pendingStep.current);
+    pendingStep.current = null;
+    stepReveal.setValue(1);
+    transitioningRef.current = false;
+    setTransitioning(false);
+  }, [reduceMotion, stepReveal]);
+
+  useEffect(() => () => {
+    transitionToken.current += 1;
+    stepReveal.stopAnimation();
+  }, [stepReveal]);
 
   return (
     <AmbientPageShell accent="#8F97DE">
@@ -2747,40 +2919,49 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
           A soundscape underneath can help. Soft Rain suits this well.
         </Text>
 
-        {current ? (
-          <GlowCard
-            accent={current.color}
-            style={styles.groundStepCard}
-          >
-            <View style={styles.groundCompass} pointerEvents="none">
-              <View style={[styles.groundRing, styles.groundRingOuter, { borderColor: current.color + '24' }]} />
-              <View style={[styles.groundRing, styles.groundRingMiddle, { borderColor: current.color + '32' }]} />
-              <View style={[styles.groundRing, styles.groundRingInner, { borderColor: current.color + '44' }]} />
-            </View>
-            <Text style={styles.groundStepLabel}>STEP {step + 1} OF {GROUND_STEPS.length}</Text>
-            <Text style={[styles.groundBigNum, styles.groundStepNum, { color: current.color }]}>
-              {current.num}
-            </Text>
-            <Text style={styles.groundStepText}>
-              {current.num === 1 ? 'thing' : 'things'} you can{' '}
-              <Text style={styles.groundEm}>{current.sense}</Text>
-            </Text>
-            <Text style={styles.groundGuide}>{current.guide}</Text>
-          </GlowCard>
-        ) : (
-          <GlowCard accent="#8F97DE" style={styles.groundStepCard}>
-            <View style={styles.groundCompass} pointerEvents="none">
-              <View style={[styles.groundRing, styles.groundRingOuter, { borderColor: '#8F97DE24' }]} />
-              <View style={[styles.groundRing, styles.groundRingMiddle, { borderColor: '#8F97DE32' }]} />
-            </View>
-            <Text style={styles.groundStepLabel}>COMPLETE</Text>
-            <Text style={styles.groundGuide}>
-              You are here. Take one more slow breath before you go.
-            </Text>
-          </GlowCard>
-        )}
+        <Animated.View
+          pointerEvents={transitioning ? 'none' : 'auto'}
+          accessibilityLiveRegion="polite"
+          style={{ opacity: stepReveal, transform: [{ translateY: stepSettleY }] }}
+        >
+          {current ? (
+            <GlowCard
+              accent={current.color}
+              style={styles.groundStepCard}
+            >
+              <View style={styles.groundCompass} pointerEvents="none">
+                <View style={[styles.groundRing, styles.groundRingOuter, { borderColor: current.color + '24' }]} />
+                <View style={[styles.groundRing, styles.groundRingMiddle, { borderColor: current.color + '32' }]} />
+                <View style={[styles.groundRing, styles.groundRingInner, { borderColor: current.color + '44' }]} />
+              </View>
+              <Text style={styles.groundStepLabel}>STEP {step + 1} OF {GROUND_STEPS.length}</Text>
+              <Text style={[styles.groundBigNum, styles.groundStepNum, { color: current.color }]}>
+                {current.num}
+              </Text>
+              <Text style={styles.groundStepText}>
+                {current.num === 1 ? 'thing' : 'things'} you can{' '}
+                <Text style={styles.groundEm}>{current.sense}</Text>
+              </Text>
+              <Text style={styles.groundGuide}>{current.guide}</Text>
+            </GlowCard>
+          ) : (
+            <GlowCard accent="#8F97DE" style={styles.groundStepCard}>
+              <View style={styles.groundCompass} pointerEvents="none">
+                <View style={[styles.groundRing, styles.groundRingOuter, { borderColor: '#8F97DE24' }]} />
+                <View style={[styles.groundRing, styles.groundRingMiddle, { borderColor: '#8F97DE32' }]} />
+              </View>
+              <Text style={styles.groundStepLabel}>COMPLETE</Text>
+              <Text style={styles.groundGuide}>
+                You are here. Take one more slow breath before you go.
+              </Text>
+            </GlowCard>
+          )}
+        </Animated.View>
 
-        <View style={styles.groundDotsRow} accessibilityLabel={`Step ${Math.min(step + 1, 5)} of 5`}>
+        <View
+          style={styles.groundDotsRow}
+          accessibilityLabel={finished ? 'Grounding complete, 5 of 5 steps' : `Step ${step + 1} of 5`}
+        >
           {GROUND_STEPS.map((s, i) => (
             <View
               key={s.num}
@@ -2799,14 +2980,16 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
               label="Begin again"
               accent="#8F97DE"
               kind="ghost"
-              onPress={() => setStep(0)}
+              disabled={transitioning}
+              onPress={() => changeStep(0)}
             />
           ) : null}
           {!finished ? (
             <ActionPill
               label={step === GROUND_STEPS.length - 1 ? 'Finish' : 'Done, next'}
               accent={current?.color ?? '#8F97DE'}
-              onPress={() => setStep(s => s + 1)}
+              disabled={transitioning}
+              onPress={() => changeStep(step + 1)}
             />
           ) : null}
         </View>
@@ -2835,7 +3018,7 @@ const ROADMAP: Array<{
     phase: 'NEXT UP',
     dotOpacity: 1,
     items: [
-      { title: 'Custom routines & auto-sequencer', blurb: 'Build your own preset chains with smooth fades between steps.' },
+      { title: 'Custom routine builder', blurb: 'Build your own preset chains with smooth fades between steps.' },
       { title: 'In-app natal chart',                blurb: 'Planet positions, houses, and aspects without leaving the app.' },
       { title: 'Bija mantra audio',                 blurb: 'Short loops of LAM / VAM / RAM / OM for chakra meditation.' },
     ],
@@ -2865,7 +3048,7 @@ const ROADMAP: Array<{
     phase: 'SHIPPED',
     shipped: true,
     items: [
-      { title: 'Built-in soundscapes', blurb: 'Rain, ocean, forest, fireplace, brown noise. Bundled and offline.' },
+      { title: 'Built-in soundscapes', blurb: 'Thirteen offline layers, including rain, thunder, forest, travel hum, and steady noise.' },
       { title: 'Settings page with a still background option', blurb: 'Pin the backdrop to one calm color any time.' },
     ],
   },
@@ -2881,11 +3064,11 @@ function SupportPage({ onBack }: { onBack: () => void }) {
           <View style={styles.supportSeal}>
             <Coffee size={28} color="#D9BE7A" weight="duotone" />
           </View>
-          <Text style={styles.supportKicker}>A NOTE FROM THE MAKER</Text>
-          <Text style={styles.supportHeadline}>Built slowly, by one person</Text>
+          <Text style={styles.supportKicker}>A NOTE FROM ME</Text>
+          <Text style={styles.supportHeadline}>I’m building this with care</Text>
           <Text style={styles.supportText}>
-            Simply Ambient is built and maintained by one person. If it's brought you peace and
-            you'd like to see more, a small donation directly funds the features below.
+            I built Simply Ambient and maintain it myself. If it has brought you some peace and you
+            would like to see it grow, your support directly funds the features below.
           </Text>
           <TouchableOpacity
             onPress={() => Linking.openURL(SUPPORT_URL).catch(() => {})}
@@ -4018,8 +4201,18 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
 //   Routines (basic. Sample routines, simple sequencer scaffolded)
 // ===========================================================================
 
-type RoutineStep = { label: string; minutes: number };
-type Routine = { id: string; name: string; description: string; color: string; steps: RoutineStep[] };
+type Routine = RoutinePathPayload & { description: string; color: string };
+
+const ROUTINE_BAND_LABELS: Record<RoutineBandTarget, string> = {
+  delta: 'Delta',
+  theta: 'Theta',
+  alpha: 'Alpha',
+  beta: 'Beta',
+};
+
+function routineStepLabel(step: RoutinePathStep) {
+  return `${ROUTINE_BAND_LABELS[step.bandTarget]} · ${step.targetHz} Hz`;
+}
 
 const SAMPLE_ROUTINES: Routine[] = [
   {
@@ -4028,8 +4221,8 @@ const SAMPLE_ROUTINES: Routine[] = [
     description: 'Wake the mind, then settle it into focus.',
     color: '#E0A470',
     steps: [
-      { label: 'Beta · 18 Hz',  minutes: 5  },
-      { label: 'Alpha · 10 Hz', minutes: 10 },
+      { id: 'morning-focus-1', order: 1, presetId: 'beta', bandTarget: 'beta', targetHz: 18, durationMinutes: 5 },
+      { id: 'morning-focus-2', order: 2, presetId: 'alpha', bandTarget: 'alpha', targetHz: 10, durationMinutes: 10 },
     ],
   },
   {
@@ -4038,8 +4231,8 @@ const SAMPLE_ROUTINES: Routine[] = [
     description: 'Release the day, then soften toward rest.',
     color: '#A498E8',
     steps: [
-      { label: 'Alpha · 10 Hz', minutes: 10 },
-      { label: 'Theta · 6 Hz',  minutes: 15 },
+      { id: 'evening-windown-1', order: 1, presetId: 'alpha', bandTarget: 'alpha', targetHz: 10, durationMinutes: 10 },
+      { id: 'evening-windown-2', order: 2, presetId: 'theta', bandTarget: 'theta', targetHz: 6, durationMinutes: 15 },
     ],
   },
   {
@@ -4048,13 +4241,25 @@ const SAMPLE_ROUTINES: Routine[] = [
     description: 'Drop in gently, then rest deeply.',
     color: '#8F97DE',
     steps: [
-      { label: 'Theta · 6 Hz', minutes: 10 },
-      { label: 'Delta · 2 Hz', minutes: 30 },
+      { id: 'deep-sleep-1', order: 1, presetId: 'theta', bandTarget: 'theta', targetHz: 6, durationMinutes: 10 },
+      { id: 'deep-sleep-2', order: 2, presetId: 'delta', bandTarget: 'delta', targetHz: 2, durationMinutes: 30 },
     ],
   },
 ];
 
-function RoutinesPage({ onBack }: { onBack: () => void }) {
+type RoutinesPageProps = {
+  onBack: () => void;
+  activeRoutineId: RoutinePathId | null;
+  onStartRoutine?: (routine: RoutinePathPayload) => void;
+  onStopRoutine?: (routine: RoutinePathPayload) => void;
+};
+
+function RoutinesPage({
+  onBack,
+  activeRoutineId,
+  onStartRoutine,
+  onStopRoutine,
+}: RoutinesPageProps) {
   const subBodyPad = useSubBodyPad();
   return (
     <AmbientPageShell accent="#9DC7AC">
@@ -4062,42 +4267,81 @@ function RoutinesPage({ onBack }: { onBack: () => void }) {
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>SESSION GUIDES</Text>
         <Text style={styles.sectionSub}>
-          Three ways to chain presets into a longer session. Run each step yourself from the
-          Frequencies tab. The sleep timer there can end a step for you.
+          Choose a ready-made sequence. Every step shows the tone it targets and how long it lasts.
         </Text>
-        {SAMPLE_ROUTINES.map(r => (
-          <GlowCard
-            key={r.id}
-            accent={r.color}
-            quiet
-            style={styles.routineCard}
-          >
-            <Text style={[styles.routineBackdropGlyph, { color: r.color + '24' }]}>△</Text>
-            <Text style={[styles.routineEyebrow, { color: r.color }]}>SESSION PATH</Text>
-            <View style={styles.routineTitleRow}>
-              <Text style={[styles.routineName, { color: r.color }]}>{r.name}</Text>
-              <Text style={styles.routineTotal}>
-                {r.steps.reduce((sum, s) => sum + s.minutes, 0)} MIN TOTAL
-              </Text>
-            </View>
-            <Text style={styles.routineDesc}>{r.description}</Text>
-            <View style={styles.routinePath}>
-              <View style={[styles.routinePathLine, { backgroundColor: r.color + '3A' }]} />
-              {r.steps.map((s, i) => (
-                <View key={i} style={styles.routineStep}>
-                  <View style={[styles.routineStepNode, { borderColor: r.color, backgroundColor: r.color + '22' }]}>
-                    <Text style={[styles.routineStepNum, { color: r.color }]}>{i + 1}</Text>
-                  </View>
-                  <Text style={styles.routineStepLabel}>{s.label}</Text>
-                  <Text style={styles.routineStepTime}>{s.minutes} min</Text>
+        {SAMPLE_ROUTINES.map(r => {
+          const steps = [...r.steps].sort((a, b) => a.order - b.order);
+          const totalMinutes = steps.reduce((sum, step) => sum + step.durationMinutes, 0);
+          const isActive = activeRoutineId === r.id;
+          const canControl = isActive ? Boolean(onStopRoutine) : Boolean(onStartRoutine);
+          const stepSummary = steps
+            .map(step => `Step ${step.order}, ${routineStepLabel(step)}, ${step.durationMinutes} minutes`)
+            .join('. ');
+
+          return (
+            <TouchableOpacity
+              key={r.id}
+              activeOpacity={0.82}
+              disabled={!canControl}
+              onPress={() => {
+                if (isActive) onStopRoutine?.(r);
+                else onStartRoutine?.(r);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`${isActive ? 'Active' : 'Start'} ${r.name} path, ${totalMinutes} minutes. ${stepSummary}`}
+              accessibilityHint={isActive ? 'Stops this routine path' : 'Starts this routine path from step one'}
+              accessibilityState={{ disabled: !canControl, selected: isActive }}
+              accessibilityValue={{ text: isActive ? 'Path active' : 'Ready to start' }}
+              style={!canControl ? styles.routinePressableDisabled : undefined}
+            >
+              <GlowCard
+                accent={r.color}
+                quiet
+                style={isActive
+                  ? [styles.routineCard, { borderColor: r.color, borderWidth: 2 }]
+                  : styles.routineCard}
+              >
+                <Text style={[styles.routineBackdropGlyph, { color: r.color + '24' }]}>△</Text>
+                <Text style={[styles.routineEyebrow, { color: r.color }]}>SESSION PATH</Text>
+                <View style={styles.routineTitleRow}>
+                  <Text style={[styles.routineName, { color: r.color }]}>{r.name}</Text>
+                  <Text style={styles.routineTotal}>{totalMinutes} MIN TOTAL</Text>
                 </View>
-              ))}
-            </View>
-          </GlowCard>
-        ))}
+                <Text style={styles.routineDesc}>{r.description}</Text>
+                <View style={styles.routinePath}>
+                  <View style={[styles.routinePathLine, { backgroundColor: r.color + '3A' }]} />
+                  {steps.map(step => (
+                    <View key={step.id} style={styles.routineStep}>
+                      <View style={[styles.routineStepNode, { borderColor: r.color, backgroundColor: r.color + '22' }]}>
+                        <Text style={[styles.routineStepNum, { color: r.color }]}>{step.order}</Text>
+                      </View>
+                      <Text style={styles.routineStepLabel}>{routineStepLabel(step)}</Text>
+                      <Text style={styles.routineStepTime}>{step.durationMinutes} min</Text>
+                    </View>
+                  ))}
+                </View>
+                <View style={[styles.routineActionRow, { borderTopColor: r.color + '32' }]}>
+                  <View style={styles.routineStatusWrap}>
+                    <View style={[styles.routineStatusDot, { backgroundColor: isActive ? r.color : r.color + '66' }]} />
+                    <Text style={[styles.routineStatusText, isActive && { color: r.color }]}>
+                      {isActive ? 'PATH ACTIVE' : 'READY WHEN YOU ARE'}
+                    </Text>
+                  </View>
+                  <View style={[styles.routineAction, { borderColor: r.color + '66', backgroundColor: r.color + '18' }]}>
+                    {isActive
+                      ? <Stop size={13} color={r.color} weight="fill" />
+                      : <Play size={13} color={r.color} weight="fill" />}
+                    <Text style={[styles.routineActionText, { color: r.color }]}>
+                      {isActive ? 'Stop path' : 'Start path'}
+                    </Text>
+                  </View>
+                </View>
+              </GlowCard>
+            </TouchableOpacity>
+          );
+        })}
         <Text style={styles.notifHint}>
-          Saved custom routines and automatic step changes are on the roadmap. See Support for
-          what is coming.
+          Custom paths are still on the roadmap. These starter paths always follow the order shown.
         </Text>
       </ScrollView>
     </AmbientPageShell>
@@ -5157,6 +5401,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.10, shadowRadius: 12, shadowOffset: { width: 0, height: 7 },
     elevation: 3,
   },
+  tileDisabled: { borderStyle: 'dashed', shadowOpacity: 0, elevation: 0 },
   tileHalf: { width: '48.5%', minHeight: 150, alignItems: 'flex-start' },
   tileWide: {
     width: '100%', minHeight: 92,
@@ -5176,6 +5421,7 @@ const styles = StyleSheet.create({
     width: 44, height: 44, borderRadius: 16, borderWidth: 1,
     justifyContent: 'center', alignItems: 'center',
   },
+  tileGlyphDisabledHalf: { marginTop: 25 },
   tileGlyph: { fontSize: 23, fontWeight: '600' },
   tileCopy: { marginTop: 13 },
   tileCopyHorizontal: { marginTop: 0, marginLeft: 13, paddingRight: 8 },
@@ -5192,6 +5438,7 @@ const styles = StyleSheet.create({
   tileBadgeWrap: {
     position: 'absolute', top: 10, right: 10, zIndex: 3,
     borderWidth: 1, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3,
+    backgroundColor: 'rgba(11,11,31,0.78)',
   },
   tileBadge: { fontSize: 8, fontWeight: '800', letterSpacing: 0.8 },
   tileArrow: {
@@ -5620,6 +5867,11 @@ const styles = StyleSheet.create({
   releaseInput: {
     minHeight: 200, fontFamily: 'CormorantGaramond_500Medium',
     fontSize: 19, lineHeight: 28, paddingTop: 18,
+    // GlowCard's atmospheric layers are absolutely positioned. Lift the live
+    // editor above them so typed text, selection, and the caret never inherit
+    // the decorative left-to-right fade.
+    position: 'relative', zIndex: 2,
+    color: '#F4EDF2', backgroundColor: 'transparent', opacity: 1,
   },
   releasePromptLabel: { color: '#8B8C9F', fontSize: 8, fontWeight: '800', letterSpacing: 1.5, marginTop: 15 },
   releasePrivacyBar: {
@@ -5761,6 +6013,7 @@ const styles = StyleSheet.create({
   },
 
   // Routines
+  routinePressableDisabled: { opacity: 0.58 },
   routineCard: {
     padding: 17, marginBottom: 12, minHeight: 190,
   },
@@ -5798,6 +6051,20 @@ const styles = StyleSheet.create({
   },
   routineStepLabel: { flex: 1, color: '#ffffffdd', fontSize: 13 },
   routineStepTime: { color: '#ffffff88', fontSize: 12 },
+  routineActionRow: {
+    borderTopWidth: 1, marginTop: 9, paddingTop: 12,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+  },
+  routineStatusWrap: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  routineStatusDot: { width: 6, height: 6, borderRadius: 3 },
+  routineStatusText: {
+    flexShrink: 1, color: '#ffffff77', fontSize: 8, fontWeight: '800', letterSpacing: 1.35,
+  },
+  routineAction: {
+    minHeight: 36, paddingHorizontal: 12, borderWidth: 1, borderRadius: 999,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+  },
+  routineActionText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.2 },
 
   // Soundscapes
   soundscapeControlCard: {

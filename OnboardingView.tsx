@@ -379,7 +379,7 @@ export default function OnboardingView({
               <EditorialHeader
                 mode="OPTIONAL PROFILE"
                 title="Make the space yours"
-                subtitle="Save a name and optional birth date to your private profile — both stay on this device."
+                subtitle="Save a name and optional birth date to your private profile. Both stay on this device."
                 accent={accent}
               />
 
