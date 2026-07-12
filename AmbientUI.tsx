@@ -202,8 +202,6 @@ function VeilAtmosphere({
         />
       </Animated.View>
       <RippleField accent={accent} active={rippleActive} periodMs={ripplePeriod} motion={motion} />
-      <View style={[shared.spark, shared.sparkOne, { backgroundColor: accent + '99' }]} />
-      <View style={[shared.spark, shared.sparkTwo]} />
     </View>
   );
 }
@@ -400,11 +398,13 @@ export function AmbientSurface({
   children,
   style,
   quiet = false,
+  showOrb = true,
 }: {
   accent: string;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   quiet?: boolean;
+  showOrb?: boolean;
 }) {
   return (
     <View
@@ -425,7 +425,9 @@ export function AmbientSurface({
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
-      <View style={[shared.surfaceOrb, { backgroundColor: accent + '16' }]} pointerEvents="none" />
+      {showOrb ? (
+        <View style={[shared.surfaceOrb, { backgroundColor: accent + '16' }]} pointerEvents="none" />
+      ) : null}
       <LinearGradient
         colors={['rgba(255,255,255,0.22)', 'transparent']}
         start={{ x: 0, y: 0 }}
@@ -527,10 +529,6 @@ const shared = StyleSheet.create({
     left: '16%', top: '24%',
     width: '68%', aspectRatio: 1,
   },
-  spark: { position: 'absolute', width: 3, height: 3, borderRadius: 2, backgroundColor: '#ffffff88' },
-  sparkOne: { top: 122, left: '10%' },
-  sparkTwo: { top: 242, right: '18%' },
-
   header: { paddingTop: 14, paddingHorizontal: 22, paddingBottom: 18 },
   headerCompact: { paddingTop: 8, paddingBottom: 12 },
   brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
