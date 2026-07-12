@@ -4749,7 +4749,7 @@ function SoundscapesPage({
   };
 
   return (
-    <AmbientPageShell accent="#8FB8DE">
+    <AmbientPageShell accent="#8FB8DE" rippleActive={isSoundscapePlaying}>
       <SubHeader title="Soundscapes" accent="#8FB8DE" onBack={onBack} />
       <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
         <Text style={styles.sectionLabel}>NATURAL AMBIENCE</Text>

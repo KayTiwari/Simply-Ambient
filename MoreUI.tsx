@@ -5,6 +5,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   Easing,
   StyleSheet,
@@ -18,9 +19,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 export function AmbientPageShell({
   accent,
   children,
+  rippleActive = false,
+  ripplePeriodMs = 5200,
 }: {
   accent: string;
   children: React.ReactNode;
+  // When true (a soundscape audibly playing), the corner orbit emits slow
+  // ripples; otherwise the corner holds still like the rest of the shell.
+  rippleActive?: boolean;
+  ripplePeriodMs?: number;
 }) {
   const atmosphere = useRef(new Animated.Value(0)).current;
 
@@ -58,6 +65,7 @@ export function AmbientPageShell({
         />
         <View style={[styles.orbitLarge, { borderColor: accent + '17' }]} />
         <View style={[styles.orbitSmall, { borderColor: accent + '12' }]} />
+        <CornerRipples accent={accent} active={rippleActive} periodMs={ripplePeriodMs} />
         <LinearGradient
           colors={['transparent', 'rgba(13,11,35,0.42)']}
           style={styles.bottomDepth}
@@ -65,6 +73,83 @@ export function AmbientPageShell({
       </Animated.View>
       {children}
     </View>
+  );
+}
+
+// Slow rings blooming outward from the corner orbit while sound plays,
+// sharing the small orbit's footprint so they stay concentric with it.
+// Each ring relaunches from its completion callback; Animated.loop around a
+// lone timing stops after one pass on some platforms.
+function CornerRipples({
+  accent,
+  active,
+  periodMs,
+}: {
+  accent: string;
+  active: boolean;
+  periodMs: number;
+}) {
+  const fade = useRef(new Animated.Value(0)).current;
+  const rings = useRef([new Animated.Value(0), new Animated.Value(0)]).current;
+  const [reduceMotion, setReduceMotion] = React.useState(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => sub.remove();
+  }, []);
+
+  const live = active && !reduceMotion;
+
+  useEffect(() => {
+    Animated.timing(fade, {
+      toValue: live ? 1 : 0,
+      duration: 600,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [live, fade]);
+
+  useEffect(() => {
+    if (!live) return;
+    let alive = true;
+    const run = (v: Animated.Value) => {
+      v.setValue(0);
+      Animated.timing(v, {
+        toValue: 1, duration: periodMs, easing: Easing.out(Easing.sin), useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished && alive) run(v);
+      });
+    };
+    run(rings[0]);
+    const timer = setTimeout(() => { if (alive) run(rings[1]); }, periodMs / 2);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      rings.forEach(v => { v.stopAnimation(); v.setValue(0); });
+    };
+  }, [live, periodMs, rings]);
+
+  return (
+    <>
+      {rings.map((v, i) => (
+        <Animated.View
+          key={i}
+          pointerEvents="none"
+          style={[
+            styles.orbitSmall,
+            {
+              borderColor: accent,
+              opacity: Animated.multiply(
+                fade,
+                v.interpolate({ inputRange: [0, 0.14, 1], outputRange: [0, 0.32, 0] }),
+              ),
+              transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2.1] }) }],
+            },
+          ]}
+        />
+      ))}
+    </>
   );
 }
 
