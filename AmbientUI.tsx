@@ -241,27 +241,31 @@ function RippleField({
 
   useEffect(() => {
     if (!active) return;
-    const loops: Animated.CompositeAnimation[] = [];
+    let alive = true;
     const timers: ReturnType<typeof setTimeout>[] = [];
+    // Animated.loop around a lone timing stops after its first pass on some
+    // platforms, so each ring relaunches itself from its completion callback:
+    // one JS call per ring every few seconds, animation itself native-driven.
+    const run = (v: Animated.Value) => {
+      v.setValue(0);
+      Animated.timing(v, {
+        toValue: 1, duration: periodMs, easing: Easing.linear, useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished && alive) run(v);
+      });
+    };
     rings.forEach((v, i) => {
       // Left source rings launch a third of a period apart; the right source
       // sits half a step behind so the two never pulse in unison.
       const source = Math.floor(i / RINGS_PER_SOURCE);
       const k = i % RINGS_PER_SOURCE;
       const delay = (k / RINGS_PER_SOURCE) * periodMs + source * (periodMs / (RINGS_PER_SOURCE * 2));
-      timers.push(setTimeout(() => {
-        v.setValue(0);
-        const loop = Animated.loop(
-          Animated.timing(v, { toValue: 1, duration: periodMs, easing: Easing.linear, useNativeDriver: true }),
-        );
-        loops.push(loop);
-        loop.start();
-      }, delay));
+      timers.push(setTimeout(() => { if (alive) run(v); }, delay));
     });
     return () => {
+      alive = false;
       timers.forEach(clearTimeout);
-      loops.forEach(l => l.stop());
-      rings.forEach(v => v.setValue(0));
+      rings.forEach(v => { v.stopAnimation(); v.setValue(0); });
     };
   }, [active, periodMs, rings]);
 

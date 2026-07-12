@@ -102,16 +102,23 @@ function SceneSvg({
   );
 }
 
-// A 0..1 sawtooth while active; parked at 0 otherwise.
+// A 0..1 sawtooth while active; parked at 0 otherwise. Self-restarting from
+// the completion callback, since Animated.loop around a lone timing stops
+// after its first pass on some platforms.
 function useLoop(active: boolean, duration: number): Animated.Value {
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!active) { v.stopAnimation(); v.setValue(0); return; }
-    const anim = Animated.loop(
-      Animated.timing(v, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: true }),
-    );
-    anim.start();
-    return () => { anim.stop(); v.setValue(0); };
+    let alive = true;
+    const run = () => {
+      v.setValue(0);
+      Animated.timing(v, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: true })
+        .start(({ finished }) => {
+          if (finished && alive) run();
+        });
+    };
+    run();
+    return () => { alive = false; v.stopAnimation(); v.setValue(0); };
   }, [active, duration, v]);
   return v;
 }
