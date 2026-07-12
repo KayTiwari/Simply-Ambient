@@ -48,7 +48,7 @@ import {
   PromptChip,
   MoreSectionGroup,
 } from './MoreUI';
-import { SoundscapeScene } from './SoundscapeScenes';
+import { SoundscapeScene, TileScene } from './SoundscapeScenes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
@@ -1168,7 +1168,7 @@ function Hub({
               onPress={() => onOpen('affirmations')}
             />
             <HubTile
-              glyph="△"
+              scene={<TileScene kind="routines" color="#9DC7AC" />}
               accent="#9DC7AC"
               label="Routines"
               sub="Follow a ready-made session path"
@@ -1176,7 +1176,7 @@ function Hub({
               onPress={() => onOpen('routines')}
             />
             <HubTile
-              Icon={Waveform}
+              scene={<TileScene kind="soundscapes" color="#8FB8DE" />}
               accent="#8FB8DE"
               label="Soundscapes"
               kicker="BUILT IN · OFFLINE"
@@ -1269,12 +1269,14 @@ function Hub({
 }
 
 function HubTile({
-  glyph, Icon, accent, label, sub, kicker, badge, badgeColor, variant = 'half', onPress, disabled = false,
+  glyph, Icon, scene, accent, label, sub, kicker, badge, badgeColor, variant = 'half', onPress, disabled = false,
 }: {
   // Either a unicode glyph (kept for spiritual symbols: ensō, flower, sparkle)
   // or a Phosphor icon component (used for utility items: Soundscapes, Bug, etc.)
   glyph?: string;
   Icon?: React.ComponentType<IconProps>;
+  // Full-bleed scene art; when set it replaces the oversized wallpaper icon.
+  scene?: React.ReactNode;
   accent: string;
   label: string;
   sub: string;
@@ -1313,6 +1315,11 @@ function HubTile({
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
+      {scene ? (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, disabled && { opacity: 0.08 }]}>
+          {scene}
+        </View>
+      ) : (
       <View
         pointerEvents="none"
         style={[
@@ -1337,6 +1344,7 @@ function HubTile({
           </Text>
         )}
       </View>
+      )}
       {badge ? (
         <View style={[styles.tileBadgeWrap, { borderColor: (badgeColor ?? accent) + '55' }]}>
           <Text style={[styles.tileBadge, { color: badgeColor ?? accent }]}>{badge}</Text>

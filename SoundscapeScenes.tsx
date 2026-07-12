@@ -742,6 +742,90 @@ export function SoundscapeScene({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Static tile art for the More hub. Same grammar as the player scenes,
+// dialed down to sit behind tile copy; no motion, since nothing is playing
+// from a menu.
+// ---------------------------------------------------------------------------
+
+const TILE_RAIN_BACK = (() => {
+  const r = prng(43);
+  return Array.from({ length: 10 }, () => ({
+    x: 150 + r() * 165, y: r() * 90, w: 1.1 + r() * 0.3, h: 14 + r() * 14, o: 0.14 + r() * 0.12,
+  }));
+})();
+const TILE_RAIN_FRONT = (() => {
+  const r = prng(44);
+  return Array.from({ length: 7 }, () => ({
+    x: 160 + r() * 152, y: r() * 80, w: 1.8 + r() * 0.5, h: 20 + r() * 18, o: 0.28 + r() * 0.18,
+  }));
+})();
+
+export function TileScene({
+  kind,
+  color,
+}: {
+  kind: 'routines' | 'soundscapes';
+  color: string;
+}) {
+  const accent = solidAccent(color);
+  if (kind === 'routines') {
+    // A session path: one soft ribbon climbing the tile, three steps along
+    // it brightening toward the destination.
+    const nodes = [
+      { x: 38, y: 118, r: 4.5, o: 0.45 },
+      { x: 86, y: 74, r: 5.5, o: 0.65 },
+      { x: 130, y: 42, r: 6.5, o: 0.9 },
+    ];
+    return (
+      <View style={styles.tileScene} pointerEvents="none">
+        <Svg width="100%" height="100%" viewBox="0 0 160 160" preserveAspectRatio="xMidYMid slice" style={StyleSheet.absoluteFill}>
+          <Defs>
+            <HGrad id="rtPath" color={accent} stops={[[0, 0], [0.35, 0.3], [0.75, 0.3], [1, 0.05]]} />
+            <RGrad id="rtAura" color={accent} stops={[[0, 0.16], [1, 0]]} />
+            {nodes.map((n, i) => (
+              <RGrad key={i} id={`rtNode${i}`} color={accent} stops={[[0, n.o * 0.5], [1, 0]]} />
+            ))}
+          </Defs>
+          <Ellipse cx={128} cy={34} rx={78} ry={54} fill="url(#rtAura)" />
+          <Path
+            d="M18 130 C52 122 56 84 86 76 S124 52 134 40 L138 44 C126 58 96 82 88 84 S54 128 22 134 Z"
+            fill="url(#rtPath)"
+          />
+          {nodes.map((n, i) => (
+            <React.Fragment key={i}>
+              <Circle cx={n.x} cy={n.y} r={n.r * 2.6} fill={`url(#rtNode${i})`} />
+              <Circle cx={n.x} cy={n.y} r={n.r * 0.42} fill={accent} opacity={n.o} />
+            </React.Fragment>
+          ))}
+        </Svg>
+      </View>
+    );
+  }
+  // Soundscapes: a quiet weather medley, rain on the right over a low swell.
+  return (
+    <View style={styles.tileScene} pointerEvents="none">
+      <Svg width="100%" height="100%" viewBox="0 0 320 140" preserveAspectRatio="xMidYMid slice" style={StyleSheet.absoluteFill}>
+        <Defs>
+          <VGrad id="tsStreak" color={accent} stops={[[0, 0], [0.22, 0.55], [0.75, 0.35], [1, 0]]} />
+          <RGrad id="tsSheen" color={accent} stops={[[0, 0.14], [1, 0]]} />
+          <RGrad id="tsMist" color={accent} stops={[[0, 0.16], [1, 0]]} />
+          <VGrad id="tsSwell" color={accent} stops={[[0, 0.18], [1, 0.02]]} />
+        </Defs>
+        <Ellipse cx={272} cy={6} rx={110} ry={48} fill="url(#tsSheen)" />
+        {TILE_RAIN_BACK.map((s, i) => (
+          <Rect key={`b${i}`} x={s.x} y={s.y} width={s.w} height={s.h} rx={s.w / 2} fill="url(#tsStreak)" opacity={s.o} />
+        ))}
+        {TILE_RAIN_FRONT.map((s, i) => (
+          <Rect key={`f${i}`} x={s.x} y={s.y} width={s.w} height={s.h} rx={s.w / 2} fill="url(#tsStreak)" opacity={s.o} />
+        ))}
+        <Path d="M0 112 C60 102 120 120 190 110 S290 98 320 108 L320 140 L0 140 Z" fill="url(#tsSwell)" />
+        <Ellipse cx={268} cy={142} rx={130} ry={26} fill="url(#tsMist)" />
+      </Svg>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   scene: {
     position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
@@ -752,4 +836,5 @@ const styles = StyleSheet.create({
     right: 22, top: 16, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
   },
+  tileScene: { ...StyleSheet.absoluteFillObject, overflow: 'hidden' },
 });
