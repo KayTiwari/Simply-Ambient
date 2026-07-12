@@ -525,13 +525,13 @@ const SOUNDSCAPE_GAIN: Record<SoundscapeKey, number> = {
   stream: 0.65,
   fire: 1,
   white: 0.025,
-  pink: 0.62,
-  brown: 0.62,
-  breeze: 0.42,
+  pink: 0.40,
+  brown: 0.50,
+  breeze: 1,
   night: 0.38,
   thunder: 0.42,
-  cabin: 0.40,
-  train: 0.44,
+  cabin: 0.90,
+  train: 1,
 };
 
 function effectiveSoundscapeVolume(kind: SoundscapeKey, volume: number) {
@@ -980,7 +980,7 @@ function buildSoundscapeWav(kind: SoundscapeKey): string {
           - Math.cos(twoPi * t / 6) * 0.14
           + Math.sin(twoPi * t / 3) * 0.06;
         const air = (pink * 0.052 + brown * 0.026 + breezeLow * 0.34) * swell;
-        return [air * panLeft, (air * 0.94 + breezeLow * 0.015) * panRight];
+        return [air * panLeft * 2.1, (air * 0.94 + breezeLow * 0.015) * panRight * 2.1];
       }
       case 'night': {
         // Raised sine gates have zero slope as they open and close, keeping
@@ -1026,7 +1026,7 @@ function buildSoundscapeWav(kind: SoundscapeKey): string {
         const railSway = Math.sin(twoPi * 2 * t) * 0.025
           + Math.sin(twoPi * 4 * t + 0.45) * 0.007;
         const rumble = trainLow * 0.25 + brown * 0.038 + pink * 0.022;
-        return [rumble + railSway, rumble * 0.93 - railSway * 0.72];
+        return [(rumble + railSway) * 1.5, (rumble * 0.93 - railSway * 0.72) * 1.5];
       }
       case 'pink':
         return [pink * 0.24 * panLeft, pink * 0.22 * panRight];
@@ -1298,7 +1298,7 @@ class WebSoundscapeEngine {
           - Math.cos(twoPi * t / 6) * 0.14
           + Math.sin(twoPi * t / 3) * 0.06;
         const air = (this.pink * 0.052 + this.brown * 0.026 + this.breezeLow * 0.34) * swell;
-        return [air, air * 0.94 + this.breezeLow * 0.015];
+        return [air * 2.1, (air * 0.94 + this.breezeLow * 0.015) * 2.1];
       }
       case 'night': {
         const gateLeft = Math.pow(Math.max(0, Math.sin(twoPi * 0.5 * t)), 6);
@@ -1344,7 +1344,7 @@ class WebSoundscapeEngine {
         const railSway = Math.sin(twoPi * 2 * t) * 0.025
           + Math.sin(twoPi * 4 * t + 0.45) * 0.007;
         const rumble = this.trainLow * 0.25 + this.brown * 0.038 + this.pink * 0.022;
-        return [rumble + railSway, rumble * 0.93 - railSway * 0.72];
+        return [(rumble + railSway) * 1.5, (rumble * 0.93 - railSway * 0.72) * 1.5];
       }
       case 'pink':
         return [this.pink * 0.24, this.pink * 0.22];
@@ -3007,10 +3007,10 @@ function MiniPlayer({
   onStopAll: () => void;
 }) {
   const [now, setNow] = useState(Date.now());
+  const [rendered, setRendered] = useState(visible);
   const { width: playerWidth } = useWindowDimensions();
   const compactPlayer = playerWidth < 360;
-  const barOpacity = useRef(new Animated.Value(visible ? 1 : 0)).current;
-  const barOffset = useRef(new Animated.Value(visible ? 0 : 12)).current;
+  const barOffset = useRef(new Animated.Value(visible ? 0 : 96)).current;
   const ringPulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -3023,25 +3023,40 @@ function MiniPlayer({
   }, [visible, sleepEndsAt]);
 
   useEffect(() => {
-    // JS-driven (not native): on web a native-driver opacity promotes the bar to
-    // its own layer, and the white play button can render at full opacity for a
-    // frame mid-fade (a white flash). Driving opacity in JS sets it on the parent
-    // element so it cascades cleanly to every child.
-    Animated.parallel([
-      Animated.timing(barOpacity, {
-        toValue: visible ? 1 : 0,
-        duration: visible ? 280 : 340,
-        easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: false,
-      }),
+    barOffset.stopAnimation();
+
+    if (visible && !rendered) {
+      // Mount first so BlurView/backdrop-filter has a frame to capture the live
+      // page underneath before any part of the player becomes visible.
+      barOffset.setValue(96);
+      setRendered(true);
+      return;
+    }
+    if (!rendered) return;
+
+    const run = () => {
+      // Keep opacity off the glass hierarchy. CSS and native backdrop blur can
+      // lose their live backdrop when an ancestor becomes an opacity layer.
       Animated.timing(barOffset, {
-        toValue: visible ? 0 : 12,
-        duration: visible ? 280 : 340,
-        easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [barOffset, barOpacity, visible]);
+        toValue: visible ? 0 : 96,
+        duration: visible ? 360 : 320,
+        easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished && !visible) setRendered(false);
+      });
+    };
+
+    if (!visible) {
+      run();
+      return;
+    }
+
+    // Two display frames is long enough for both native BlurView and CSS
+    // backdrop-filter to initialize, while keeping first-play response quick.
+    const warmup = setTimeout(run, 34);
+    return () => clearTimeout(warmup);
+  }, [barOffset, rendered, visible]);
 
   useEffect(() => {
     if (!soundscapePlaying && !bgPlaying) {
@@ -3069,6 +3084,7 @@ function MiniPlayer({
     return () => loop.stop();
   }, [ringPulse, soundscapePlaying, bgPlaying]);
 
+  if (!rendered) return null;
   const timerText = sleepEndsAt ? formatRemaining(sleepEndsAt - now) : null;
   const ringScale = ringPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] });
   const ringGlowOpacity = ringPulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.95] });
@@ -3108,8 +3124,8 @@ function MiniPlayer({
       accessibilityElementsHidden={!visible}
       importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
       style={[
-        { opacity: barOpacity, transform: [{ translateY: barOffset }] },
-        Platform.OS === 'web' ? ({ willChange: 'opacity, transform' } as any) : null,
+        { transform: [{ translateY: barOffset }] },
+        Platform.OS === 'web' ? ({ willChange: 'transform' } as any) : null,
       ]}
     >
       <View
@@ -3117,25 +3133,31 @@ function MiniPlayer({
           styles.miniPlayer,
           {
             borderColor: accent + '70',
-            backgroundColor: accent + '0D',
+            backgroundColor: 'transparent',
           },
-          Platform.OS === 'web'
-            ? ({
-                backdropFilter: 'blur(26px) saturate(130%)',
-                WebkitBackdropFilter: 'blur(26px) saturate(130%)',
-              } as any)
-            : null,
         ]}
       >
-        {Platform.OS !== 'web' ? (
+        {Platform.OS === 'web' ? (
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: accent + '0D' },
+              ({
+                backdropFilter: 'blur(46px) saturate(145%)',
+                WebkitBackdropFilter: 'blur(46px) saturate(145%)',
+              } as any),
+            ]}
+            pointerEvents="none"
+          />
+        ) : (
           <BlurView
-            intensity={28}
+            intensity={46}
             tint="dark"
             experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"
           />
-        ) : null}
+        )}
         <LinearGradient
           colors={[accent + '24', 'rgba(13,15,32,0.11)', accent + '0A']}
           locations={[0, 0.46, 1]}
@@ -3565,13 +3587,8 @@ function FrequenciesView(props: FreqViewProps) {
         <View style={styles.enso} />
       </View>
       <View style={styles.freqEditorialHeader}>
-        <EditorialHeader
-          mode={isTonePlaying ? 'LIVE SESSION' : 'CREATE'}
-          title="Shape the signal"
-          accent={beatColor}
-          centerBrand
-          brandFirst
-        />
+        <Text accessibilityRole="header" style={styles.ambience}>Simply Ambient</Text>
+        <Text style={styles.title}>Binaural frequency generator</Text>
       </View>
 
       <AmbientSurface accent={beatColor} quiet style={styles.freqAffirmationCard}>
@@ -4229,7 +4246,10 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? 12 : 4,
     paddingBottom: 112,
   },
-  freqEditorialHeader: { marginHorizontal: -20, paddingTop: 8 },
+  freqEditorialHeader: {
+    alignItems: 'center', marginHorizontal: -20,
+    paddingHorizontal: 20, paddingTop: 8, paddingBottom: 18,
+  },
   freqEnsoWrap: { alignItems: 'center', paddingTop: 12, marginBottom: -2 },
   freqAffirmationCard: {
     marginBottom: 14, paddingHorizontal: 17, paddingVertical: 14, minHeight: 92,
@@ -4586,6 +4606,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
+    height: 105,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
     zIndex: 180,
     elevation: 180,
   },
