@@ -10,6 +10,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 /**
  * Shared editorial primitives for the five main rooms of Simply Ambient.
@@ -110,6 +111,14 @@ export function AmbientVeil({
     return () => loop.stop();
   }, [active, ambientMotion, motionHz, reduceMotion]);
 
+  // Interference ripples run at the same band-aware tempo as the drift:
+  // slower for delta, quicker for gamma. Only the live accent layer ripples;
+  // the outgoing layer holds still while it fades, so the accent crossfade
+  // reads exactly as before.
+  const rippleHz = Math.max(0, Math.min(40, motionHz));
+  const ripplePeriod = Math.round(6400 - rippleHz * 55);
+  const rippleActive = active && !reduceMotion;
+
   const base: [string, string, string] = strength === 'light'
     ? ['rgba(8,9,25,0.08)', 'rgba(8,9,25,0.18)', 'rgba(6,7,21,0.30)']
     : strength === 'deep'
@@ -150,19 +159,32 @@ export function AmbientVeil({
         style={[StyleSheet.absoluteFill, { opacity: Animated.multiply(reveal, accentFade) }]}
         pointerEvents="none"
       >
-        <VeilAtmosphere accent={displayAccent} motion={ambientMotion} />
+        <VeilAtmosphere
+          accent={displayAccent}
+          motion={ambientMotion}
+          rippleActive={rippleActive}
+          ripplePeriod={ripplePeriod}
+        />
       </Animated.View>
       {children}
     </View>
   );
 }
 
-function VeilAtmosphere({ accent, motion }: { accent: string; motion: Animated.Value }) {
+function VeilAtmosphere({
+  accent,
+  motion,
+  rippleActive = false,
+  ripplePeriod = 6000,
+}: {
+  accent: string;
+  motion: Animated.Value;
+  rippleActive?: boolean;
+  ripplePeriod?: number;
+}) {
   const auraX = motion.interpolate({ inputRange: [0, 1], outputRange: [-8, 12] });
   const auraY = motion.interpolate({ inputRange: [0, 1], outputRange: [-5, 11] });
   const auraScale = motion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.075] });
-  const orbitLargeScale = motion.interpolate({ inputRange: [0, 1], outputRange: [1, 1.085] });
-  const orbitSmallScale = motion.interpolate({ inputRange: [0, 1], outputRange: [1, 0.925] });
   return (
     <View style={StyleSheet.absoluteFill}>
       <Animated.View
@@ -179,20 +201,116 @@ function VeilAtmosphere({ accent, motion }: { accent: string; motion: Animated.V
           style={StyleSheet.absoluteFill}
         />
       </Animated.View>
-      <Animated.View
-        style={[
-          shared.orbitLarge,
-          { borderColor: accent + '27', transform: [{ scale: orbitLargeScale }] },
-        ]}
-      />
-      <Animated.View
-        style={[
-          shared.orbitSmall,
-          { borderColor: accent + '20', transform: [{ scale: orbitSmallScale }] },
-        ]}
-      />
+      <RippleField accent={accent} active={rippleActive} periodMs={ripplePeriod} motion={motion} />
       <View style={[shared.spark, shared.sparkOne, { backgroundColor: accent + '99' }]} />
       <View style={[shared.spark, shared.sparkTwo]} />
+    </View>
+  );
+}
+
+// Two soft ring sources, left ear and right ear, sending slow ripples that
+// cross mid-screen where a quiet glow swells at the beat tempo. While idle a
+// single faint resting ring per source hints at the still pond; playing
+// crossfades the hints out and the live ripples in.
+const RINGS_PER_SOURCE = 3;
+
+function RippleField({
+  accent,
+  active,
+  periodMs,
+  motion,
+}: {
+  accent: string;
+  active: boolean;
+  periodMs: number;
+  motion: Animated.Value;
+}) {
+  const fade = useRef(new Animated.Value(0)).current;
+  const rings = useRef(
+    Array.from({ length: RINGS_PER_SOURCE * 2 }, () => new Animated.Value(0)),
+  ).current;
+
+  useEffect(() => {
+    Animated.timing(fade, {
+      toValue: active ? 1 : 0,
+      duration: 650,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [active, fade]);
+
+  useEffect(() => {
+    if (!active) return;
+    const loops: Animated.CompositeAnimation[] = [];
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    rings.forEach((v, i) => {
+      // Left source rings launch a third of a period apart; the right source
+      // sits half a step behind so the two never pulse in unison.
+      const source = Math.floor(i / RINGS_PER_SOURCE);
+      const k = i % RINGS_PER_SOURCE;
+      const delay = (k / RINGS_PER_SOURCE) * periodMs + source * (periodMs / (RINGS_PER_SOURCE * 2));
+      timers.push(setTimeout(() => {
+        v.setValue(0);
+        const loop = Animated.loop(
+          Animated.timing(v, { toValue: 1, duration: periodMs, easing: Easing.linear, useNativeDriver: true }),
+        );
+        loops.push(loop);
+        loop.start();
+      }, delay));
+    });
+    return () => {
+      timers.forEach(clearTimeout);
+      loops.forEach(l => l.stop());
+      rings.forEach(v => v.setValue(0));
+    };
+  }, [active, periodMs, rings]);
+
+  const restingOpacity = fade.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0] });
+  const meetOpacity = Animated.multiply(
+    fade,
+    motion.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] }),
+  );
+  const meetScale = motion.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1.08] });
+
+  const ring = (v: Animated.Value, source: 0 | 1, key: number) => (
+    <Animated.View
+      key={key}
+      style={[
+        shared.rippleRing,
+        source === 0 ? shared.rippleLeft : shared.rippleRight,
+        {
+          borderColor: accent,
+          opacity: Animated.multiply(
+            fade,
+            v.interpolate({ inputRange: [0, 0.12, 1], outputRange: [0, 0.4, 0] }),
+          ),
+          transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.18, 1.6] }) }],
+        },
+      ]}
+    />
+  );
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Animated.View style={[shared.rippleMeet, { opacity: meetOpacity, transform: [{ scale: meetScale }] }]}>
+        <Svg width="100%" height="100%" viewBox="0 0 100 100">
+          <Defs>
+            <RadialGradient id="veilMeet">
+              <Stop offset="0" stopColor={accent} stopOpacity={0.3} />
+              <Stop offset="0.7" stopColor={accent} stopOpacity={0.08} />
+              <Stop offset="1" stopColor={accent} stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          <Circle cx={50} cy={50} r={50} fill="url(#veilMeet)" />
+        </Svg>
+      </Animated.View>
+      {rings.map((v, i) => ring(v, i < RINGS_PER_SOURCE ? 0 : 1, i))}
+      <Animated.View
+        style={[shared.rippleRing, shared.rippleLeft, shared.rippleRest, { borderColor: accent, opacity: restingOpacity }]}
+      />
+      <Animated.View
+        style={[shared.rippleRing, shared.rippleRight, shared.rippleRest, { borderColor: accent, opacity: restingOpacity }]}
+      />
     </View>
   );
 }
@@ -392,13 +510,18 @@ const shared = StyleSheet.create({
     height: 430,
     borderBottomRightRadius: 280,
   },
-  orbitLarge: {
-    position: 'absolute', top: -188, right: -168,
-    width: 370, height: 370, borderRadius: 185, borderWidth: 1,
+  rippleRing: {
+    position: 'absolute',
+    width: '58%', aspectRatio: 1,
+    borderRadius: 9999, borderWidth: 1.5,
   },
-  orbitSmall: {
-    position: 'absolute', top: -70, right: -76,
-    width: 190, height: 190, borderRadius: 95, borderWidth: 1,
+  rippleLeft: { left: '-24%', top: '26%' },
+  rippleRight: { right: '-24%', top: '34%' },
+  rippleRest: { transform: [{ scale: 0.5 }] },
+  rippleMeet: {
+    position: 'absolute',
+    left: '16%', top: '24%',
+    width: '68%', aspectRatio: 1,
   },
   spark: { position: 'absolute', width: 3, height: 3, borderRadius: 2, backgroundColor: '#ffffff88' },
   sparkOne: { top: 122, left: '10%' },
