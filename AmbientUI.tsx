@@ -3,6 +3,7 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
+  Platform,
   StyleSheet,
   Text,
   View,
@@ -10,6 +11,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 
 /**
@@ -202,7 +204,75 @@ function VeilAtmosphere({
         />
       </Animated.View>
       <RippleField accent={accent} active={rippleActive} periodMs={ripplePeriod} motion={motion} />
+      <CornerRipples accent={accent} active={rippleActive} periodMs={ripplePeriod} />
     </View>
+  );
+}
+
+// Rings blooming outward from the top-right corner while sound plays, the
+// third voice of the atmosphere alongside the aurora and the ear ripples.
+// Gated upstream by rippleActive, so reduce-motion is already respected.
+function CornerRipples({
+  accent,
+  active,
+  periodMs,
+}: {
+  accent: string;
+  active: boolean;
+  periodMs: number;
+}) {
+  const fade = useRef(new Animated.Value(0)).current;
+  const rings = useRef([new Animated.Value(0), new Animated.Value(0)]).current;
+
+  useEffect(() => {
+    Animated.timing(fade, {
+      toValue: active ? 1 : 0,
+      duration: 600,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [active, fade]);
+
+  useEffect(() => {
+    if (!active) return;
+    let alive = true;
+    const run = (v: Animated.Value) => {
+      v.setValue(0);
+      Animated.timing(v, {
+        toValue: 1, duration: periodMs, easing: Easing.out(Easing.sin), useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished && alive) run(v);
+      });
+    };
+    run(rings[0]);
+    const timer = setTimeout(() => { if (alive) run(rings[1]); }, periodMs / 2);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      rings.forEach(v => { v.stopAnimation(); v.setValue(0); });
+    };
+  }, [active, periodMs, rings]);
+
+  return (
+    <>
+      {rings.map((v, i) => (
+        <Animated.View
+          key={i}
+          pointerEvents="none"
+          style={[
+            shared.cornerRing,
+            {
+              borderColor: accent,
+              opacity: Animated.multiply(
+                fade,
+                v.interpolate({ inputRange: [0, 0.14, 1], outputRange: [0, 0.32, 0] }),
+              ),
+              transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2.1] }) }],
+            },
+          ]}
+        />
+      ))}
+    </>
   );
 }
 
@@ -324,6 +394,7 @@ export function EditorialHeader({
   compact = false,
   centerBrand = false,
   brandFirst = false,
+  glass = false,
 }: {
   mode: string;
   title: string;
@@ -332,9 +403,11 @@ export function EditorialHeader({
   compact?: boolean;
   centerBrand?: boolean;
   brandFirst?: boolean;
+  glass?: boolean;
 }) {
   return (
-    <View style={[shared.header, compact && shared.headerCompact]}>
+    <View style={[shared.header, glass && shared.headerGlassContainer, compact && shared.headerCompact]}>
+      {glass ? <HeaderGlass accent={accent} /> : null}
       <View style={[shared.brandRow, centerBrand && shared.brandRowCentered]}>
         <Text
           accessibilityRole={brandFirst ? 'header' : undefined}
@@ -363,6 +436,42 @@ export function EditorialHeader({
           <Text style={shared.pageSubtitle}>{subtitle}</Text>
         </View>
       ) : null}
+    </View>
+  );
+}
+
+export function HeaderGlass({ accent }: { accent: string }) {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {Platform.OS === 'web' ? (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            shared.headerGlassWeb,
+            { backgroundColor: accent + '08' },
+          ]}
+        />
+      ) : (
+        <BlurView
+          intensity={34}
+          tint="dark"
+          experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
+          style={StyleSheet.absoluteFill}
+        />
+      )}
+      <LinearGradient
+        colors={['rgba(255,255,255,0.052)', accent + '09', 'rgba(8,9,25,0.15)']}
+        locations={[0, 0.52, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <LinearGradient
+        colors={['transparent', accent + '3C', 'transparent']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={shared.headerGlassEdge}
+      />
     </View>
   );
 }
@@ -529,7 +638,22 @@ const shared = StyleSheet.create({
     left: '16%', top: '24%',
     width: '68%', aspectRatio: 1,
   },
+  cornerRing: {
+    position: 'absolute', width: 170, height: 170, borderRadius: 85,
+    borderWidth: 1, top: -52, right: -66,
+  },
   header: { paddingTop: 14, paddingHorizontal: 22, paddingBottom: 18 },
+  headerGlassContainer: {
+    position: 'relative', overflow: 'hidden', zIndex: 30, elevation: 18,
+    backgroundColor: 'rgba(8,9,25,0.07)',
+    borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  headerGlassWeb: ({
+    backdropFilter: 'blur(30px) saturate(135%)',
+    WebkitBackdropFilter: 'blur(30px) saturate(135%)',
+  } as any),
+  headerGlassEdge: { position: 'absolute', left: 22, right: 22, bottom: 0, height: 1 },
   headerCompact: { paddingTop: 8, paddingBottom: 12 },
   brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   brandRowCentered: { justifyContent: 'center' },

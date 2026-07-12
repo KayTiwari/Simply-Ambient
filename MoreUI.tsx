@@ -3,11 +3,8 @@
 // actions/empty states carry the same tactile language across very different
 // wellness tools.
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import {
-  AccessibilityInfo,
-  Animated,
-  Easing,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,141 +12,25 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { AmbientVeil } from './AmbientUI';
 
+// One background system for every screen: the More section rides the same
+// veil the main tabs use, so the aurora, the interference field, the corner
+// ripples, and the accent crossfade behave identically app-wide.
 export function AmbientPageShell({
   accent,
   children,
   rippleActive = false,
-  ripplePeriodMs = 5200,
 }: {
   accent: string;
   children: React.ReactNode;
-  // When true (a soundscape audibly playing), the corner orbit emits slow
-  // ripples; otherwise the corner holds still like the rest of the shell.
+  // True while sound is audibly playing from this page; wakes the veil.
   rippleActive?: boolean;
-  ripplePeriodMs?: number;
 }) {
-  const atmosphere = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(atmosphere, {
-      toValue: 1,
-      duration: 700,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [atmosphere]);
-
   return (
-    <View style={styles.shell}>
-      <LinearGradient
-        colors={['rgba(17,18,43,0.34)', 'rgba(10,11,31,0.48)', 'rgba(7,8,24,0.62)']}
-        locations={[0, 0.48, 1]}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-      <Animated.View
-        style={[StyleSheet.absoluteFill, { opacity: atmosphere }]}
-        pointerEvents="none"
-      >
-        <LinearGradient
-          colors={[accent + '2B', accent + '0D', 'transparent']}
-          locations={[0, 0.5, 1]}
-          start={{ x: 0.05, y: 0 }}
-          end={{ x: 0.9, y: 1 }}
-          style={styles.topAurora}
-        />
-        <LinearGradient
-          colors={['#8F79D122', '#3C41790C', 'transparent']}
-          style={styles.sideAura}
-        />
-        <View style={[styles.orbitLarge, { borderColor: accent + '17' }]} />
-        <View style={[styles.orbitSmall, { borderColor: accent + '12' }]} />
-        <CornerRipples accent={accent} active={rippleActive} periodMs={ripplePeriodMs} />
-        <LinearGradient
-          colors={['transparent', 'rgba(13,11,35,0.42)']}
-          style={styles.bottomDepth}
-        />
-      </Animated.View>
+    <AmbientVeil accent={accent} strength="light" active={rippleActive}>
       {children}
-    </View>
-  );
-}
-
-// Slow rings blooming outward from the corner orbit while sound plays,
-// sharing the small orbit's footprint so they stay concentric with it.
-// Each ring relaunches from its completion callback; Animated.loop around a
-// lone timing stops after one pass on some platforms.
-function CornerRipples({
-  accent,
-  active,
-  periodMs,
-}: {
-  accent: string;
-  active: boolean;
-  periodMs: number;
-}) {
-  const fade = useRef(new Animated.Value(0)).current;
-  const rings = useRef([new Animated.Value(0), new Animated.Value(0)]).current;
-  const [reduceMotion, setReduceMotion] = React.useState(false);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => sub.remove();
-  }, []);
-
-  const live = active && !reduceMotion;
-
-  useEffect(() => {
-    Animated.timing(fade, {
-      toValue: live ? 1 : 0,
-      duration: 600,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [live, fade]);
-
-  useEffect(() => {
-    if (!live) return;
-    let alive = true;
-    const run = (v: Animated.Value) => {
-      v.setValue(0);
-      Animated.timing(v, {
-        toValue: 1, duration: periodMs, easing: Easing.out(Easing.sin), useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished && alive) run(v);
-      });
-    };
-    run(rings[0]);
-    const timer = setTimeout(() => { if (alive) run(rings[1]); }, periodMs / 2);
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-      rings.forEach(v => { v.stopAnimation(); v.setValue(0); });
-    };
-  }, [live, periodMs, rings]);
-
-  return (
-    <>
-      {rings.map((v, i) => (
-        <Animated.View
-          key={i}
-          pointerEvents="none"
-          style={[
-            styles.orbitSmall,
-            {
-              borderColor: accent,
-              opacity: Animated.multiply(
-                fade,
-                v.interpolate({ inputRange: [0, 0.14, 1], outputRange: [0, 0.32, 0] }),
-              ),
-              transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2.1] }) }],
-            },
-          ]}
-        />
-      ))}
-    </>
+    </AmbientVeil>
   );
 }
 
@@ -315,24 +196,6 @@ export function MoreSectionGroup({
 }
 
 const styles = StyleSheet.create({
-  shell: { flex: 1, backgroundColor: 'transparent', overflow: 'hidden' },
-  topAurora: {
-    position: 'absolute', top: -80, left: -80, right: -40, height: 430,
-    borderBottomRightRadius: 260,
-  },
-  sideAura: {
-    position: 'absolute', top: 250, right: -150, width: 330, height: 520,
-    borderRadius: 260, transform: [{ rotate: '-18deg' }], opacity: 0.8,
-  },
-  bottomDepth: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 300 },
-  orbitLarge: {
-    position: 'absolute', width: 330, height: 330, borderRadius: 165,
-    borderWidth: 1, top: -164, right: -142,
-  },
-  orbitSmall: {
-    position: 'absolute', width: 170, height: 170, borderRadius: 85,
-    borderWidth: 1, top: -52, right: -66,
-  },
   glowCard: {
     borderRadius: 26,
     borderWidth: 1,
