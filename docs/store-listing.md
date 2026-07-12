@@ -44,7 +44,7 @@ Design your own personal binaural frequency, or explore the most practiced ones.
 • Ayurvedic doshas — Vata, Pitta, Kapha — with balancing recommendations
 
 **Horoscopes**
-• Daily, monthly, and yearly horoscopes for your sign
+• Daily, weekly, and monthly horoscopes for your sign
 • Lunar phase indicator everywhere
 • Tarot card of the moment with grounded interpretations
 

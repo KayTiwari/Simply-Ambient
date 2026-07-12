@@ -22,7 +22,7 @@ The philosophy is rooted in **New Thought / manifestation**: tune your vibration
 | **Frequencies** | ∿ | L/R sliders, brainwave & tuning presets, custom presets, background music, sleep timer |
 | **Breath** | ○ | Mala counter (108), 18 breath techniques, circle / polygonal-mandala visualizations, mudras |
 | **Chakras** | ✦ | 7 chakras with Devanagari bija glyphs, doshas (Vata/Pitta/Kapha) |
-| **Horoscopes** | ☽ | Daily / monthly / yearly horoscopes, zodiac picker, tarot card draw, lunar phase |
+| **Horoscopes** | ☽ | Daily / weekly / monthly horoscopes, zodiac picker, tarot card draw, lunar phase |
 | **More** | ⋯ | Daily affirmation + opt-in push, mood check-in, gratitude journal, 5-4-3-2-1 grounding, support, bug report |
 
 Plus a small **lunar-phase chip** in the top-right corner of every screen.
@@ -107,9 +107,8 @@ Three Ayurvedic constitutions on the chakra tab — **Vata** (Air + Ether), **Pi
 ### ☽ Horoscopes tab
 
 - **Today widget** with the actual date, your sign's glyph, element, and qualities.
-- **Three period toggles**: DAILY · MONTHLY · YEARLY.
-  - Daily and monthly are pulled live from a free public horoscope API.
-  - Yearly uses 12 hand-written "year-ahead" intentions (one per sign) — grounded, manifestation-aligned, not predictive pulp.
+- **Three period toggles**: DAILY · WEEKLY · MONTHLY.
+  - All three readings are pulled live from a free public horoscope API.
 - **Lunar phase + percent illumination** at the bottom of the widget (also computed locally from Conway's algorithm).
 - **Full 12-zodiac picker** — tap to set your sign. Persisted in local storage.
 
@@ -198,7 +197,7 @@ Every time the frequency changes, a **1-second 44.1 kHz 16-bit stereo PCM WAV** 
 
 ### How the horoscopes work
 
-Daily and monthly horoscopes are fetched from `freehoroscopeapi.com` — a free public API that returns plain JSON. Yearly horoscopes are local: each of the 12 zodiac signs has a hand-written one-paragraph "year ahead" intention bundled into the app. The user's chosen zodiac sign is persisted in `AsyncStorage` so the next launch defaults to the same sign.
+Daily, weekly, and monthly horoscopes are fetched from `freehoroscopeapi.com`, a free public API that returns plain JSON. The user's chosen zodiac sign is persisted in `AsyncStorage` so the next launch defaults to the same sign.
 
 ---
 
@@ -240,7 +239,7 @@ Then either:
 ├── App.tsx                  # Tabs, state, audio, frequencies UI, animated background, zodiac/lunar data
 ├── BreathworkView.tsx       # 18 breath techniques + circle and polygonal-mandala visuals + mudras
 ├── ChakrasView.tsx          # 7 chakras (Devanagari bijas) + doshas
-├── HoroscopesView.tsx       # Today widget, daily/monthly/yearly horoscopes (cached), zodiac picker, tarot
+├── HoroscopesView.tsx       # Today widget, daily/weekly/monthly horoscopes (cached), zodiac picker, tarot
 ├── MoreView.tsx             # Hub: Profile (MBTI), Compatibility, AI Insights, Affirmations, Mood + graph,
 │                            #      Gratitude, Grounding, Support, Bug report
 ├── OnboardingView.tsx       # First-launch 3-step welcome → intent → recommendations
@@ -263,7 +262,7 @@ Shipped lately:
 - ✅ Chakras with Devanagari bijas
 - ✅ Doshas
 - ✅ Mudras paired with breath techniques
-- ✅ Horoscopes tab (daily / monthly / yearly)
+- ✅ Horoscopes tab (daily / weekly / monthly)
 - ✅ Persistent user zodiac sign
 - ✅ Manifestation rotating quotes
 - ✅ Slide-to-tuning auto-detection

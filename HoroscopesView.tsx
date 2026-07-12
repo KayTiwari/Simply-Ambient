@@ -63,7 +63,7 @@ function localDayStamp(): string {
 }
 function horoscopeCacheKey(signId: string, period: string) {
   // Daily entries are keyed by local date so a new local day is a cache miss;
-  // monthly relies on the TTL alone.
+  // weekly and monthly rely on the TTL alone.
   const day = period === 'daily' ? `_${localDayStamp()}` : '';
   return `@simply_ambient_horo_${signId}_${period}${day}_v1`;
 }
@@ -79,15 +79,16 @@ function tarotUrl(n: number): string {
     ? `/api/tarot?n=${n}`
     : `https://freehoroscopeapi.com/api/v1/tarot/cards/random?n=${n}`;
 }
-function horoscopeUrl(period: string, signName: string): string {
+function horoscopeUrl(period: Period, signName: string): string {
+  const encodedSign = encodeURIComponent(signName);
   if (ON_WEB) {
     return period === 'daily'
-      ? `/api/horoscope?period=daily&sign=${encodeURIComponent(signName)}&day=TODAY`
-      : `/api/horoscope?period=monthly&sign=${encodeURIComponent(signName)}`;
+      ? `/api/horoscope?period=daily&sign=${encodedSign}&day=TODAY`
+      : `/api/horoscope?period=${period}&sign=${encodedSign}`;
   }
   return period === 'daily'
-    ? `https://freehoroscopeapi.com/api/v1/get-horoscope/daily?sign=${signName}&day=TODAY`
-    : `https://freehoroscopeapi.com/api/v1/get-horoscope/monthly?sign=${signName}`;
+    ? `https://freehoroscopeapi.com/api/v1/get-horoscope/daily?sign=${encodedSign}&day=TODAY`
+    : `https://freehoroscopeapi.com/api/v1/get-horoscope/${period}?sign=${encodedSign}`;
 }
 
 // freehoroscopeapi.com is on IST (UTC+5:30), so when it's late evening in
@@ -123,8 +124,8 @@ function freshnessLabel(ts: number): string {
   return `Updated ${days}d ago`;
 }
 
-type Period = 'daily' | 'monthly' | 'yearly';
-const PERIODS: Period[] = ['daily', 'monthly', 'yearly'];
+type Period = 'daily' | 'weekly' | 'monthly';
+const PERIODS: Period[] = ['daily', 'weekly', 'monthly'];
 const PERIOD_ROW_INSET = 4;
 type ReadingMode = 'horoscope' | 'tarot';
 const MODE_SEGMENT_GAP = 6;
@@ -277,7 +278,7 @@ export default function HoroscopesView({
   // "tap to set your sign" strip reads like onboarding that never ends.
   const [pickerOpen, setPickerOpen] = useState(false);
   const [horoscope, setHoroscope] = useState<string | null>(null);
-  // When the shown text was fetched (cache ts or fetch time); null for yearly.
+  // When the shown text was fetched, either from cache or the live service.
   const [horoscopeTs, setHoroscopeTs] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -425,8 +426,8 @@ export default function HoroscopesView({
 
   // Daily cache keys embed the date, so without a sweep yesterday's entries
   // would pile up forever (one per sign per day). Remove any daily key that
-  // is stamped with a different local day; monthly keys carry no date and
-  // stay bounded at one per sign.
+  // is stamped with a different local day. Weekly and monthly keys carry no
+  // date and stay bounded at one per sign and period.
   useEffect(() => {
     (async () => {
       try {
@@ -532,15 +533,6 @@ export default function HoroscopesView({
   useEffect(() => {
     let cancelled = false;
 
-    // Yearly is a static intention written into the zodiac data. No API call,
-    // so no freshness stamp either.
-    if (period === 'yearly') {
-      setLoading(false);
-      setHoroscope(mySign.yearAhead);
-      setHoroscopeTs(null);
-      return;
-    }
-
     // Clear the previous sign/period text so it never shows under the new label,
     // and spin until the cache read settles so the fallback quote never flashes.
     setHoroscope(null);
@@ -600,7 +592,7 @@ export default function HoroscopesView({
     })();
 
     return () => { cancelled = true; };
-  }, [mySign.id, period, mySign.yearAhead]);
+  }, [mySign.id, mySign.name, period]);
 
   const dateText = new Date().toLocaleDateString(undefined, {
     weekday: 'long', month: 'long', day: 'numeric',
@@ -609,17 +601,16 @@ export default function HoroscopesView({
   const lunarCountdown = lunarCountdownLabel(lunar.phase);
 
   const monthName = new Date().toLocaleDateString(undefined, { month: 'long' }).toUpperCase();
-  const yearText = new Date().getFullYear();
   const periodLabel =
     period === 'daily' ? 'TODAY · ' + dateText.toUpperCase() :
-    period === 'monthly' ? 'THIS MONTH · ' + monthName :
-    'YEAR AHEAD · ' + yearText;
+    period === 'weekly' ? 'THIS WEEK' :
+    'THIS MONTH · ' + monthName;
 
   const accent = readingMode === 'horoscope' ? mySign.color : '#B39BE0';
   const forecastTitle =
     period === 'daily' ? 'A note for today' :
-    period === 'monthly' ? `The shape of ${new Date().toLocaleDateString(undefined, { month: 'long' })}` :
-    `An intention for ${yearText}`;
+    period === 'weekly' ? 'The rhythm of this week' :
+    `The shape of ${new Date().toLocaleDateString(undefined, { month: 'long' })}`;
   const modeSegmentWidth = Math.max(0, (modeRowWidth - MODE_SEGMENT_GAP) / 2);
   const modeSegmentTravel = modeSegmentWidth + MODE_SEGMENT_GAP;
   const periodSegmentWidth = Math.max(0, (periodRowWidth - PERIOD_ROW_INSET * 2) / PERIODS.length);
@@ -888,8 +879,8 @@ export default function HoroscopesView({
               <Text style={styles.manuscriptBody}>{horoscope}</Text>
               <StatusStrip
                 accent={mySign.color}
-                label={period === 'yearly' ? 'SIGN INTENTION' : 'CURRENT READING'}
-                detail={period !== 'yearly' && horoscopeTs != null ? freshnessLabel(horoscopeTs) : 'held locally'}
+                label="CURRENT READING"
+                detail={horoscopeTs != null ? freshnessLabel(horoscopeTs) : 'held locally'}
                 active
               />
             </>

@@ -33,7 +33,7 @@ The app contacts a small number of services. None of these requests include pers
 
 | Service | What is sent | What it returns | When |
 |---|---|---|---|
-| `freehoroscopeapi.com` | Your selected zodiac sign and the period (daily / monthly) | Public horoscope text | Each time you open the Horoscopes tab; cached for 6 h |
+| `freehoroscopeapi.com` | Your selected zodiac sign and the period (daily / weekly / monthly) | Public horoscope text | Each time you open the Horoscopes tab; cached for 6 h |
 | Developer's proxy (Vercel) | Your selected zodiac sign and, as with any web server, the IP address of the request | Relays the horoscope or tarot response | **Web version only.** Horoscope and tarot requests route through it. It stores nothing and no logs are kept beyond standard hosting. |
 | `generativelanguage.googleapis.com` (Google Gemini) | The journal sources you have toggled ON for AI Insights (any of: mood log, gratitude entries, manifestations, rants) + the API key you entered | A short AI reflection | **Only when you tap "Journal Themes" or "Interpret Tarot" on the AI Insights page.** Rant sharing is OFF by default; the user must explicitly enable it. |
 | `formsubmit.co` | Subject and body of your feedback or bug report, plus (only if you leave "Attach app info" on) one line with the app version, platform, and OS version | Forwards to the developer's inbox | Only when you submit the Feedback form |

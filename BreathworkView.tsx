@@ -61,16 +61,7 @@ export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandCo
       active={toneIsPlaying}
       motionHz={beatHz}
     >
-      {!technique ? (
-        <EditorialHeader
-          mode="RESTORE"
-          title="Follow the breath"
-          subtitle="Choose a rhythm for the moment you are in."
-          accent={accent}
-        />
-      ) : null}
-
-      {toneIsPlaying ? (
+      {technique && toneIsPlaying ? (
         <View style={styles.toneStripWrap}>
           <StatusStrip
             accent={bandColor}
@@ -90,6 +81,26 @@ export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandCo
           initialOffset={libraryOffset.current}
           onOffsetChange={offset => { libraryOffset.current = offset; }}
           onPick={t => setActiveId(t.id)}
+          header={(
+            <EditorialHeader
+              mode="RESTORE"
+              title="Follow the breath"
+              subtitle="Choose a rhythm for the moment you are in."
+              accent={accent}
+              glass="soft"
+            />
+          )}
+          status={toneIsPlaying ? (
+            <View style={styles.toneStripInList}>
+              <StatusStrip
+                accent={bandColor}
+                label={`${bandName.toUpperCase()} TONE`}
+                detail={`${beatHz} Hz continues underneath`}
+                active
+                pulse
+              />
+            </View>
+          ) : null}
         />
       )}
     </AmbientVeil>
@@ -251,11 +262,15 @@ function TechniqueList({
   initialOffset,
   onOffsetChange,
   onPick,
+  header,
+  status,
 }: {
   accent: string;
   initialOffset: number;
   onOffsetChange: (offset: number) => void;
   onPick: (t: Technique) => void;
+  header: React.ReactNode;
+  status?: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
@@ -278,10 +293,13 @@ function TechniqueList({
       onContentSizeChange={restoreOffset}
       onScroll={event => onOffsetChange(event.nativeEvent.contentOffset.y)}
       scrollEventThrottle={16}
+      stickyHeaderIndices={[0]}
       // Clear the ~80px tab bar rendered by App.tsx plus the safe-area inset.
       contentContainerStyle={{ paddingBottom: insets.bottom + 108, paddingHorizontal: 20 }}
       showsVerticalScrollIndicator={false}
     >
+      <View style={styles.libraryStickyHeader}>{header}</View>
+      {status}
       <EditorialSection
         index="01"
         eyebrow="RITUAL"
@@ -1262,6 +1280,8 @@ function BreathMandala({
 
 const styles = StyleSheet.create({
   toneStripWrap: { paddingHorizontal: 20, marginTop: -4, marginBottom: 3 },
+  toneStripInList: { marginTop: 4, marginBottom: 3 },
+  libraryStickyHeader: { marginHorizontal: -20, zIndex: 30 },
 
   // Practice library. Each card reads as a small editorial object rather
   // than a row in a settings list.

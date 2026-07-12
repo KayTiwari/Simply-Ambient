@@ -41,11 +41,11 @@ Chakra fields are documented inline on the `Chakra` type. Points worth calling o
 
 Doshas follow the same pattern: `band` needs a palette, `balanceHz` must stay within 20 to 2000, and `balanceTechnique` must match a technique name exactly. The suite expects exactly 3 doshas.
 
-## Zodiac year-ahead copy
+## Zodiac copy
 
 File: `lib/content/zodiac.ts`, array `ZODIAC`.
 
-To edit a sign's reading, change its `yearAhead` (the longer reading) or `intention` (the one-line prompt). Keep `id`, `glyph`, and the date ranges as they are. Each sign's `chakraId` maps it to the chakra whose element matches; if you change one, it must be a real id from `CHAKRAS`. The suite expects exactly 12 signs.
+To edit a sign's local fallback, change its `intention`. Daily, weekly, and monthly readings come from the horoscope API. Keep `id`, `glyph`, and the date ranges as they are. Each sign's `chakraId` maps it to the chakra whose element matches; if you change one, it must be a real id from `CHAKRAS`. The suite expects exactly 12 signs.
 
 ## Soundscapes
 
