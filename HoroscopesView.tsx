@@ -51,6 +51,7 @@ import {
   StatusStrip,
 } from './AmbientUI';
 import type { Zodiac } from './lib/content';
+import { lunarCountdownLabel } from './lib/lunar';
 
 const HOROSCOPE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 // Local calendar date (not UTC), so "today" matches what the user sees.
@@ -605,6 +606,7 @@ export default function HoroscopesView({
     weekday: 'long', month: 'long', day: 'numeric',
   });
   const illumPct = Math.round(lunar.illum * 100);
+  const lunarCountdown = lunarCountdownLabel(lunar.phase);
 
   const monthName = new Date().toLocaleDateString(undefined, { month: 'long' }).toUpperCase();
   const yearText = new Date().getFullYear();
@@ -640,7 +642,7 @@ export default function HoroscopesView({
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 104 }]}
         showsVerticalScrollIndicator={false}
       >
-        <AmbientSurface accent={accent} quiet style={styles.modeSurface}>
+        <AmbientSurface accent={accent} quiet showOrb={false} style={styles.modeSurface}>
           <View
             style={styles.modeRow}
             accessibilityRole="tablist"
@@ -728,7 +730,7 @@ export default function HoroscopesView({
               accent={mySign.color}
             />
         {/* Today / week / month widget */}
-        <AmbientSurface accent={mySign.color} style={styles.todayCard}>
+        <AmbientSurface accent={mySign.color} showOrb={false} style={styles.todayCard}>
           <View style={styles.todayRow}>
             <View style={[styles.signBadge, { borderColor: mySign.color + '88', backgroundColor: mySign.color + '16' }]}>
               <Text style={[styles.signBadgeGlyph, { color: mySign.color }]}>{textGlyph(mySign.glyph)}</Text>
@@ -761,7 +763,7 @@ export default function HoroscopesView({
             <View style={styles.moonCopy}>
               <Text style={styles.todayLabel}>LUNAR WEATHER</Text>
               <Text style={styles.todayMoonName}>{lunar.name}</Text>
-              <Text style={styles.todayMoonText}>{illumPct}% illuminated</Text>
+              <Text style={styles.todayMoonText}>{lunarCountdown}</Text>
             </View>
             <View style={[styles.illuminationBadge, { borderColor: mySign.color + '44' }]}>
               <Text style={[styles.illuminationNumber, { color: mySign.color }]}>{illumPct}%</Text>
@@ -778,7 +780,7 @@ export default function HoroscopesView({
               subtitle="Choose a sign; you can change it whenever you need."
               accent={mySign.color}
             />
-            <AmbientSurface accent={mySign.color} quiet style={styles.pickerSurface}>
+            <AmbientSurface accent={mySign.color} quiet showOrb={false} style={styles.pickerSurface}>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -869,7 +871,7 @@ export default function HoroscopesView({
           })}
         </View>
 
-        <AmbientSurface accent={mySign.color} style={styles.manuscript}>
+        <AmbientSurface accent={mySign.color} showOrb={false} style={styles.manuscript}>
           <View style={styles.manuscriptHeading}>
             <Text style={[styles.manuscriptKicker, { color: mySign.color }]}>{periodLabel}</Text>
             <Text style={[styles.manuscriptGlyph, { color: mySign.color }]}>{textGlyph(mySign.glyph)}</Text>
@@ -914,7 +916,7 @@ export default function HoroscopesView({
             />
 
         {/* TAROT CARD OF THE DAY */}
-        <AmbientSurface accent="#B39BE0" style={styles.tarotCard}>
+        <AmbientSurface accent="#B39BE0" showOrb={false} style={styles.tarotCard}>
           <View style={styles.tarotHeaderRow}>
             <View>
               <Text style={styles.cardLabel}>DAILY DRAW</Text>
@@ -1012,7 +1014,7 @@ export default function HoroscopesView({
           subtitle="Choose a shape, then turn each position in its own time."
           accent="#B39BE0"
         />
-        <AmbientSurface accent="#B39BE0" quiet style={styles.spreadRoom}>
+        <AmbientSurface accent="#B39BE0" quiet showOrb={false} style={styles.spreadRoom}>
           <Text style={styles.spreadChoiceLabel}>CHOOSE THE SHAPE</Text>
           <View style={styles.spreadBtnRow}>
             {SPREAD_SIZES.map(n => {

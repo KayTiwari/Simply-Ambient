@@ -1810,8 +1810,30 @@ function AppContent() {
   const [isSoundscapePlaying, setIsSoundscapePlaying] = useState(false);
   const [soundscapeVolume, setSoundscapeVolume] = useState(0.42);
 
-  const [lunar] = useState(() => lunarPhase());
+  const [lunar, setLunar] = useState(() => lunarPhase());
   const [mySignId, setMySignId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let midnightTimer: ReturnType<typeof setTimeout> | null = null;
+    const refreshLunar = () => setLunar(lunarPhase());
+    const scheduleMidnightRefresh = () => {
+      const now = new Date();
+      const nextMidnight = new Date(now);
+      nextMidnight.setHours(24, 0, 2, 0);
+      midnightTimer = setTimeout(() => {
+        refreshLunar();
+        scheduleMidnightRefresh();
+      }, Math.max(1000, nextMidnight.getTime() - now.getTime()));
+    };
+    const appStateSubscription = AppState.addEventListener('change', state => {
+      if (state === 'active') refreshLunar();
+    });
+    scheduleMidnightRefresh();
+    return () => {
+      if (midnightTimer) clearTimeout(midnightTimer);
+      appStateSubscription.remove();
+    };
+  }, []);
 
   // More-tab state
   const [notifPref, setNotifPref] = useState<NotifPref>('off');
@@ -3626,7 +3648,7 @@ function FrequenciesView(props: FreqViewProps) {
         <Text style={styles.title}>Binaural frequency generator</Text>
       </View>
 
-      <AmbientSurface accent={beatColor} quiet style={styles.freqAffirmationCard}>
+      <AmbientSurface accent={beatColor} quiet showOrb={false} style={styles.freqAffirmationCard}>
         <View style={styles.freqAffirmationTopline}>
           <View style={[styles.freqAffirmationRule, { backgroundColor: beatColor }]} />
           <Text style={[styles.freqAffirmationLabel, { color: beatColor }]}>A THOUGHT TO CARRY</Text>
@@ -3635,11 +3657,11 @@ function FrequenciesView(props: FreqViewProps) {
         <ManifestQuote />
       </AmbientSurface>
 
-      <AmbientSurface accent={beatColor} style={styles.beatCard}>
+      <AmbientSurface accent={beatColor} showOrb={false} style={styles.beatCard}>
         <View style={styles.beatHeaderRow}>
           <View>
             <Text style={[styles.beatLabel, { color: beatColor }]}>SESSION CHAMBER</Text>
-            <Text style={styles.beatKicker}>{isTonePlaying ? 'Your mix is in motion' : 'Ready when you are'}</Text>
+            {isTonePlaying ? <Text style={styles.beatKicker}>Your mix is in motion</Text> : null}
           </View>
           <TouchableOpacity
             onPress={props.onSave}
@@ -3882,7 +3904,7 @@ function FrequenciesView(props: FreqViewProps) {
         accent="#9DC7AC"
       />
 
-      <AmbientSurface accent="#9DC7AC" quiet style={styles.mixerCard}>
+      <AmbientSurface accent="#9DC7AC" quiet showOrb={false} style={styles.mixerCard}>
       <View style={styles.sleepRow}>
         <Text style={styles.sleepLabel}>STILLNESS · auto-end</Text>
         <View style={styles.sleepPills}>

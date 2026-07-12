@@ -264,7 +264,7 @@ export default function ChakrasView({
         />
 
         <View style={styles.body}>
-          <AmbientSurface accent={bandColor} style={styles.toneConsole}>
+          <AmbientSurface accent={bandColor} showOrb={false} style={styles.toneConsole}>
             <View style={styles.consoleTopRow}>
               <Text style={styles.consoleEyebrow}>CURRENT TONE</Text>
               <StatusStrip
@@ -323,7 +323,7 @@ export default function ChakrasView({
             accent={bandColor}
           />
 
-          <AmbientSurface accent={bandColor} quiet style={styles.spectrumSurface}>
+          <AmbientSurface accent={bandColor} quiet showOrb={false} style={styles.spectrumSurface}>
             <View style={styles.spectrumLine} pointerEvents="none" />
             {selectedChakra ? (
               <Animated.View
@@ -350,12 +350,6 @@ export default function ChakrasView({
                   style={[
                     styles.selectionNodeRing,
                     { borderColor: selectedChakra.color + 'B8' },
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.selectionGlow,
-                    { backgroundColor: selectedChakra.color + '18' },
                   ]}
                 />
               </Animated.View>
@@ -410,6 +404,7 @@ export default function ChakrasView({
           {selectedChakra ? (
             <AmbientSurface
               accent={selectedChakra.color}
+              showOrb={false}
               style={[styles.readingCard, { borderColor: selectedChakra.color + '55' }]}
             >
               <Text
@@ -519,6 +514,7 @@ export default function ChakrasView({
                   <AmbientSurface
                     accent={dosha.color}
                     quiet
+                    showOrb={false}
                     style={[
                       styles.doshaCard,
                       active && { borderColor: dosha.color + '88' },
@@ -700,14 +696,6 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: 15,
     borderWidth: 1,
-  },
-  selectionGlow: {
-    position: 'absolute',
-    right: -34,
-    top: -47,
-    width: 128,
-    height: 128,
-    borderRadius: 64,
   },
   spectrumRow: {
     zIndex: 1,

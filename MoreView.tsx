@@ -3494,6 +3494,62 @@ const SINGLE_COLOR_CHOICES = [
   { hex: '#000000', name: 'Black' },
 ];
 
+function stillColorFromHue(hue: number): string {
+  const h = (((hue % 360) + 360) % 360) / 360;
+  const saturation = 0.48;
+  const lightness = 0.11;
+  const q = lightness < 0.5
+    ? lightness * (1 + saturation)
+    : lightness + saturation - lightness * saturation;
+  const p = 2 * lightness - q;
+  const channel = (offset: number) => {
+    let t = h + offset;
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    const value = t < 1 / 6
+      ? p + (q - p) * 6 * t
+      : t < 1 / 2
+        ? q
+        : t < 2 / 3
+          ? p + (q - p) * (2 / 3 - t) * 6
+          : p;
+    return Math.round(value * 255).toString(16).padStart(2, '0');
+  };
+  return `#${channel(1 / 3)}${channel(0)}${channel(-1 / 3)}`.toUpperCase();
+}
+
+function hueFromHex(hex: string | null): number | null {
+  if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return null;
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  if (delta === 0) return 225;
+  const raw = max === r
+    ? ((g - b) / delta) % 6
+    : max === g
+      ? (b - r) / delta + 2
+      : (r - g) / delta + 4;
+  return (raw * 60 + 360) % 360;
+}
+
+function hueName(hue: number): string {
+  const normalized = ((hue % 360) + 360) % 360;
+  if (normalized < 20 || normalized >= 345) return 'Rose night';
+  if (normalized < 48) return 'Ember night';
+  if (normalized < 78) return 'Golden night';
+  if (normalized < 155) return 'Forest night';
+  if (normalized < 195) return 'Teal night';
+  if (normalized < 250) return 'Deep blue';
+  if (normalized < 295) return 'Violet night';
+  return 'Plum night';
+}
+
+const CUSTOM_HUE_COLORS = [0, 45, 90, 145, 190, 235, 280, 325, 360]
+  .map(stillColorFromHue);
+
 function SettingsPage({
   onBack, singleColor, onChangeSingleColor, onReplayOnboarding, notifPref, onOpenAffirmations,
 }: {
@@ -3507,6 +3563,18 @@ function SettingsPage({
   const subBodyPad = useSubBodyPad();
   const on = singleColor != null;
   const [pendingOpenUrl, setPendingOpenUrl] = useState<string | null>(null);
+  const [customHue, setCustomHue] = useState(() => hueFromHex(singleColor) ?? 225);
+  const customColor = stillColorFromHue(customHue);
+  const selectedColorName = singleColor
+    ? SINGLE_COLOR_CHOICES.find(choice => choice.hex === singleColor)?.name
+      ?? hueName(hueFromHex(singleColor) ?? customHue)
+    : null;
+
+  useEffect(() => {
+    const selectedHue = hueFromHex(singleColor);
+    if (selectedHue != null) setCustomHue(selectedHue);
+  }, [singleColor]);
+
   return (
     <AmbientPageShell accent="#d9b35c">
       <SubHeader title="Settings" accent="#d9b35c" onBack={onBack} />
@@ -3526,9 +3594,7 @@ function SettingsPage({
           <View style={styles.settingsPreviewCopy}>
             <Text style={styles.settingsPreviewKicker}>YOUR ATMOSPHERE</Text>
             <Text style={styles.settingsPreviewTitle}>
-              {on
-                ? SINGLE_COLOR_CHOICES.find(c => c.hex === singleColor)?.name ?? 'Still color'
-                : 'Moves with the sound'}
+              {on ? selectedColorName : 'Moves with the sound'}
             </Text>
             <Text style={styles.settingsPreviewHint}>{on ? 'Held still' : 'Frequency-responsive'}</Text>
           </View>
@@ -3582,8 +3648,51 @@ function SettingsPage({
               })}
             </View>
             <Text style={styles.bugAppInfoHint}>
-              {SINGLE_COLOR_CHOICES.find(c => c.hex === singleColor)?.name ?? 'Custom color'}
+              {selectedColorName}
             </Text>
+            <View style={styles.customColorPicker}>
+              <View style={styles.customColorHeading}>
+                <View>
+                  <Text style={styles.customColorKicker}>COLOR SELECT</Text>
+                  <Text style={styles.customColorName}>{hueName(customHue)}</Text>
+                </View>
+                <View
+                  style={[
+                    styles.customColorSample,
+                    { backgroundColor: customColor, borderColor: customColor + 'CC' },
+                  ]}
+                />
+              </View>
+              <View style={styles.customHueControl}>
+                <LinearGradient
+                  colors={CUSTOM_HUE_COLORS as [string, string, ...string[]]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={styles.customHueGradient}
+                  pointerEvents="none"
+                />
+                <Slider
+                  style={styles.customHueSlider}
+                  minimumValue={0}
+                  maximumValue={360}
+                  step={1}
+                  value={customHue}
+                  minimumTrackTintColor="transparent"
+                  maximumTrackTintColor="transparent"
+                  thumbTintColor={customColor}
+                  onValueChange={setCustomHue}
+                  onSlidingComplete={value => onChangeSingleColor(stillColorFromHue(value))}
+                  accessibilityLabel="Still background color"
+                  accessibilityValue={{
+                    min: 0,
+                    max: 360,
+                    now: Math.round(customHue),
+                    text: hueName(customHue),
+                  }}
+                />
+              </View>
+              <Text style={styles.customColorHint}>Drag to choose a custom still color.</Text>
+            </View>
           </>
         ) : null}
 
@@ -5985,6 +6094,24 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   swatchCheck: { color: '#d9b35c', fontSize: 14, fontWeight: '700' },
+  customColorPicker: {
+    marginTop: 15, paddingHorizontal: 14, paddingTop: 13, paddingBottom: 11,
+    borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.035)',
+  },
+  customColorHeading: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  customColorKicker: { color: '#D9BE7A', fontSize: 8, fontWeight: '800', letterSpacing: 1.6 },
+  customColorName: { color: '#F5F2FA', fontSize: 14, fontWeight: '600', marginTop: 3 },
+  customColorSample: { width: 34, height: 34, borderRadius: 12, borderWidth: 1.5 },
+  customHueControl: { height: 46, marginTop: 9, justifyContent: 'center' },
+  customHueGradient: {
+    position: 'absolute', left: 7, right: 7, height: 14, borderRadius: 7,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)',
+  },
+  customHueSlider: { width: '100%', height: 46 },
+  customColorHint: { color: '#7F8092', fontSize: 10, lineHeight: 14, marginTop: -2 },
   settingsPreview: { minHeight: 190, marginTop: 8, padding: 18, justifyContent: 'flex-end' },
   settingsPreviewOrbLarge: {
     position: 'absolute', width: 170, height: 170, borderRadius: 85,
