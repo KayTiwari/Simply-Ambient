@@ -3580,6 +3580,22 @@ function stillColorFromHue(hue: number): string {
   return `#${channel(1 / 3)}${channel(0)}${channel(-1 / 3)}`.toUpperCase();
 }
 
+// Ring color for the atmosphere preview: hue-faithful to the chosen color,
+// lifted toward white just enough that rings stay visible on colors as dark
+// as Midnight. Bright accents pass through untouched.
+function rippleTint(hex: string): string {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+  if (luma >= 140) return hex;
+  const mix = (140 - luma) / (255 - luma);
+  const lift = (c: number) => Math.round(c + (255 - c) * mix);
+  const to2 = (c: number) => lift(c).toString(16).padStart(2, '0');
+  return `#${to2(r)}${to2(g)}${to2(b)}`;
+}
+
 function hueFromHex(hex: string | null): number | null {
   if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return null;
   const r = parseInt(hex.slice(1, 3), 16) / 255;
@@ -3663,11 +3679,12 @@ function SettingsPage({
             locations={[0, 0.52, 1]}
             style={StyleSheet.absoluteFill}
           />
-          {/* The corner ripples ARE the preview: they loop while the
-              atmosphere is live and hold still when it is pinned. */}
+          {/* The corner ripples ARE the preview: live or pinned, they swirl
+              in the atmosphere's own color, lifted only enough to stay
+              visible on the darkest choices. */}
           <CornerRipples
-            accent={singleColor ?? '#8F97DE'}
-            active={!on && !previewReduceMotion}
+            accent={rippleTint(singleColor ?? '#8F97DE')}
+            active={!previewReduceMotion}
             periodMs={5200}
           />
           <View style={styles.settingsPreviewCopy}>
