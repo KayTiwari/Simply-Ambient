@@ -48,6 +48,7 @@ import {
   PromptChip,
   MoreSectionGroup,
 } from './MoreUI';
+import { SoundscapeScene } from './SoundscapeScenes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
@@ -1312,25 +1313,38 @@ function HubTile({
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
-      <View style={[styles.tileAura, { backgroundColor: accent + '1A' }]} pointerEvents="none" />
+      <View
+        pointerEvents="none"
+        style={[
+          styles.tileWallpaper,
+          feature ? styles.tileWallpaperFeature : horizontal ? styles.tileWallpaperWide : styles.tileWallpaperHalf,
+          disabled && { opacity: 0.08 },
+        ]}
+      >
+        {Icon ? (
+          <Icon
+            size={feature ? 118 : horizontal ? 94 : 86}
+            weight="thin"
+            color={accent}
+          />
+        ) : (
+          <Text style={[
+            styles.tileWallpaperGlyph,
+            feature && styles.tileWallpaperGlyphFeature,
+            { color: accent },
+          ]}>
+            {glyph}
+          </Text>
+        )}
+      </View>
       {badge ? (
         <View style={[styles.tileBadgeWrap, { borderColor: (badgeColor ?? accent) + '55' }]}>
           <Text style={[styles.tileBadge, { color: badgeColor ?? accent }]}>{badge}</Text>
         </View>
       ) : null}
       <View style={[
-        styles.tileGlyphWrap,
-        { borderColor: accent + '40', backgroundColor: accent + '12' },
-        disabled && !horizontal && styles.tileGlyphDisabledHalf,
-      ]}>
-        {Icon ? (
-          <Icon size={horizontal ? 20 : 23} weight="duotone" color={accent} />
-        ) : (
-          <Text style={[styles.tileGlyph, { color: accent }]}>{glyph}</Text>
-        )}
-      </View>
-      <View style={[
         styles.tileCopy,
+        !horizontal && !feature && styles.tileCopyHalf,
         (horizontal || feature) && styles.tileCopyHorizontal,
         (horizontal || feature) && { flex: 1 },
       ]}>
@@ -1462,6 +1476,11 @@ const SUBPAGE_PRESENTATION: Record<string, {
 function BreathingGlyphMedallion({ accent, glyph }: { accent: string; glyph: string }) {
   const reduceMotion = React.useContext(ReducedMotionContext);
   const scale = useRef(new Animated.Value(1)).current;
+  const ringOpacity = scale.interpolate({
+    inputRange: [1, 1.08],
+    outputRange: [0.58, 1],
+    extrapolate: 'clamp',
+  });
 
   useEffect(() => {
     scale.stopAnimation();
@@ -1471,14 +1490,14 @@ function BreathingGlyphMedallion({ accent, glyph }: { accent: string; glyph: str
     const breathing = Animated.loop(
       Animated.sequence([
         Animated.timing(scale, {
-          toValue: 1.035,
-          duration: 1350,
-          easing: Easing.out(Easing.back(0.72)),
+          toValue: 1.08,
+          duration: 1250,
+          easing: Easing.out(Easing.back(0.9)),
           useNativeDriver: true,
         }),
         Animated.timing(scale, {
           toValue: 1,
-          duration: 1650,
+          duration: 1700,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
@@ -1493,14 +1512,20 @@ function BreathingGlyphMedallion({ accent, glyph }: { accent: string; glyph: str
   }, [reduceMotion, scale]);
 
   return (
-    <Animated.View
-      style={[
-        styles.subGlyphInner,
-        { borderColor: accent + '2E', transform: [{ scale }] },
-      ]}
-    >
+    <View style={styles.subGlyphInner}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.subGlyphBreathingRing,
+          {
+            borderColor: accent + '66',
+            opacity: reduceMotion ? 0.72 : ringOpacity,
+            transform: [{ scale }],
+          },
+        ]}
+      />
       <Text style={[styles.subGlyph, { color: accent }]}>{glyph}</Text>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -2259,7 +2284,41 @@ function BackfillCalendar({
 // ===========================================================================
 
 const STORAGE_GRAT_REMINDER = '@simply_ambient_grat_reminder_v1';
-type GratReminderHour = 'off' | '21' | '22' | '23'; // 9pm / 10pm / 11pm
+type GratReminderPref = string;
+type ReminderMeridiem = 'am' | 'pm';
+
+const GRAT_REMINDER_PRESETS = [
+  { id: 'off', label: 'Off' },
+  { id: '21:00', label: '9 pm' },
+  { id: '22:00', label: '10 pm' },
+  { id: '23:00', label: '11 pm' },
+] as const;
+
+function parseReminderPref(value: string | null): { hour: number; minute: number } | null {
+  if (!value || value === 'off') return null;
+  const match = /^(\d{1,2})(?::(\d{2}))?$/.exec(value);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2] ?? 0);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return null;
+  if (!Number.isInteger(minute) || minute < 0 || minute > 59) return null;
+  return { hour, minute };
+}
+
+function normalizedReminderPref(value: string | null): GratReminderPref | null {
+  if (value === 'off') return 'off';
+  const parsed = parseReminderPref(value);
+  if (!parsed) return null;
+  return `${String(parsed.hour).padStart(2, '0')}:${String(parsed.minute).padStart(2, '0')}`;
+}
+
+function reminderTimeLabel(value: string): string {
+  const parsed = parseReminderPref(value);
+  if (!parsed) return 'Custom';
+  const hour12 = parsed.hour % 12 || 12;
+  const meridiem = parsed.hour >= 12 ? 'pm' : 'am';
+  return `${hour12}:${String(parsed.minute).padStart(2, '0')} ${meridiem}`;
+}
 
 // Prompt rotates with the calendar so the page feels alive on return visits.
 const GRAT_PLACEHOLDERS = [
@@ -2287,7 +2346,11 @@ function GratitudePage({
 }) {
   const subBodyPad = useSubBodyPad();
   const [text, setText] = useState('');
-  const [reminder, setReminder] = useState<GratReminderHour>('off');
+  const [reminder, setReminder] = useState<GratReminderPref>('off');
+  const [customReminderOpen, setCustomReminderOpen] = useState(false);
+  const [customHour, setCustomHour] = useState('9');
+  const [customMinute, setCustomMinute] = useState('00');
+  const [customMeridiem, setCustomMeridiem] = useState<ReminderMeridiem>('pm');
 
   // Deterministic pick by day of year, so the prompt holds steady all day.
   const placeholder = useMemo(() => {
@@ -2305,7 +2368,8 @@ function GratitudePage({
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_GRAT_REMINDER).then(v => {
-      if (v === 'off' || v === '21' || v === '22' || v === '23') setReminder(v);
+      const normalized = normalizedReminderPref(v);
+      if (normalized) setReminder(normalized);
     }).catch(() => {});
   }, []);
 
@@ -2324,11 +2388,36 @@ function GratitudePage({
     return () => { cancelled = true; };
   }, [reminder]);
 
-  function setReminderPref(p: GratReminderHour) {
+  function setReminderPref(p: GratReminderPref) {
     setReminder(p);
     AsyncStorage.setItem(STORAGE_GRAT_REMINDER, p).catch(() => {});
     // Schedule (or cancel) the actual notification; the pref alone does nothing.
     scheduleGratitudeReminder(p);
+  }
+
+  function openCustomReminder() {
+    const parsed = parseReminderPref(reminder) ?? { hour: 21, minute: 0 };
+    setCustomHour(String(parsed.hour % 12 || 12));
+    setCustomMinute(String(parsed.minute).padStart(2, '0'));
+    setCustomMeridiem(parsed.hour >= 12 ? 'pm' : 'am');
+    setCustomReminderOpen(true);
+  }
+
+  function saveCustomReminder() {
+    const hour12 = Number(customHour);
+    const minute = Number(customMinute);
+    if (!Number.isInteger(hour12) || hour12 < 1 || hour12 > 12) {
+      notify('Check the hour', 'Choose an hour from 1 to 12.');
+      return;
+    }
+    if (!Number.isInteger(minute) || minute < 0 || minute > 59) {
+      notify('Check the minutes', 'Choose minutes from 00 to 59.');
+      return;
+    }
+    const hour24 = (hour12 % 12) + (customMeridiem === 'pm' ? 12 : 0);
+    const next = `${String(hour24).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    setReminderPref(next);
+    setCustomReminderOpen(false);
   }
 
   function commit() {
@@ -2407,19 +2496,17 @@ function GratitudePage({
           A gentle nudge each evening at the hour you choose.
         </Text>
         <View style={[styles.notifPills, isExpoGo && { opacity: 0.4 }]}>
-          {([
-            { id: 'off', label: 'Off' },
-            { id: '21',  label: '9 pm' },
-            { id: '22',  label: '10 pm' },
-            { id: '23',  label: '11 pm' },
-          ] as Array<{ id: GratReminderHour; label: string }>).map(o => {
+          {GRAT_REMINDER_PRESETS.map(o => {
             const active = reminder === o.id;
             return (
               <TouchableOpacity
                 key={o.id}
                 activeOpacity={0.85}
                 disabled={isExpoGo}
-                onPress={() => setReminderPref(o.id)}
+                onPress={() => {
+                  setCustomReminderOpen(false);
+                  setReminderPref(o.id);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={`Evening reminder: ${o.label}`}
                 accessibilityState={{ selected: active, disabled: isExpoGo }}
@@ -2432,7 +2519,124 @@ function GratitudePage({
               </TouchableOpacity>
             );
           })}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            disabled={isExpoGo}
+            onPress={openCustomReminder}
+            accessibilityRole="button"
+            accessibilityLabel={reminder !== 'off' && !GRAT_REMINDER_PRESETS.some(option => option.id === reminder)
+              ? `Custom evening reminder, ${reminderTimeLabel(reminder)}`
+              : 'Choose a custom evening reminder time'}
+            accessibilityState={{
+              selected: customReminderOpen || (reminder !== 'off' && !GRAT_REMINDER_PRESETS.some(option => option.id === reminder)),
+              expanded: customReminderOpen,
+              disabled: isExpoGo,
+            }}
+            style={[
+              styles.notifPill,
+              (customReminderOpen || (reminder !== 'off' && !GRAT_REMINDER_PRESETS.some(option => option.id === reminder)))
+                && { borderColor: '#E0A470', backgroundColor: '#E0A47022' },
+            ]}
+          >
+            <Text
+              style={[
+                styles.notifPillText,
+                (customReminderOpen || (reminder !== 'off' && !GRAT_REMINDER_PRESETS.some(option => option.id === reminder)))
+                  && { color: '#E0A470' },
+              ]}
+            >
+              {reminder !== 'off' && !GRAT_REMINDER_PRESETS.some(option => option.id === reminder)
+                ? reminderTimeLabel(reminder)
+                : 'Custom'}
+            </Text>
+          </TouchableOpacity>
         </View>
+        {customReminderOpen && !isExpoGo ? (
+          <GlowCard accent="#E0A470" quiet style={styles.customReminderCard}>
+            <View style={styles.customReminderHeading}>
+              <View>
+                <Text style={styles.customReminderKicker}>CUSTOM TIME</Text>
+                <Text style={styles.customReminderTitle}>When should I nudge you?</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setCustomReminderOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close custom reminder time"
+                style={styles.customReminderClose}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={16} color="#A6A4B2" weight="regular" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.customReminderTimeRow}>
+              <View style={styles.customReminderFieldWrap}>
+                <Text style={styles.customReminderFieldLabel}>HOUR</Text>
+                <TextInput
+                  value={customHour}
+                  onChangeText={value => setCustomHour(value.replace(/\D/g, '').slice(0, 2))}
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  maxLength={2}
+                  selectTextOnFocus
+                  style={styles.customReminderField}
+                  placeholder="9"
+                  placeholderTextColor="#696A7D"
+                  accessibilityLabel="Custom reminder hour"
+                />
+              </View>
+              <Text style={styles.customReminderColon}>:</Text>
+              <View style={styles.customReminderFieldWrap}>
+                <Text style={styles.customReminderFieldLabel}>MINUTE</Text>
+                <TextInput
+                  value={customMinute}
+                  onChangeText={value => setCustomMinute(value.replace(/\D/g, '').slice(0, 2))}
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                  maxLength={2}
+                  selectTextOnFocus
+                  style={styles.customReminderField}
+                  placeholder="00"
+                  placeholderTextColor="#696A7D"
+                  accessibilityLabel="Custom reminder minute"
+                />
+              </View>
+              <View style={styles.customReminderMeridiem} accessibilityRole="radiogroup">
+                {(['am', 'pm'] as ReminderMeridiem[]).map(value => {
+                  const active = customMeridiem === value;
+                  return (
+                    <TouchableOpacity
+                      key={value}
+                      onPress={() => setCustomMeridiem(value)}
+                      accessibilityRole="radio"
+                      accessibilityLabel={value.toUpperCase()}
+                      accessibilityState={{ checked: active }}
+                      style={[
+                        styles.customReminderMeridiemBtn,
+                        active && styles.customReminderMeridiemBtnActive,
+                      ]}
+                    >
+                      <Text style={[
+                        styles.customReminderMeridiemText,
+                        active && styles.customReminderMeridiemTextActive,
+                      ]}>
+                        {value.toUpperCase()}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={saveCustomReminder}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Save custom reminder time"
+              style={styles.customReminderSave}
+            >
+              <Text style={styles.customReminderSaveText}>SAVE TIME</Text>
+            </TouchableOpacity>
+          </GlowCard>
+        ) : null}
         {isExpoGo ? (
           <Text style={styles.notifWarn}>
             Reminders are unavailable in this preview build.
@@ -4356,130 +4560,6 @@ function solidAccent(color: string): string {
   return /^#[0-9a-f]{8}$/i.test(color) ? color.slice(0, 7) : color;
 }
 
-function SoundscapeScene({ soundscape }: { soundscape: SoundscapeOption | null }) {
-  const id = soundscape?.id ?? 'idle';
-  const color = solidAccent(soundscape?.color ?? '#8FB8DE');
-  const SceneIcon = soundscape?.Icon ?? Waveform;
-
-  const pattern = (() => {
-    switch (id) {
-      case 'rain':
-        return <>
-          {[18, 50, 82, 114, 146, 178, 210, 242, 274].map((x, index) => (
-            <Line key={x} x1={x} y1={-8 + (index % 3) * 13} x2={x - 15} y2={38 + (index % 3) * 13} />
-          ))}
-        </>;
-      case 'ocean':
-        return <>
-          <Path d="M-10 38 C35 15 70 58 118 35 S205 14 256 38 S320 51 344 28" />
-          <Path d="M-18 60 C26 38 66 79 112 57 S202 37 250 61 S319 72 344 50" />
-          <Path d="M-12 79 C31 61 68 92 116 76 S207 59 257 78 S320 86 344 68" />
-        </>;
-      case 'forest':
-        return <>
-          <Path d="M18 88 L48 25 L78 88 Z M66 88 L100 12 L134 88 Z M126 88 L154 32 L182 88 Z M174 88 L211 18 L248 88 Z" />
-          <Line x1={0} y1={88} x2={320} y2={88} />
-        </>;
-      case 'stream':
-        return <>
-          <Path d="M-14 78 C42 42 64 88 116 54 S190 24 232 52 S286 73 336 34" />
-          <Path d="M-12 87 C41 55 71 96 121 65 S189 39 228 63 S287 83 338 48" />
-          {[54, 132, 212, 276].map((x, index) => (
-            <Circle key={x} cx={x} cy={69 - (index % 2) * 16} r={3 + (index % 2)} />
-          ))}
-        </>;
-      case 'fire':
-        return <>
-          <Path d="M128 88 C105 67 123 49 143 37 C140 56 153 58 158 30 C184 55 191 74 174 88 Z" />
-          <Path d="M146 88 C136 75 146 66 158 56 C158 69 169 71 168 84 L166 88 Z" />
-          {[80, 112, 202, 234, 263].map((x, index) => (
-            <Circle key={x} cx={x} cy={62 - (index % 3) * 15} r={1.8 + (index % 2)} />
-          ))}
-        </>;
-      case 'breeze':
-        return <>
-          <Path d="M-16 28 C42 7 75 42 129 22 S220 5 276 25 C296 32 310 27 330 16" />
-          <Path d="M18 52 C66 33 105 65 153 48 S232 31 286 48" />
-          <Path d="M-10 76 C34 60 73 85 118 72 S194 56 239 72" />
-        </>;
-      case 'night':
-        return <>
-          <Path d="M240 15 A25 25 0 1 0 262 55 A20 20 0 1 1 240 15 Z" />
-          {[35, 72, 112, 159, 205, 288].map((x, index) => (
-            <Circle key={x} cx={x} cy={18 + (index % 3) * 21} r={index % 2 ? 1.4 : 2} />
-          ))}
-        </>;
-      case 'thunder':
-        return <>
-          <Path d="M30 48 C39 30 60 31 68 42 C76 24 107 27 112 46 C129 43 141 53 139 66 H27 C19 57 22 50 30 48 Z" />
-          <Path d="M83 55 L66 78 H80 L71 94 L101 68 H86 L99 55 Z" />
-          <Line x1={172} y1={27} x2={300} y2={27} />
-          <Line x1={190} y1={45} x2={278} y2={45} />
-        </>;
-      case 'cabin':
-        return <>
-          <Path d="M35 11 C20 11 13 27 13 47 C13 69 21 84 37 84 H118 C134 84 142 69 142 47 C142 27 134 11 118 11 Z" />
-          <Path d="M42 22 C32 22 27 33 27 48 C27 63 33 73 43 73 H110 C121 73 127 63 127 48 C127 33 121 22 110 22 Z" />
-          <Path d="M34 61 L78 47 L119 52 L73 66 Z" />
-          <Line x1={174} y1={29} x2={300} y2={29} />
-          <Line x1={190} y1={48} x2={278} y2={48} />
-          <Line x1={168} y1={67} x2={306} y2={67} />
-        </>;
-      case 'train':
-        return <>
-          <Line x1={50} y1={94} x2={135} y2={28} />
-          <Line x1={270} y1={94} x2={185} y2={28} />
-          <Line x1={77} y1={79} x2={243} y2={79} />
-          <Line x1={94} y1={65} x2={226} y2={65} />
-          <Line x1={111} y1={52} x2={209} y2={52} />
-          <Line x1={124} y1={41} x2={196} y2={41} />
-          <Path d="M142 18 H178 L185 34 H135 Z" />
-        </>;
-      case 'white':
-      case 'pink':
-      case 'brown':
-        return <>
-          <Path d="M-8 30 C18 6 40 54 68 30 S117 8 145 31 S195 54 224 29 S276 8 332 34" />
-          <Path d="M-8 52 C22 30 42 76 72 52 S120 31 151 54 S199 75 230 51 S280 31 332 56" />
-          <Path d="M-8 74 C23 56 44 91 75 73 S124 55 155 75 S204 91 235 72 S284 56 332 78" />
-        </>;
-      default:
-        return <>
-          <Path d="M-12 36 C35 15 74 55 122 34 S211 15 260 37 S313 48 340 30" />
-          <Path d="M-12 68 C35 48 74 86 122 66 S211 47 260 69 S313 80 340 62" />
-        </>;
-    }
-  })();
-
-  return (
-    <View style={[styles.soundscapeScene, { backgroundColor: color + '0D' }]} pointerEvents="none">
-      <LinearGradient
-        colors={[color + '24', color + '08', 'transparent']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <Svg
-        width="100%"
-        height="100%"
-        viewBox="0 0 320 94"
-        preserveAspectRatio="none"
-        style={styles.soundscapePattern}
-        stroke={color + '70'}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      >
-        {pattern}
-      </Svg>
-      <View style={[styles.soundscapeSceneIcon, { borderColor: color + '55', backgroundColor: color + '16' }]}>
-        <SceneIcon size={28} color={color} weight="duotone" />
-      </View>
-    </View>
-  );
-}
-
 function SoundscapesPage({
   onBack,
   soundscapes,
@@ -4559,7 +4639,7 @@ function SoundscapesPage({
         </Text>
 
         <GlowCard accent={heroAccent} style={styles.soundscapeHero}>
-          <SoundscapeScene soundscape={activeSoundscape} />
+          <SoundscapeScene soundscape={activeSoundscape} playing={isSoundscapePlaying} />
           <View style={styles.soundscapeTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.soundscapeActiveLabel, { color: heroAccent }]}>CURRENT</Text>
@@ -4857,7 +4937,163 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
 const GEMINI_KEY_URL = 'https://aistudio.google.com/apikey';
 const STORAGE_TAROT = '@simply_ambient_tarot_v1';
 const STORAGE_LAST_REFLECTION = '@simply_ambient_last_reflection_v1';
-const GEMINI_ERROR_TEXT = 'Gemini could not process this request. Check the key and try again.';
+// Keep the model in one place so a retired endpoint cannot silently break both
+// journal and tarot readings. This is the current stable model used in Google's
+// generateContent REST example.
+const GEMINI_MODEL = 'gemini-3.5-flash';
+const GEMINI_GENERATE_URL =
+  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+
+const GEMINI_ERRORS = {
+  invalidRequest:
+    'Gemini did not accept the key or request. Review this key in Google AI Studio and try again.',
+  precondition:
+    'Gemini needs billing enabled for this project or is unavailable in your region. Check the project in Google AI Studio.',
+  unauthenticated:
+    'Gemini could not authenticate this key. Create or review it in Google AI Studio and try again.',
+  permission:
+    'This key does not have permission to use Gemini. Review its project and Gemini API access in Google AI Studio.',
+  notFound:
+    'This Gemini service or model is unavailable. Update the app, then try again.',
+  quota:
+    'This Gemini project has reached a rate or usage limit. Wait a little or check its quota in Google AI Studio.',
+  unavailable:
+    'Gemini is temporarily unavailable. Please try again in a little while.',
+  timeout:
+    'Gemini took too long to respond. Check your connection and try again.',
+  network:
+    'Could not reach Gemini. Check your connection and try again.',
+  blocked:
+    'Gemini\'s safety filters did not return a reflection for this selection. Try fewer or different sources.',
+  empty:
+    'Gemini returned no reflection. Please try again.',
+  generic:
+    'Gemini could not process this request. Please try again.',
+} as const;
+
+class GeminiRequestError extends Error {
+  constructor(readonly userMessage: string) {
+    super(userMessage);
+    this.name = 'GeminiRequestError';
+  }
+}
+
+function geminiApiStatus(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const error = (payload as { error?: unknown }).error;
+  if (!error || typeof error !== 'object') return null;
+  const status = (error as { status?: unknown }).status;
+  return typeof status === 'string' ? status : null;
+}
+
+// Backend messages can contain project details, so the UI uses only the HTTP
+// code and Google's documented status enum. Raw payloads are never displayed
+// or logged.
+function geminiHttpErrorMessage(httpStatus: number, payload: unknown): string {
+  const apiStatus = geminiApiStatus(payload);
+
+  if (apiStatus === 'FAILED_PRECONDITION') {
+    return GEMINI_ERRORS.precondition;
+  }
+  if (apiStatus === 'UNAUTHENTICATED') {
+    return GEMINI_ERRORS.unauthenticated;
+  }
+  if (apiStatus === 'PERMISSION_DENIED') {
+    return GEMINI_ERRORS.permission;
+  }
+  if (apiStatus === 'NOT_FOUND') {
+    return GEMINI_ERRORS.notFound;
+  }
+  if (apiStatus === 'DEADLINE_EXCEEDED') {
+    return GEMINI_ERRORS.timeout;
+  }
+  if (apiStatus === 'RESOURCE_EXHAUSTED') {
+    return GEMINI_ERRORS.quota;
+  }
+  if (apiStatus === 'INTERNAL' || apiStatus === 'UNAVAILABLE') {
+    return GEMINI_ERRORS.unavailable;
+  }
+  if (apiStatus === 'INVALID_ARGUMENT') return GEMINI_ERRORS.invalidRequest;
+
+  if (httpStatus === 400) return GEMINI_ERRORS.invalidRequest;
+  if (httpStatus === 401) return GEMINI_ERRORS.unauthenticated;
+  if (httpStatus === 403) return GEMINI_ERRORS.permission;
+  if (httpStatus === 404) return GEMINI_ERRORS.notFound;
+  if (httpStatus === 408 || httpStatus === 504) return GEMINI_ERRORS.timeout;
+  if (httpStatus === 429) return GEMINI_ERRORS.quota;
+  if (httpStatus >= 500) return GEMINI_ERRORS.unavailable;
+  return GEMINI_ERRORS.generic;
+}
+
+function geminiResponseText(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') {
+    throw new GeminiRequestError(GEMINI_ERRORS.empty);
+  }
+  const response = payload as {
+    promptFeedback?: { blockReason?: unknown };
+    candidates?: Array<{
+      finishReason?: unknown;
+      content?: { parts?: Array<{ text?: unknown }> };
+    }>;
+  };
+  const promptBlockReason = response.promptFeedback?.blockReason;
+  const candidate = Array.isArray(response.candidates) ? response.candidates[0] : undefined;
+  const finishReason = candidate?.finishReason;
+  const blockedFinishReasons = new Set([
+    'SAFETY',
+    'BLOCKLIST',
+    'PROHIBITED_CONTENT',
+    'SPII',
+    'IMAGE_SAFETY',
+  ]);
+  if (
+    (typeof promptBlockReason === 'string' && promptBlockReason !== 'BLOCK_REASON_UNSPECIFIED') ||
+    (typeof finishReason === 'string' && blockedFinishReasons.has(finishReason))
+  ) {
+    throw new GeminiRequestError(GEMINI_ERRORS.blocked);
+  }
+
+  const parts = candidate?.content?.parts;
+  const text = Array.isArray(parts)
+    ? parts
+        .map(part => typeof part?.text === 'string' ? part.text : '')
+        .filter(Boolean)
+        .join('\n')
+        .trim()
+    : '';
+  if (!text) throw new GeminiRequestError(GEMINI_ERRORS.empty);
+  return text;
+}
+
+function isAbortError(error: unknown): boolean {
+  return !!error && typeof error === 'object' &&
+    (error as { name?: unknown }).name === 'AbortError';
+}
+
+async function requestGeminiReflection(apiKey: string, prompt: string): Promise<string> {
+  // Time-boxed: a stalled connection would otherwise spin forever with both
+  // analyse buttons disabled. The key stays in a header so it cannot enter URL
+  // logging, and neither the key nor journal payload is ever logged here.
+  const abort = new AbortController();
+  const timeout = setTimeout(() => abort.abort(), 20000);
+  try {
+    const res = await fetch(GEMINI_GENERATE_URL, {
+      method: 'POST',
+      signal: abort.signal,
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+      }),
+    });
+    const payload: unknown = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new GeminiRequestError(geminiHttpErrorMessage(res.status, payload));
+    }
+    return geminiResponseText(payload);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 // Shown before a key is saved, so the page demonstrates its value first.
 const EXAMPLE_REFLECTION =
@@ -4948,7 +5184,7 @@ function InsightsPage({
 
   async function runAnalysis(kind: 'journal' | 'tarot') {
     if (!savedKey.trim()) {
-      notify('Add your Gemini API key', 'Get a free key from aistudio.google.com and paste it above.');
+      notify('Add your Gemini API key', 'Create or view a key at aistudio.google.com and paste it above.');
       return;
     }
     setLoading(true);
@@ -5030,43 +5266,22 @@ function InsightsPage({
           `Description: ${(card.desc ?? '').slice(0, 600)}`;
       }
 
-      // The key travels in a header instead of the URL so it can never leak
-      // through URL-based logging anywhere along the way.
-      const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
-      // Time-boxed: a stalled connection would otherwise spin forever with
-      // both analyse buttons disabled.
-      const abort = new AbortController();
-      const timeout = setTimeout(() => abort.abort(), 20000);
-      let json: any;
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          signal: abort.signal,
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': savedKey.trim() },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-          }),
-        });
-        json = await res.json();
-      } finally {
-        clearTimeout(timeout);
-      }
-      // Only a genuine reflection reaches the dream card. API errors and
-      // empty responses surface as a warning line instead.
-      const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (typeof text === 'string' && text.trim()) {
-        const entry: SavedReflection = {
-          ts: Date.now(),
-          kind: kind === 'journal' ? 'themes' : 'tarot',
-          text: text.trim(),
-        };
-        setReflection(entry);
-        AsyncStorage.setItem(STORAGE_LAST_REFLECTION, JSON.stringify(entry)).catch(() => {});
-      } else {
-        setErrorMsg(GEMINI_ERROR_TEXT);
-      }
+      const text = await requestGeminiReflection(savedKey.trim(), prompt);
+      const entry: SavedReflection = {
+        ts: Date.now(),
+        kind: kind === 'journal' ? 'themes' : 'tarot',
+        text,
+      };
+      setReflection(entry);
+      AsyncStorage.setItem(STORAGE_LAST_REFLECTION, JSON.stringify(entry)).catch(() => {});
     } catch (e) {
-      setErrorMsg(GEMINI_ERROR_TEXT);
+      if (e instanceof GeminiRequestError) {
+        setErrorMsg(e.userMessage);
+      } else if (isAbortError(e)) {
+        setErrorMsg(GEMINI_ERRORS.timeout);
+      } else {
+        setErrorMsg(GEMINI_ERRORS.network);
+      }
     } finally {
       setLoading(false);
     }
@@ -5121,7 +5336,7 @@ function InsightsPage({
           <View style={styles.settingRow}>
             <View style={{ flex: 1, paddingRight: 12 }}>
               <Text style={styles.settingLabel}>Gemini key</Text>
-              <Text style={styles.bugAppInfoPreview}>Saved on this device</Text>
+              <Text style={styles.bugAppInfoPreview}>Stored locally without app-level encryption</Text>
             </View>
             <TouchableOpacity
               activeOpacity={0.85}
@@ -5135,11 +5350,11 @@ function InsightsPage({
           </View>
         ) : (
           <Text style={styles.sectionSub}>
-            Free at{' '}
+            Create or view one at{' '}
             <Text style={styles.linkText} onPress={() => setConfirmOpenLink(true)}>
               aistudio.google.com
             </Text>
-            . Saved on this device only.
+            . The app stores it locally without app-level encryption.
           </Text>
         )}
         {!hasKey || keyInputOpen ? (
@@ -5276,7 +5491,7 @@ function InsightsPage({
         <Text style={styles.aiFootnote}>
           Powered by Google Gemini with your own key. Journal analysis sends only the sources
           you toggle on. Tarot interpretation sends the drawn card. Nothing is sent until you
-          tap a button.
+          tap a button. Your key is stored locally without app-level encryption.
         </Text>
       </ScrollView>
 
@@ -5291,7 +5506,7 @@ function InsightsPage({
             <Text style={styles.linkConfirmTitle}>Open in browser?</Text>
             <Text style={styles.linkConfirmUrl}>{GEMINI_KEY_URL}</Text>
             <Text style={styles.linkConfirmHint}>
-              You'll leave the app to get a free Gemini API key from Google.
+              You'll leave the app to create or view a Gemini API key from Google.
             </Text>
             <View style={styles.linkConfirmActions}>
               <TouchableOpacity
@@ -5413,18 +5628,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingVertical: 18, paddingHorizontal: 17,
   },
-  tileAura: {
-    position: 'absolute', width: 130, height: 130, borderRadius: 65,
-    right: -58, top: -68,
+  tileWallpaper: {
+    position: 'absolute', opacity: 0.14,
+    alignItems: 'center', justifyContent: 'center',
   },
-  tileGlyphWrap: {
-    width: 44, height: 44, borderRadius: 16, borderWidth: 1,
-    justifyContent: 'center', alignItems: 'center',
+  tileWallpaperHalf: {
+    width: 108, height: 108, right: -13, top: 8,
+    transform: [{ rotate: '-10deg' }],
   },
-  tileGlyphDisabledHalf: { marginTop: 25 },
-  tileGlyph: { fontSize: 23, fontWeight: '600' },
-  tileCopy: { marginTop: 13 },
-  tileCopyHorizontal: { marginTop: 0, marginLeft: 13, paddingRight: 8 },
+  tileWallpaperWide: {
+    width: 118, height: 118, right: 35, top: -13,
+    transform: [{ rotate: '8deg' }],
+  },
+  tileWallpaperFeature: {
+    width: 148, height: 148, right: 30, top: -5,
+    transform: [{ rotate: '-7deg' }],
+  },
+  tileWallpaperGlyph: {
+    fontSize: 84, lineHeight: 94, fontFamily: 'CormorantGaramond_500Medium',
+  },
+  tileWallpaperGlyphFeature: { fontSize: 112, lineHeight: 122 },
+  tileCopy: { position: 'relative', zIndex: 1 },
+  tileCopyHalf: { marginTop: 'auto', paddingTop: 54, paddingRight: 2 },
+  tileCopyHorizontal: { marginTop: 0, paddingRight: 82 },
   tileKicker: { fontSize: 8, fontWeight: '800', letterSpacing: 1.5, marginBottom: 5 },
   tileLabel: { color: '#FAF8FF', fontSize: 14, fontWeight: '600', letterSpacing: 0.1 },
   tileLabelFeature: {
@@ -5499,8 +5725,11 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-8deg' }],
   },
   subGlyphInner: {
-    width: 52, height: 52, borderRadius: 26, borderWidth: 1,
+    width: 52, height: 52, borderRadius: 26,
     alignItems: 'center', justifyContent: 'center',
+  },
+  subGlyphBreathingRing: {
+    position: 'absolute', width: 52, height: 52, borderRadius: 26, borderWidth: 1,
   },
   subGlyph: { fontSize: 26, transform: [{ rotate: '8deg' }] },
   subBackBtn: {
@@ -5636,6 +5865,53 @@ const styles = StyleSheet.create({
   notifPillText: { color: '#ffffff99', fontSize: 12, fontWeight: '600', letterSpacing: 1 },
   notifHint: { color: '#ffffff77', fontSize: 12, marginTop: 8, lineHeight: 18 },
   notifWarn: { color: '#E0A470', fontSize: 12, marginTop: 8, lineHeight: 18 },
+  customReminderCard: {
+    marginTop: 12, paddingHorizontal: 15, paddingTop: 14, paddingBottom: 15,
+  },
+  customReminderHeading: {
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+  },
+  customReminderKicker: { color: '#E0A470', fontSize: 8, fontWeight: '800', letterSpacing: 1.7 },
+  customReminderTitle: {
+    color: '#F8F5FC', fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 20, lineHeight: 23, marginTop: 2,
+  },
+  customReminderClose: {
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center', marginTop: -8, marginRight: -8,
+  },
+  customReminderTimeRow: {
+    flexDirection: 'row', alignItems: 'flex-end', marginTop: 14,
+  },
+  customReminderFieldWrap: { width: 64 },
+  customReminderFieldLabel: {
+    color: '#858597', fontSize: 7, fontWeight: '800', letterSpacing: 1.3,
+    textAlign: 'center', marginBottom: 4,
+  },
+  customReminderField: {
+    height: 52, borderRadius: 16, borderWidth: 1,
+    borderColor: 'rgba(224,164,112,0.34)', backgroundColor: 'rgba(8,9,25,0.36)',
+    color: '#FFF9F3', fontSize: 22, fontWeight: '600', textAlign: 'center',
+    paddingHorizontal: 8, paddingVertical: 8,
+    position: 'relative', zIndex: 4, elevation: 2, opacity: 1,
+  },
+  customReminderColon: {
+    color: '#E0A470', fontSize: 24, lineHeight: 50, marginHorizontal: 5,
+  },
+  customReminderMeridiem: {
+    flex: 1, minWidth: 100, height: 52, marginLeft: 10,
+    flexDirection: 'row', borderWidth: 1, borderRadius: 16,
+    borderColor: 'rgba(255,255,255,0.13)', overflow: 'hidden',
+  },
+  customReminderMeridiemBtn: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  customReminderMeridiemBtnActive: { backgroundColor: 'rgba(224,164,112,0.20)' },
+  customReminderMeridiemText: { color: '#858597', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  customReminderMeridiemTextActive: { color: '#E0A470' },
+  customReminderSave: {
+    minHeight: 48, marginTop: 14, borderRadius: 999,
+    backgroundColor: '#E0A470', alignItems: 'center', justifyContent: 'center',
+  },
+  customReminderSaveText: { color: '#111225', fontSize: 10, fontWeight: '900', letterSpacing: 1.8 },
 
   // Mood
   moodHeroHeading: {
@@ -5854,6 +6130,9 @@ const styles = StyleSheet.create({
     color: '#fff', fontSize: 14.5, lineHeight: 22,
     minHeight: 150, textAlignVertical: 'top',
     paddingHorizontal: 16, paddingVertical: 14,
+    // GlowCard's gradients and auras are decorative. Keep every live editor
+    // in a shared foreground plane so text never fades beneath them.
+    position: 'relative', zIndex: 4, elevation: 2, opacity: 1,
   },
   releaseSheet: { marginTop: 8, minHeight: 260, paddingTop: 16 },
   releaseSheetTop: {
@@ -5870,7 +6149,7 @@ const styles = StyleSheet.create({
     // GlowCard's atmospheric layers are absolutely positioned. Lift the live
     // editor above them so typed text, selection, and the caret never inherit
     // the decorative left-to-right fade.
-    position: 'relative', zIndex: 2,
+    position: 'relative', zIndex: 4,
     color: '#F4EDF2', backgroundColor: 'transparent', opacity: 1,
   },
   releasePromptLabel: { color: '#8B8C9F', fontSize: 8, fontWeight: '800', letterSpacing: 1.5, marginTop: 15 },
@@ -6163,6 +6442,7 @@ const styles = StyleSheet.create({
   bugSubjectInput: {
     color: '#fff', fontSize: 14.5,
     paddingHorizontal: 16, paddingVertical: 14,
+    position: 'relative', zIndex: 4, elevation: 2, opacity: 1,
   },
   bugInputDivider: {
     height: 1, marginHorizontal: 16,
@@ -6192,6 +6472,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(7,8,23,0.34)',
     borderRadius: 13, paddingHorizontal: 13, paddingVertical: 11,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.11)',
+    position: 'relative', zIndex: 4, elevation: 2, opacity: 1,
   },
   identityAtlas: {
     minHeight: 150, marginTop: 8, padding: 18,

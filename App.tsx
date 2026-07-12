@@ -684,26 +684,32 @@ async function scheduleAffirmationNotifs(pref: NotifPref) {
   }
 }
 
-// Evening gratitude nudge. Called by MoreView's Gratitude page when the user
-// picks an hour ('21' | '22' | '23') or turns it off.
-export async function scheduleGratitudeReminder(pref: 'off' | '21' | '22' | '23') {
+// Evening gratitude nudge. Accepts legacy whole-hour values such as "21"
+// and precise 24-hour clock values such as "21:35".
+export async function scheduleGratitudeReminder(pref: string) {
   if (Platform.OS === 'web') return;
   if (IS_EXPO_GO) return;
   try {
     await cancelScheduledByPrefix(GRAT_NOTIF_PREFIX);
     if (pref === 'off') return;
+    const match = /^(\d{1,2})(?::(\d{2}))?$/.exec(pref);
+    if (!match) return;
+    const hour = Number(match[1]);
+    const minute = Number(match[2] ?? 0);
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) return;
+    if (!Number.isInteger(minute) || minute < 0 || minute > 59) return;
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== 'granted') return;
     await Notifications.scheduleNotificationAsync({
-      identifier: `${GRAT_NOTIF_PREFIX}${pref}`,
+      identifier: `${GRAT_NOTIF_PREFIX}${String(hour).padStart(2, '0')}-${String(minute).padStart(2, '0')}`,
       content: {
         title: 'Simply Ambient',
         body: 'A quiet moment before the day ends. What is one thing you appreciated today?',
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: parseInt(pref, 10),
-        minute: 0,
+        hour,
+        minute,
       },
     });
   } catch (e) {
@@ -3001,7 +3007,6 @@ function MiniPlayer({
   onStopAll: () => void;
 }) {
   const [now, setNow] = useState(Date.now());
-  const [rendered, setRendered] = useState(visible);
   const { width: playerWidth } = useWindowDimensions();
   const compactPlayer = playerWidth < 360;
   const barOpacity = useRef(new Animated.Value(visible ? 1 : 0)).current;
@@ -3018,7 +3023,6 @@ function MiniPlayer({
   }, [visible, sleepEndsAt]);
 
   useEffect(() => {
-    if (visible) setRendered(true);
     // JS-driven (not native): on web a native-driver opacity promotes the bar to
     // its own layer, and the white play button can render at full opacity for a
     // frame mid-fade (a white flash). Driving opacity in JS sets it on the parent
@@ -3036,9 +3040,7 @@ function MiniPlayer({
         easing: Easing.inOut(Easing.cubic),
         useNativeDriver: false,
       }),
-    ]).start(({ finished }) => {
-      if (finished && !visible) setRendered(false);
-    });
+    ]).start();
   }, [barOffset, barOpacity, visible]);
 
   useEffect(() => {
@@ -3067,7 +3069,6 @@ function MiniPlayer({
     return () => loop.stop();
   }, [ringPulse, soundscapePlaying, bgPlaying]);
 
-  if (!rendered) return null;
   const timerText = sleepEndsAt ? formatRemaining(sleepEndsAt - now) : null;
   const ringScale = ringPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] });
   const ringGlowOpacity = ringPulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.95] });
@@ -3101,7 +3102,15 @@ function MiniPlayer({
 
   return (
     <Animated.View
-      style={{ opacity: barOpacity, transform: [{ translateY: barOffset }] }}
+      {...(Platform.OS === 'web' ? ({ inert: !visible } as any) : {})}
+      pointerEvents={visible ? 'auto' : 'none'}
+      aria-hidden={!visible}
+      accessibilityElementsHidden={!visible}
+      importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
+      style={[
+        { opacity: barOpacity, transform: [{ translateY: barOffset }] },
+        Platform.OS === 'web' ? ({ willChange: 'opacity, transform' } as any) : null,
+      ]}
     >
       <View
         style={[
@@ -3138,6 +3147,7 @@ function MiniPlayer({
         <View style={[styles.miniAura, { backgroundColor: accent + '16' }]} pointerEvents="none" />
         <TouchableOpacity
           activeOpacity={0.85}
+          disabled={!visible}
           onPress={onTogglePlay}
           style={[styles.miniPlayBtn, { backgroundColor: isTonePlaying ? '#fff' : accent }]}
           accessibilityRole="button"
@@ -3151,6 +3161,7 @@ function MiniPlayer({
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.miniBody}
+          disabled={!visible}
           onPress={onOpen}
           activeOpacity={0.75}
           accessibilityRole="button"
@@ -3173,6 +3184,7 @@ function MiniPlayer({
         {showBgControl && (
           <TouchableOpacity
             activeOpacity={0.85}
+            disabled={!visible}
             onPress={onBgPress}
             style={[
               styles.miniSoundscapeBtn,
@@ -3200,6 +3212,7 @@ function MiniPlayer({
         )}
         {showSoundscapeControl ? <TouchableOpacity
           activeOpacity={0.85}
+          disabled={!visible}
           onPress={onSoundscapePress}
           style={[
             styles.miniSoundscapeBtn,
@@ -3226,6 +3239,7 @@ function MiniPlayer({
         </TouchableOpacity> : null}
         <TouchableOpacity
           activeOpacity={0.85}
+          disabled={!visible}
           onPress={onStopAll}
           style={styles.miniStopBtn}
           accessibilityLabel="Stop all audio"
