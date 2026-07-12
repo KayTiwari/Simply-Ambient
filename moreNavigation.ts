@@ -71,7 +71,7 @@ export const MORE_PAGE_META: Record<MorePageId, {
   },
   soundscapes: {
     label: 'Soundscapes',
-    shortLabel: 'Sound',
+    shortLabel: 'Scape',
     glyph: '≋',
     accent: '#8FB8DE',
     pinnable: true,

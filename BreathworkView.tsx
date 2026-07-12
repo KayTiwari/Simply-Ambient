@@ -330,20 +330,16 @@ function TechniqueCard({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${technique.name}, ${technique.blurb}. Open breathing session.`}
+      accessibilityHint="Opens this guided breathing practice"
       style={styles.cardTouch}
     >
       <AmbientSurface accent={technique.color} style={styles.card}>
-        <View style={styles.cardTopRow}>
-          <Text style={[styles.cardIndex, { color: technique.color }]}>PRACTICE {String(index).padStart(2, '0')}</Text>
-          <View style={[styles.cardArrow, { borderColor: technique.color + '3D' }]}>
-            <Text style={[styles.cardChevron, { color: technique.color }]}>↗</Text>
-          </View>
-        </View>
         <View style={styles.cardRow}>
           <View style={[styles.cardIconSlot, { borderColor: technique.color + '42', backgroundColor: technique.color + '12' }]}>
             <Icon size={28} weight="duotone" color={technique.color} />
           </View>
           <View style={styles.cardCopy}>
+            <Text style={[styles.cardIndex, { color: technique.color }]}>PRACTICE {String(index).padStart(2, '0')}</Text>
             <Text style={styles.cardName}>{technique.name}</Text>
             <Text style={[styles.cardBlurb, { color: technique.color }]}>{technique.blurb}</Text>
           </View>
@@ -1271,26 +1267,17 @@ const styles = StyleSheet.create({
   // than a row in a settings list.
   cardTouch: { marginBottom: 12, borderRadius: 26 },
   card: {
-    padding: 18,
+    paddingHorizontal: 17,
+    paddingVertical: 17,
     minHeight: 190,
   },
-  cardTopRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: 13,
-  },
-  cardIndex: { fontSize: 8.5, fontWeight: '800', letterSpacing: 2.2 },
-  cardArrow: {
-    width: 30, height: 30, borderRadius: 15, borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.035)',
-  },
-  cardChevron: { fontSize: 15, marginTop: -1 },
+  cardIndex: { fontSize: 8.5, fontWeight: '800', letterSpacing: 2.2, marginBottom: 4 },
   cardRow: { flexDirection: 'row', alignItems: 'center' },
   cardIconSlot: {
     width: 54, height: 54, borderRadius: 18, marginRight: 13, borderWidth: 1,
     alignItems: 'center', justifyContent: 'center',
   },
-  cardCopy: { flex: 1 },
+  cardCopy: { flex: 1, minWidth: 0 },
   cardName: {
     color: '#FFFDFE', fontFamily: 'CormorantGaramond_500Medium',
     fontSize: 25, lineHeight: 27, letterSpacing: 0.2,

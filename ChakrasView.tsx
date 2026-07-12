@@ -11,6 +11,14 @@ import {
 } from 'react-native';
 import { Wind, Flame, Mountains, type IconProps } from 'phosphor-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, {
+  Circle as SvgCircle,
+  Ellipse as SvgEllipse,
+  Line as SvgLine,
+  Path as SvgPath,
+  Polygon as SvgPolygon,
+  Rect as SvgRect,
+} from 'react-native-svg';
 
 import {
   AmbientSurface,
@@ -32,6 +40,118 @@ const DOSHA_ICONS: Record<Dosha['id'], React.ComponentType<IconProps>> = {
 // line where needed; the 70pt row remains a comfortable touch target.
 const SPECTRUM_ROW_HEIGHT = 70;
 const SPECTRUM_PADDING_VERTICAL = 10;
+
+function ChakraSigil({ chakra, size = 16 }: { chakra: Chakra; size?: number }) {
+  const sharedStroke = {
+    fill: 'none',
+    stroke: chakra.color,
+    strokeWidth: 1.55,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  };
+
+  let mark: React.ReactNode;
+
+  switch (chakra.number) {
+    case 7:
+      mark = (
+        <>
+          {[0, 45, 90, 135].map(angle => (
+            <SvgEllipse
+              key={angle}
+              cx="12"
+              cy="7.2"
+              rx="2.15"
+              ry="4.7"
+              transform={`rotate(${angle} 12 12)`}
+              {...sharedStroke}
+              strokeWidth="1.25"
+            />
+          ))}
+          <SvgCircle cx="12" cy="12" r="1.65" fill={chakra.color} />
+        </>
+      );
+      break;
+    case 6:
+      mark = (
+        <>
+          <SvgPath
+            d="M2.7 12 Q12 4.8 21.3 12 Q12 19.2 2.7 12 Z"
+            {...sharedStroke}
+          />
+          <SvgCircle cx="12" cy="12" r="2.45" fill={chakra.color} />
+        </>
+      );
+      break;
+    case 5:
+      mark = (
+        <>
+          <SvgCircle cx="12" cy="12" r="8.2" {...sharedStroke} />
+          <SvgPolygon points="6.8,9 17.2,9 12,17.4" {...sharedStroke} />
+          <SvgCircle cx="12" cy="12.2" r="1.45" fill={chakra.color} />
+        </>
+      );
+      break;
+    case 4:
+      mark = (
+        <>
+          <SvgPolygon points="12,3.8 20,17 4,17" {...sharedStroke} />
+          <SvgPolygon points="4,7 20,7 12,20.2" {...sharedStroke} />
+          <SvgCircle cx="12" cy="12" r="1.25" fill={chakra.color} />
+        </>
+      );
+      break;
+    case 3:
+      mark = (
+        <>
+          <SvgCircle cx="12" cy="12" r="4.25" {...sharedStroke} />
+          {[0, 45, 90, 135].map(angle => (
+            <SvgLine
+              key={angle}
+              x1="12"
+              y1="1.8"
+              x2="12"
+              y2="5.2"
+              transform={`rotate(${angle} 12 12)`}
+              {...sharedStroke}
+            />
+          ))}
+          <SvgCircle cx="12" cy="12" r="1.55" fill={chakra.color} />
+        </>
+      );
+      break;
+    case 2:
+      mark = (
+        <SvgPath
+          d="M16.9 3.5 A9 9 0 1 0 16.9 20.5 A7.1 7.1 0 0 1 16.9 3.5 Z"
+          fill={chakra.color}
+        />
+      );
+      break;
+    default:
+      mark = (
+        <>
+          <SvgRect x="4.5" y="4.5" width="15" height="15" rx="1.1" {...sharedStroke} />
+          <SvgPolygon points="7,8.2 17,8.2 12,17.6" {...sharedStroke} />
+          <SvgCircle cx="12" cy="11.7" r="1.25" fill={chakra.color} />
+        </>
+      );
+  }
+
+  return (
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      pointerEvents="none"
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      {mark}
+    </Svg>
+  );
+}
 
 type Props = {
   chakras: Chakra[];
@@ -257,7 +377,7 @@ export default function ChakrasView({
                 >
                   <View style={styles.nodeColumn}>
                     <View style={styles.nodeHalo}>
-                      <View style={[styles.node, { backgroundColor: chakra.color }]} />
+                      <ChakraSigil chakra={chakra} />
                     </View>
                   </View>
 
@@ -614,7 +734,6 @@ const styles = StyleSheet.create({
     shadowRadius: 9,
     shadowOffset: { width: 0, height: 0 },
   },
-  node: { width: 8, height: 8, borderRadius: 4 },
   spectrumCopy: { flex: 1, minWidth: 0 },
   spectrumNameRow: { flexDirection: 'row', alignItems: 'center' },
   spectrumIndex: { fontSize: 8, fontWeight: '900', letterSpacing: 1.2, marginRight: 8 },

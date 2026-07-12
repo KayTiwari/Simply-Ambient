@@ -1485,7 +1485,7 @@ function BreathingGlyphMedallion({ accent, glyph }: { accent: string; glyph: str
   const reduceMotion = React.useContext(ReducedMotionContext);
   const scale = useRef(new Animated.Value(1)).current;
   const ringOpacity = scale.interpolate({
-    inputRange: [1, 1.08],
+    inputRange: [1, 1.075],
     outputRange: [0.58, 1],
     extrapolate: 'clamp',
   });
@@ -1495,18 +1495,21 @@ function BreathingGlyphMedallion({ accent, glyph }: { accent: string; glyph: str
     scale.setValue(1);
     if (reduceMotion) return;
 
+    // Non-zero endpoint velocity makes the ring reverse like a soft bounce
+    // instead of overshooting, settling, and visibly pausing at full size.
+    const continuousTurn = Easing.bezier(0.38, 0.12, 0.62, 0.88);
     const breathing = Animated.loop(
       Animated.sequence([
         Animated.timing(scale, {
-          toValue: 1.08,
-          duration: 1250,
-          easing: Easing.out(Easing.back(0.9)),
+          toValue: 1.075,
+          duration: 1450,
+          easing: continuousTurn,
           useNativeDriver: true,
         }),
         Animated.timing(scale, {
           toValue: 1,
-          duration: 1700,
-          easing: Easing.inOut(Easing.sin),
+          duration: 1450,
+          easing: continuousTurn,
           useNativeDriver: true,
         }),
       ]),

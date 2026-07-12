@@ -528,7 +528,7 @@ const SOUNDSCAPE_GAIN: Record<SoundscapeKey, number> = {
   pink: 0.40,
   brown: 0.50,
   breeze: 1,
-  night: 0.38,
+  night: 0.65,
   thunder: 0.42,
   cabin: 0.90,
   train: 1,
@@ -536,6 +536,61 @@ const SOUNDSCAPE_GAIN: Record<SoundscapeKey, number> = {
 
 function effectiveSoundscapeVolume(kind: SoundscapeKey, volume: number) {
   return Math.max(0, Math.min(1, volume)) * SOUNDSCAPE_GAIN[kind];
+}
+
+type CricketEvent = readonly [start: number, duration: number, pulseHz: number, amplitude: number];
+
+const NIGHT_CRICKET_LOOP_SECONDS = 16;
+const NIGHT_CRICKETS_LEFT: readonly CricketEvent[] = [
+  [0.62, 0.24, 29, 0.76], [2.05, 0.18, 31, 0.58], [3.48, 0.30, 27, 0.92],
+  [5.82, 0.21, 32, 0.65], [7.24, 0.27, 29, 0.83], [9.63, 0.19, 33, 0.55],
+  [11.18, 0.25, 28, 1], [13.66, 0.22, 30, 0.71], [15.02, 0.20, 32, 0.60],
+];
+const NIGHT_CRICKETS_RIGHT: readonly CricketEvent[] = [
+  [1.16, 0.20, 31, 0.62], [2.72, 0.28, 28, 0.88], [4.46, 0.18, 34, 0.54],
+  [6.31, 0.25, 29, 0.78], [8.11, 0.21, 32, 0.68], [10.34, 0.29, 27, 0.96],
+  [12.24, 0.19, 33, 0.57], [14.19, 0.26, 29, 0.81],
+];
+
+function cricketEnvelope(t: number, events: readonly CricketEvent[]) {
+  const cycle = ((t % NIGHT_CRICKET_LOOP_SECONDS) + NIGHT_CRICKET_LOOP_SECONDS)
+    % NIGHT_CRICKET_LOOP_SECONDS;
+  for (const [start, duration, pulseHz, amplitude] of events) {
+    if (cycle < start) break;
+    const x = cycle - start;
+    if (x >= duration) continue;
+    const group = Math.sin(Math.PI * x / duration) ** 2;
+    const pulse = (x * pulseHz) % 1;
+    const duty = 0.46;
+    const syllable = pulse < duty ? Math.sin(Math.PI * pulse / duty) ** 2 : 0;
+    return amplitude * group * syllable;
+  }
+  return 0;
+}
+
+function summerNightSample(t: number, white: number, pink: number, brown: number): [number, number] {
+  const twoPi = Math.PI * 2;
+  const envLeft = cricketEnvelope(t, NIGHT_CRICKETS_LEFT);
+  const envRight = cricketEnvelope(t, NIGHT_CRICKETS_RIGHT);
+  const carrierLeft = envLeft > 0 ? (
+    Math.sin(twoPi * 3260 * t + 0.14 * Math.sin(twoPi * 11.3 * t)) * 0.52
+    + Math.sin(twoPi * 3291 * t + 1.1) * 0.29
+    + Math.sin(twoPi * 3227 * t + 0.45) * 0.19
+    + white * 0.12
+  ) : 0;
+  const carrierRight = envRight > 0 ? (
+    Math.sin(twoPi * 3820 * t + 0.13 * Math.sin(twoPi * 9.7 * t)) * 0.50
+    + Math.sin(twoPi * 3857 * t + 0.7) * 0.31
+    + Math.sin(twoPi * 3786 * t + 1.65) * 0.19
+    + white * 0.12
+  ) : 0;
+  const bed = pink * 0.032 + brown * 0.007;
+  const colonyLeft = envLeft * carrierLeft * 0.28;
+  const colonyRight = envRight * carrierRight * 0.26;
+  return [
+    bed + colonyLeft + colonyRight * 0.24,
+    bed * 0.90 + colonyRight + colonyLeft * 0.22,
+  ];
 }
 
 export function todaysSign(date: Date = new Date()): Zodiac {
@@ -919,7 +974,7 @@ function buildSoundscapeWav(kind: SoundscapeKey): string {
   const loopSeconds = kind === 'thunder'
     ? 12
     : kind === 'night'
-      ? 8
+      ? NIGHT_CRICKET_LOOP_SECONDS
       : kind === 'fire' || kind === 'breeze' || kind === 'train'
         ? 6
         : kind === 'cabin'
@@ -982,19 +1037,8 @@ function buildSoundscapeWav(kind: SoundscapeKey): string {
         const air = (pink * 0.052 + brown * 0.026 + breezeLow * 0.34) * swell;
         return [air * panLeft * 2.1, (air * 0.94 + breezeLow * 0.015) * panRight * 2.1];
       }
-      case 'night': {
-        // Raised sine gates have zero slope as they open and close, keeping
-        // the distant cricket calls rounded rather than click-like.
-        const gateLeft = Math.pow(Math.max(0, Math.sin(twoPi * 0.5 * t)), 6);
-        const gateRight = Math.pow(Math.max(0, Math.sin(twoPi * 0.375 * t + Math.PI * 0.35)), 6);
-        const cricketLeft = Math.sin(twoPi * 2780 * t + Math.sin(twoPi * 4 * t) * 0.65);
-        const cricketRight = Math.sin(twoPi * 2460 * t + Math.sin(twoPi * 3 * t) * 0.55);
-        const nightBed = pink * 0.052 + brown * 0.014;
-        return [
-          nightBed + cricketLeft * gateLeft * 0.018,
-          nightBed * 0.92 + cricketRight * gateRight * 0.016,
-        ];
-      }
+      case 'night':
+        return summerNightSample(t, white, pink, brown);
       case 'thunder': {
         // One distant rumble per twelve-second loop, shaped with a raised
         // cosine so it arrives and leaves without a transient.
@@ -1300,17 +1344,8 @@ class WebSoundscapeEngine {
         const air = (this.pink * 0.052 + this.brown * 0.026 + this.breezeLow * 0.34) * swell;
         return [air * 2.1, (air * 0.94 + this.breezeLow * 0.015) * 2.1];
       }
-      case 'night': {
-        const gateLeft = Math.pow(Math.max(0, Math.sin(twoPi * 0.5 * t)), 6);
-        const gateRight = Math.pow(Math.max(0, Math.sin(twoPi * 0.375 * t + Math.PI * 0.35)), 6);
-        const cricketLeft = Math.sin(twoPi * 2780 * t + Math.sin(twoPi * 4 * t) * 0.65);
-        const cricketRight = Math.sin(twoPi * 2460 * t + Math.sin(twoPi * 3 * t) * 0.55);
-        const nightBed = this.pink * 0.052 + this.brown * 0.014;
-        return [
-          nightBed + cricketLeft * gateLeft * 0.018,
-          nightBed * 0.92 + cricketRight * gateRight * 0.016,
-        ];
-      }
+      case 'night':
+        return summerNightSample(t, white, this.pink, this.brown);
       case 'thunder': {
         this.thunderLow = this.thunderLow * 0.997
           + (this.brown * 0.75 + this.pink * 0.25) * 0.003;
