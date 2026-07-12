@@ -56,7 +56,7 @@ function ChakraSigil({ chakra, size = 16 }: { chakra: Chakra; size?: number }) {
     case 7:
       mark = (
         <>
-          {[0, 45, 90, 135].map(angle => (
+          {[0, 45, 90, 135, 180, 225, 270, 315].map(angle => (
             <SvgEllipse
               key={angle}
               cx="12"
@@ -105,7 +105,7 @@ function ChakraSigil({ chakra, size = 16 }: { chakra: Chakra; size?: number }) {
       mark = (
         <>
           <SvgCircle cx="12" cy="12" r="4.25" {...sharedStroke} />
-          {[0, 45, 90, 135].map(angle => (
+          {[0, 45, 90, 135, 180, 225, 270, 315].map(angle => (
             <SvgLine
               key={angle}
               x1="12"
