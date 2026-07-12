@@ -58,9 +58,6 @@ export function AmbientPageShell({
         />
         <View style={[styles.orbitLarge, { borderColor: accent + '17' }]} />
         <View style={[styles.orbitSmall, { borderColor: accent + '12' }]} />
-        <View style={[styles.star, styles.starOne, { backgroundColor: accent + '99' }]} />
-        <View style={[styles.star, styles.starTwo]} />
-        <View style={[styles.star, styles.starThree, { backgroundColor: accent + '88' }]} />
         <LinearGradient
           colors={['transparent', 'rgba(13,11,35,0.42)']}
           style={styles.bottomDepth}
@@ -251,11 +248,6 @@ const styles = StyleSheet.create({
     position: 'absolute', width: 170, height: 170, borderRadius: 85,
     borderWidth: 1, top: -52, right: -66,
   },
-  star: { position: 'absolute', width: 3, height: 3, borderRadius: 2, backgroundColor: '#ffffff77' },
-  starOne: { top: 118, left: '11%' },
-  starTwo: { top: 205, right: '22%' },
-  starThree: { top: 430, left: '8%', width: 2, height: 2 },
-
   glowCard: {
     borderRadius: 26,
     borderWidth: 1,

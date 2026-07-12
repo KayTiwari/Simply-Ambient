@@ -382,11 +382,61 @@ function RainScene({ color, playing, w, h }: SceneProps) {
   );
 }
 
+// One tidal breath for the ocean: the heave travels top, middle, bottom on
+// the way up, then releases bottom, middle, top on the way down, so the top
+// band holds its crest longest. Values are a shared 8.8s timeline; each band
+// runs its own delay/rise/hold/fall/rest sequence inside it.
+const TIDE_RISE = 2000;
+const TIDE_PERIOD = 8800;
+const TIDE_BANDS = [
+  { lead: 0,    hold: 3800, rest: 1000, amp: 9 },  // top
+  { lead: 800,  hold: 2200, rest: 1800, amp: 11 }, // middle
+  { lead: 1600, hold: 600,  rest: 2600, amp: 13 }, // bottom
+];
+
+function useTide(active: boolean, lead: number, hold: number, rest: number): Animated.Value {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!active) { v.stopAnimation(); v.setValue(0); return; }
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.delay(lead),
+        Animated.timing(v, { toValue: 1, duration: TIDE_RISE, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.delay(hold),
+        Animated.timing(v, { toValue: 0, duration: TIDE_RISE, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.delay(rest),
+      ]),
+    );
+    anim.start();
+    return () => { anim.stop(); v.setValue(0); };
+  }, [active, lead, hold, rest, v]);
+  return v;
+}
+
+function TideBand({
+  playing, lead, hold, rest, amp, children,
+}: {
+  playing: boolean; lead: number; hold: number; rest: number; amp: number;
+  children: React.ReactNode;
+}) {
+  const tide = useTide(playing, lead, hold, rest);
+  const translateY = tide.interpolate({ inputRange: [0, 1], outputRange: [0, -amp] });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      // Overshoot below the card so a lifted band never exposes its underside.
+      style={[StyleSheet.absoluteFill, { bottom: -16, transform: [{ translateY }] }]}
+    >
+      <SceneSvg>{children}</SceneSvg>
+    </Animated.View>
+  );
+}
+
 function OceanScene({ color, playing }: SceneProps) {
   const bands = [
-    { d: 'M0 58 C55 46 95 66 160 56 S275 42 320 54 L320 120 L0 120 Z', top: 0.16, amp: 6, dur: 9000 },
-    { d: 'M0 78 C60 64 110 88 175 76 S280 62 320 76 L320 120 L0 120 Z', top: 0.26, amp: 8, dur: 7200 },
-    { d: 'M0 98 C70 86 120 108 190 96 S285 84 320 98 L320 120 L0 120 Z', top: 0.4, amp: 10, dur: 5600 },
+    { d: 'M0 58 C55 46 95 66 160 56 S275 42 320 54 L320 140 L0 140 Z', top: 0.16 },
+    { d: 'M0 78 C60 64 110 88 175 76 S280 62 320 76 L320 140 L0 140 Z', top: 0.26 },
+    { d: 'M0 98 C70 86 120 108 190 96 S285 84 320 98 L320 140 L0 140 Z', top: 0.4 },
   ];
   return (
     <>
@@ -395,11 +445,10 @@ function OceanScene({ color, playing }: SceneProps) {
         <Ellipse cx={235} cy={26} rx={150} ry={40} fill="url(#oGlow)" />
       </SceneSvg>
       {bands.map((b, i) => (
-        <SwayLayer key={i} playing={playing} duration={b.dur} amplitude={b.amp}>
+        <TideBand key={i} playing={playing} {...TIDE_BANDS[i]}>
           <Defs><VGrad id={`oBand${i}`} color={color} stops={[[0, b.top], [1, 0.02]]} /></Defs>
-          {/* Extend past both edges so the sway never shows a seam. */}
-          <Path d={b.d} fill={`url(#oBand${i})`} transform="translate(-12,0) scale(1.08,1)" />
-        </SwayLayer>
+          <Path d={b.d} fill={`url(#oBand${i})`} />
+        </TideBand>
       ))}
       <SceneSvg>
         {OCEAN_FOAM.map((f, i) => (
