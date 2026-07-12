@@ -4,9 +4,11 @@ import {
   Animated,
   Easing,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   View,
+  type GestureResponderEvent,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -130,8 +132,40 @@ export function AmbientVeil({
   const baseDriftY = ambientMotion.interpolate({ inputRange: [0, 1], outputRange: [-5, 8] });
   const baseScale = ambientMotion.interpolate({ inputRange: [0, 1], outputRange: [1.04, 1.085] });
 
+  // Touching open background births one ring at the touch point, like a
+  // finger on still water. The root is a Pressable so child controls keep
+  // priority: only taps nothing else claims reach it, on native and web.
+  const [touchRipples, setTouchRipples] = React.useState<Array<{ id: number; x: number; y: number }>>([]);
+  const touchIdRef = useRef(0);
+  const veilRef = useRef<View>(null);
+  const veilOriginRef = useRef({ x: 0, y: 0 });
+  const measureVeil = () => {
+    veilRef.current?.measureInWindow?.((x, y) => { veilOriginRef.current = { x, y }; });
+  };
+  const spawnTouchRipple = (e: GestureResponderEvent) => {
+    if (reduceMotion) return;
+    // locationX is missing from web press events, so fall back to page
+    // coordinates against the veil's measured origin.
+    const { locationX, locationY, pageX, pageY } = e.nativeEvent;
+    const x = locationX ?? (pageX != null ? pageX - veilOriginRef.current.x : null);
+    const y = locationY ?? (pageY != null ? pageY - veilOriginRef.current.y : null);
+    if (x == null || y == null) return;
+    const id = ++touchIdRef.current;
+    // Cap concurrent ripples; the oldest quietly leaves under a tap storm.
+    setTouchRipples(prev => [...prev.slice(-4), { id, x, y }]);
+  };
+  const removeTouchRipple = (id: number) => {
+    setTouchRipples(prev => prev.filter(r => r.id !== id));
+  };
+
   return (
-    <View style={[shared.veil, style]}>
+    <Pressable
+      ref={veilRef}
+      style={[shared.veil, style]}
+      onPress={spawnTouchRipple}
+      onLayout={measureVeil}
+      accessible={false}
+    >
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
@@ -168,8 +202,50 @@ export function AmbientVeil({
           ripplePeriod={ripplePeriod}
         />
       </Animated.View>
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {touchRipples.map(r => (
+          <TouchRipple key={r.id} x={r.x} y={r.y} accent={displayAccent} onDone={() => removeTouchRipple(r.id)} />
+        ))}
+      </View>
       {children}
-    </View>
+    </Pressable>
+  );
+}
+
+// One ring born under a touch, expanding and fading once, then gone.
+const TOUCH_RIPPLE_RADIUS = 130;
+
+function TouchRipple({
+  x, y, accent, onDone,
+}: {
+  x: number; y: number; accent: string; onDone: () => void;
+}) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(v, {
+      toValue: 1, duration: 1100, easing: Easing.out(Easing.quad), useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) onDone();
+    });
+    // Runs exactly once for the life of this ripple.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: x - TOUCH_RIPPLE_RADIUS,
+        top: y - TOUCH_RIPPLE_RADIUS,
+        width: TOUCH_RIPPLE_RADIUS * 2,
+        height: TOUCH_RIPPLE_RADIUS * 2,
+        borderRadius: TOUCH_RIPPLE_RADIUS,
+        borderWidth: 1.5,
+        borderColor: accent,
+        opacity: v.interpolate({ inputRange: [0, 0.08, 1], outputRange: [0, 0.5, 0] }),
+        transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.1, 1] }) }],
+      }}
+    />
   );
 }
 
@@ -212,7 +288,7 @@ function VeilAtmosphere({
 // Rings blooming outward from the top-right corner while sound plays, the
 // third voice of the atmosphere alongside the aurora and the ear ripples.
 // Gated upstream by rippleActive, so reduce-motion is already respected.
-function CornerRipples({
+export function CornerRipples({
   accent,
   active,
   periodMs,
@@ -403,11 +479,20 @@ export function EditorialHeader({
   compact?: boolean;
   centerBrand?: boolean;
   brandFirst?: boolean;
-  glass?: boolean;
+  glass?: false | 'standard' | 'soft';
 }) {
+  const glassEnabled = glass !== false;
   return (
-    <View style={[shared.header, glass && shared.headerGlassContainer, compact && shared.headerCompact]}>
-      {glass ? <HeaderGlass accent={accent} /> : null}
+    <View
+      style={[
+        shared.header,
+        glassEnabled && shared.headerGlassContainer,
+        glass === 'standard' && shared.headerGlassContainerStandard,
+        glass === 'soft' && shared.headerGlassContainerSoft,
+        compact && shared.headerCompact,
+      ]}
+    >
+      {glassEnabled ? <HeaderGlass accent={accent} variant={glass} /> : null}
       <View style={[shared.brandRow, centerBrand && shared.brandRowCentered]}>
         <Text
           accessibilityRole={brandFirst ? 'header' : undefined}
@@ -440,7 +525,14 @@ export function EditorialHeader({
   );
 }
 
-export function HeaderGlass({ accent }: { accent: string }) {
+export function HeaderGlass({
+  accent,
+  variant = 'standard',
+}: {
+  accent: string;
+  variant?: 'standard' | 'soft';
+}) {
+  const soft = variant === 'soft';
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       {Platform.OS === 'web' ? (
@@ -448,26 +540,28 @@ export function HeaderGlass({ accent }: { accent: string }) {
           style={[
             StyleSheet.absoluteFill,
             shared.headerGlassWeb,
-            { backgroundColor: accent + '08' },
+            { backgroundColor: accent + (soft ? '08' : '0C') },
           ]}
         />
       ) : (
         <BlurView
-          intensity={34}
+          intensity={soft ? 24 : 34}
           tint="dark"
           experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
           style={StyleSheet.absoluteFill}
         />
       )}
       <LinearGradient
-        colors={['rgba(255,255,255,0.052)', accent + '09', 'rgba(8,9,25,0.15)']}
+        colors={soft
+          ? ['rgba(255,255,255,0.052)', accent + '09', 'rgba(8,9,25,0.15)']
+          : ['rgba(255,255,255,0.075)', accent + '0D', 'rgba(8,9,25,0.22)']}
         locations={[0, 0.52, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
       <LinearGradient
-        colors={['transparent', accent + '3C', 'transparent']}
+        colors={['transparent', accent + (soft ? '3C' : '56'), 'transparent']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={shared.headerGlassEdge}
@@ -645,9 +739,16 @@ const shared = StyleSheet.create({
   header: { paddingTop: 14, paddingHorizontal: 22, paddingBottom: 18 },
   headerGlassContainer: {
     position: 'relative', overflow: 'hidden', zIndex: 30, elevation: 18,
-    backgroundColor: 'rgba(8,9,25,0.07)',
     borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomWidth: 1,
+  },
+  headerGlassContainerStandard: {
+    backgroundColor: 'rgba(8,9,25,0.10)',
+    borderBottomColor: 'rgba(255,255,255,0.12)',
+  },
+  headerGlassContainerSoft: {
+    backgroundColor: 'rgba(8,9,25,0.07)',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   headerGlassWeb: ({
     backdropFilter: 'blur(30px) saturate(135%)',

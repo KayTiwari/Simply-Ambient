@@ -50,6 +50,7 @@ import {
 } from './MoreUI';
 import { SoundscapeScene, TileScene } from './SoundscapeScenes';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CornerRipples, HeaderGlass } from './AmbientUI';
 
 import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
 import { openStoreListing } from './lib/rateApp';
@@ -1015,21 +1016,24 @@ function Hub({
 
   return (
     <AmbientPageShell accent={ambientAccent}>
-      <View style={styles.headerWrap}>
-        <View style={styles.hubBrandRow}>
-          <Text style={styles.ambience}>Simply Ambient</Text>
-        </View>
-        <Text style={styles.hubHeadline}>A quiet corner,{`\n`}made for you.</Text>
-        <Text style={styles.hubIntro}>
-          Reflect, restore, or simply notice what you need.
-        </Text>
-      </View>
-
       <ScrollView
         contentContainerStyle={styles.hubScrollContent}
         showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={[0]}
       >
-        <GlowCard accent="#8F97DE" style={styles.hubHeroCard}>
+        <View style={styles.headerWrap}>
+          <HeaderGlass accent={ambientAccent} variant="soft" />
+          <View style={styles.hubBrandRow}>
+            <Text style={styles.ambience}>Simply Ambient</Text>
+          </View>
+          <Text style={styles.hubHeadline}>A quiet corner,{`\n`}made for you.</Text>
+          <Text style={styles.hubIntro}>
+            Reflect, restore, or simply notice what you need.
+          </Text>
+        </View>
+
+        <View style={styles.hubScrollBody}>
+          <GlowCard accent="#8F97DE" style={styles.hubHeroCard}>
           <View style={styles.hubHeroTopline}>
             <View style={styles.hubLiveDot} />
             <Text style={styles.hubHeroGreeting}>{greeting.toUpperCase()}</Text>
@@ -1262,7 +1266,8 @@ function Hub({
               onPress={() => onOpen('bug')}
             />
           </View>
-        </MoreSectionGroup>
+          </MoreSectionGroup>
+        </View>
       </ScrollView>
     </AmbientPageShell>
   );
@@ -1613,6 +1618,7 @@ function SubHeader({
   if (keyboardOpen || height < 480) {
     return (
       <View style={styles.subHeaderCompact}>
+        <HeaderGlass accent={accent} variant="soft" />
         <TouchableOpacity
           onPress={onBack}
           style={[styles.subBackBtnCompact, { borderColor: accent + '38', backgroundColor: accent + '12' }]}
@@ -1633,6 +1639,7 @@ function SubHeader({
 
   return (
     <View style={styles.subHeader}>
+      <HeaderGlass accent={accent} variant="soft" />
       <View style={styles.subNavRow}>
         <TouchableOpacity
           onPress={onBack}
@@ -1670,6 +1677,37 @@ function SubHeader({
         </View>
       </View>
     </View>
+  );
+}
+
+type StickySubpageScrollProps = Omit<
+  React.ComponentProps<typeof ScrollView>,
+  'children' | 'contentContainerStyle' | 'stickyHeaderIndices'
+> & {
+  title: string;
+  accent: string;
+  onBack: () => void;
+  bodyStyle?: React.ComponentProps<typeof View>['style'];
+  children: React.ReactNode;
+};
+
+function StickySubpageScroll({
+  title,
+  accent,
+  onBack,
+  bodyStyle,
+  children,
+  ...scrollProps
+}: StickySubpageScrollProps) {
+  return (
+    <ScrollView
+      {...scrollProps}
+      stickyHeaderIndices={[0]}
+      contentContainerStyle={styles.subScrollContent}
+    >
+      <SubHeader title={title} accent={accent} onBack={onBack} />
+      <View style={[styles.subBody, bodyStyle]}>{children}</View>
+    </ScrollView>
   );
 }
 
@@ -1720,8 +1758,13 @@ function AffirmationsPage({
 
   return (
     <AmbientPageShell accent="#9DC7AC">
-      <SubHeader title="Daily Affirmation" accent="#9DC7AC" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
+      <StickySubpageScroll
+        title="Daily Affirmation"
+        accent="#9DC7AC"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
+        showsVerticalScrollIndicator={false}
+      >
         <GlowCard
           accent="#9DC7AC"
           style={styles.affirmTalisman}
@@ -1792,7 +1835,7 @@ function AffirmationsPage({
           </Text>
         ) : null}
         <PageClosing accent="#9DC7AC" glyph="◌" label="ONE THOUGHT · ONE DAY" />
-      </ScrollView>
+      </StickySubpageScroll>
     </AmbientPageShell>
   );
 }
@@ -1899,8 +1942,13 @@ function MoodPage({
 
   return (
     <AmbientPageShell accent="#8FB8DE">
-      <SubHeader title="Mood" accent="#8FB8DE" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
+      <StickySubpageScroll
+        title="Mood"
+        accent="#8FB8DE"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
+        showsVerticalScrollIndicator={false}
+      >
         <GlowCard accent="#8FB8DE" style={{ padding: 16, marginTop: 12 }}>
           <View style={styles.moodHeroHeading}>
             <View style={styles.moodHeroCopy}>
@@ -2065,7 +2113,7 @@ function MoodPage({
             </View>
           ))
         )}
-      </ScrollView>
+      </StickySubpageScroll>
     </AmbientPageShell>
   );
 }
@@ -2449,9 +2497,11 @@ function GratitudePage({
 
   return (
     <AmbientPageShell accent="#E0A470">
-      <SubHeader title="Gratitude" accent="#E0A470" onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={[styles.subBody, subBodyPad]}
+      <StickySubpageScroll
+        title="Gratitude"
+        accent="#E0A470"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
         showsVerticalScrollIndicator={false}
         automaticallyAdjustKeyboardInsets
       >
@@ -2693,7 +2743,7 @@ function GratitudePage({
             </View>
           ))
         )}
-      </ScrollView>
+      </StickySubpageScroll>
     </AmbientPageShell>
   );
 }
@@ -2751,9 +2801,11 @@ function RantPage({
 
   return (
     <AmbientPageShell accent="#D68097">
-      <SubHeader title="Release the Noise" accent="#D68097" onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={[styles.subBody, subBodyPad]}
+      <StickySubpageScroll
+        title="Release the Noise"
+        accent="#D68097"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
         showsVerticalScrollIndicator={false}
         automaticallyAdjustKeyboardInsets
       >
@@ -2868,7 +2920,7 @@ function RantPage({
             </View>
           ))
         )}
-      </ScrollView>
+      </StickySubpageScroll>
     </AmbientPageShell>
   );
 }
@@ -2900,9 +2952,11 @@ function ManifestationPage({
 
   return (
     <AmbientPageShell accent="#B39BE0">
-      <SubHeader title="Manifestation" accent="#B39BE0" onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={[styles.subBody, subBodyPad]}
+      <StickySubpageScroll
+        title="Manifestation"
+        accent="#B39BE0"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
         showsVerticalScrollIndicator={false}
         automaticallyAdjustKeyboardInsets
       >
@@ -2969,7 +3023,7 @@ function ManifestationPage({
           </>
         ) : null}
         <PageClosing accent="#B39BE0" glyph="✷" label="HELD HERE · UNTIL IT ARRIVES" />
-      </ScrollView>
+      </StickySubpageScroll>
     </AmbientPageShell>
   );
 }
@@ -3123,8 +3177,12 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
 
   return (
     <AmbientPageShell accent="#8F97DE">
-      <SubHeader title="5-4-3-2-1 Grounding" accent="#8F97DE" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
+      <StickySubpageScroll
+        title="5-4-3-2-1 Grounding"
+        accent="#8F97DE"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
+      >
         <Text style={styles.sectionLabel}>THE PRACTICE</Text>
         <Text style={styles.sectionSub}>
           Five senses pull a looping mind back into the room, in a minute or two.
@@ -3216,7 +3274,7 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
           </Text>
         ) : null}
         <PageClosing accent="#8F97DE" glyph="·" label="INHALE · EXHALE · HERE" />
-      </ScrollView>
+      </StickySubpageScroll>
     </AmbientPageShell>
   );
 }
@@ -3273,8 +3331,12 @@ function SupportPage({ onBack }: { onBack: () => void }) {
   const subBodyPad = useSubBodyPad();
   return (
     <AmbientPageShell accent="#d9b35c">
-      <SubHeader title="Support" accent="#d9b35c" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
+      <StickySubpageScroll
+        title="Support"
+        accent="#d9b35c"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
+      >
         <GlowCard accent="#d9b35c" style={{ padding: 22, marginTop: 8, alignItems: 'center' }}>
           <View style={styles.supportSeal}>
             <Coffee size={28} color="#D9BE7A" weight="duotone" />
@@ -3336,7 +3398,7 @@ function SupportPage({ onBack }: { onBack: () => void }) {
         <Text style={styles.supportFootnote}>
           Donations are entirely optional. Thank you for being here either way.
         </Text>
-      </ScrollView>
+      </StickySubpageScroll>
     </AmbientPageShell>
   );
 }
@@ -3570,6 +3632,13 @@ function SettingsPage({
       ?? hueName(hueFromHex(singleColor) ?? customHue)
     : null;
 
+  const [previewReduceMotion, setPreviewReduceMotion] = useState(false);
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setPreviewReduceMotion).catch(() => {});
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setPreviewReduceMotion);
+    return () => sub.remove();
+  }, []);
+
   useEffect(() => {
     const selectedHue = hueFromHex(singleColor);
     if (selectedHue != null) setCustomHue(selectedHue);
@@ -3577,8 +3646,13 @@ function SettingsPage({
 
   return (
     <AmbientPageShell accent="#d9b35c">
-      <SubHeader title="Settings" accent="#d9b35c" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
+      <StickySubpageScroll
+        title="Settings"
+        accent="#d9b35c"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
+        showsVerticalScrollIndicator={false}
+      >
         <GlowCard accent={singleColor ?? '#8F97DE'} style={styles.settingsPreview}>
           <LinearGradient
             colors={
@@ -3589,8 +3663,13 @@ function SettingsPage({
             locations={[0, 0.52, 1]}
             style={StyleSheet.absoluteFill}
           />
-          <View style={styles.settingsPreviewOrbLarge} />
-          <View style={styles.settingsPreviewOrbSmall} />
+          {/* The corner ripples ARE the preview: they loop while the
+              atmosphere is live and hold still when it is pinned. */}
+          <CornerRipples
+            accent={singleColor ?? '#8F97DE'}
+            active={!on && !previewReduceMotion}
+            periodMs={5200}
+          />
           <View style={styles.settingsPreviewCopy}>
             <Text style={styles.settingsPreviewKicker}>YOUR ATMOSPHERE</Text>
             <Text style={styles.settingsPreviewTitle}>
@@ -3771,7 +3850,7 @@ function SettingsPage({
           <Text style={styles.settingLabel}>Rate Simply Ambient</Text>
           <Text style={styles.settingRowChevron}>›</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </StickySubpageScroll>
 
       <LinkConfirmModal url={pendingOpenUrl} onClose={() => setPendingOpenUrl(null)} />
     </AmbientPageShell>
@@ -3796,8 +3875,13 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
 
   return (
     <AmbientPageShell accent="#9aa0b4">
-      <SubHeader title="Safety & Disclaimer" accent="#9aa0b4" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} showsVerticalScrollIndicator={false}>
+      <StickySubpageScroll
+        title="Safety & Disclaimer"
+        accent="#9aa0b4"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
+        showsVerticalScrollIndicator={false}
+      >
         <GlowCard accent="#9DC7AC" style={styles.safetyHero}>
           <View style={styles.safetyShieldWrap}>
             <ShieldCheck size={32} color="#9DC7AC" weight="duotone" />
@@ -3854,7 +3938,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
         >
           <Text style={styles.wipeBtnText}>WIPE ALL DATA</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </StickySubpageScroll>
 
       <LinkConfirmModal url={pendingOpenUrl} onClose={() => setPendingOpenUrl(null)} />
 
@@ -4005,9 +4089,11 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
 
   return (
     <AmbientPageShell accent="#D68097">
-      <SubHeader title="Feedback" accent="#D68097" onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={[styles.subBody, subBodyPad]}
+      <StickySubpageScroll
+        title="Feedback"
+        accent="#D68097"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
         showsVerticalScrollIndicator={false}
         automaticallyAdjustKeyboardInsets
       >
@@ -4116,7 +4202,7 @@ function BugReportPage({ onBack }: { onBack: () => void }) {
             Sent. Thank you, the developer will see it soon.
           </Text>
         ) : null}
-      </ScrollView>
+      </StickySubpageScroll>
     </AmbientPageShell>
   );
 }
@@ -4232,9 +4318,11 @@ function ProfilePage({
 
   return (
     <AmbientPageShell accent="#B39BE0">
-      <SubHeader title="Profile" accent="#B39BE0" onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={[styles.subBody, subBodyPad]}
+      <StickySubpageScroll
+        title="Profile"
+        accent="#B39BE0"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
         showsVerticalScrollIndicator={false}
         automaticallyAdjustKeyboardInsets
       >
@@ -4374,7 +4462,7 @@ function ProfilePage({
             </TouchableOpacity>
           </>
         ) : null}
-      </ScrollView>
+      </StickySubpageScroll>
     </AmbientPageShell>
   );
 }
@@ -4456,8 +4544,12 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
 
   return (
     <AmbientPageShell accent="#B39BE0">
-      <SubHeader title="Natal Chart" accent="#B39BE0" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
+      <StickySubpageScroll
+        title="Natal Chart"
+        accent="#B39BE0"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
+      >
         <NatalWheel sign={sunSign} />
 
         <Text style={styles.sectionLabel}>YOUR BIRTH DETAILS</Text>
@@ -4514,7 +4606,7 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
             </Text>
           ) : null}
         </View>
-      </ScrollView>
+      </StickySubpageScroll>
 
       <LinkConfirmModal url={pendingOpenUrl} onClose={() => setPendingOpenUrl(null)} />
     </AmbientPageShell>
@@ -4587,8 +4679,12 @@ function RoutinesPage({
   const subBodyPad = useSubBodyPad();
   return (
     <AmbientPageShell accent="#9DC7AC">
-      <SubHeader title="Routines" accent="#9DC7AC" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
+      <StickySubpageScroll
+        title="Routines"
+        accent="#9DC7AC"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
+      >
         <Text style={styles.sectionLabel}>SESSION GUIDES</Text>
         <Text style={styles.sectionSub}>
           Choose a ready-made sequence. Every step shows the tone it targets and how long it lasts.
@@ -4667,7 +4763,7 @@ function RoutinesPage({
         <Text style={styles.notifHint}>
           Custom paths are still on the roadmap. These starter paths always follow the order shown.
         </Text>
-      </ScrollView>
+      </StickySubpageScroll>
     </AmbientPageShell>
   );
 }
@@ -4750,8 +4846,12 @@ function SoundscapesPage({
 
   return (
     <AmbientPageShell accent="#8FB8DE" rippleActive={isSoundscapePlaying}>
-      <SubHeader title="Soundscapes" accent="#8FB8DE" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]}>
+      <StickySubpageScroll
+        title="Soundscapes"
+        accent="#8FB8DE"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
+      >
         <Text style={styles.sectionLabel}>NATURAL AMBIENCE</Text>
         <Text style={styles.sectionSub}>
           A soft ambient layer under your binaural tones, built in and available offline.
@@ -4823,7 +4923,7 @@ function SoundscapesPage({
 
         <Text style={styles.sectionLabel}>STEADY & RHYTHMIC</Text>
         <View style={styles.soundscapeGrid}>{steadyScapes.map(renderCard)}</View>
-      </ScrollView>
+      </StickySubpageScroll>
     </AmbientPageShell>
   );
 }
@@ -4903,8 +5003,13 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
 
   return (
     <AmbientPageShell accent="#D8A0B0">
-      <SubHeader title="Compatibility" accent="#D8A0B0" onBack={onBack} />
-      <ScrollView contentContainerStyle={[styles.subBody, subBodyPad]} automaticallyAdjustKeyboardInsets>
+      <StickySubpageScroll
+        title="Compatibility"
+        accent="#D8A0B0"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
+        automaticallyAdjustKeyboardInsets
+      >
         <GlowCard accent="#D8A0B0" style={styles.compatOrbitCard}>
           <Text style={styles.compatOrbitKicker}>TWO ORBITS · ONE MEETING PLACE</Text>
           <View style={styles.compatOrbitRow}>
@@ -5045,7 +5150,7 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
             A planet-by-planet reading is on the roadmap. Your saved details will be ready for it.
           </Text>
         </View>
-      </ScrollView>
+      </StickySubpageScroll>
     </AmbientPageShell>
   );
 }
@@ -5413,9 +5518,11 @@ function InsightsPage({
 
   return (
     <AmbientPageShell accent="#8FB8DE">
-      <SubHeader title="AI Insights" accent="#8FB8DE" onBack={onBack} />
-      <ScrollView
-        contentContainerStyle={[styles.subBody, subBodyPad]}
+      <StickySubpageScroll
+        title="AI Insights"
+        accent="#8FB8DE"
+        onBack={onBack}
+        bodyStyle={subBodyPad}
         showsVerticalScrollIndicator={false}
         automaticallyAdjustKeyboardInsets
       >
@@ -5613,7 +5720,7 @@ function InsightsPage({
           you toggle on. Tarot interpretation sends the drawn card. Nothing is sent until you
           tap a button. Your key is stored locally without app-level encryption.
         </Text>
-      </ScrollView>
+      </StickySubpageScroll>
 
       <Modal
         visible={confirmOpenLink}
@@ -5663,7 +5770,13 @@ function InsightsPage({
 // ===========================================================================
 
 const styles = StyleSheet.create({
-  headerWrap: { paddingHorizontal: 22, paddingTop: 10, paddingBottom: 16 },
+  headerWrap: {
+    position: 'relative', overflow: 'hidden', zIndex: 30, elevation: 18,
+    paddingHorizontal: 22, paddingTop: 10, paddingBottom: 16,
+    backgroundColor: 'rgba(8,9,25,0.07)',
+    borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
   hubBrandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   ambience: {
     color: '#F8F5FF',
@@ -5689,7 +5802,8 @@ const styles = StyleSheet.create({
   },
 
   // Hub
-  hubScrollContent: { paddingHorizontal: 20, paddingBottom: 130 },
+  hubScrollContent: { paddingBottom: 130 },
+  hubScrollBody: { paddingHorizontal: 20 },
   hubHeroCard: { padding: 18, minHeight: 250 },
   hubHeroTopline: { flexDirection: 'row', alignItems: 'center' },
   hubLiveDot: {
@@ -5808,8 +5922,11 @@ const styles = StyleSheet.create({
 
   // Sub-page
   subHeaderCompact: {
+    position: 'relative', overflow: 'hidden', zIndex: 30, elevation: 18,
     minHeight: 44, flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 12, paddingVertical: 4,
+    backgroundColor: 'rgba(8,9,25,0.07)',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   subBackBtnCompact: {
     width: 34, height: 34, borderRadius: 12, borderWidth: 1,
@@ -5822,7 +5939,11 @@ const styles = StyleSheet.create({
     fontSize: 19, lineHeight: 20, marginTop: -1,
   },
   subHeader: {
+    position: 'relative', overflow: 'hidden', zIndex: 30, elevation: 18,
     paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10,
+    backgroundColor: 'rgba(8,9,25,0.07)',
+    borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   subNavRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   subBrand: { color: '#77788D', fontSize: 8.5, fontWeight: '800', letterSpacing: 2.2 },
@@ -5862,6 +5983,7 @@ const styles = StyleSheet.create({
     fontSize: 34, lineHeight: 35,
     letterSpacing: 0.1,
   },
+  subScrollContent: { flexGrow: 1 },
   subBody: { paddingHorizontal: 20, paddingTop: 6, flexGrow: 1 },
   pageClosing: {
     marginTop: 'auto', paddingTop: 30, paddingBottom: 4,
@@ -6113,14 +6235,6 @@ const styles = StyleSheet.create({
   customHueSlider: { width: '100%', height: 46 },
   customColorHint: { color: '#7F8092', fontSize: 10, lineHeight: 14, marginTop: -2 },
   settingsPreview: { minHeight: 190, marginTop: 8, padding: 18, justifyContent: 'flex-end' },
-  settingsPreviewOrbLarge: {
-    position: 'absolute', width: 170, height: 170, borderRadius: 85,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', right: -48, top: -78,
-  },
-  settingsPreviewOrbSmall: {
-    position: 'absolute', width: 92, height: 92, borderRadius: 46,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', right: 2, top: -28,
-  },
   settingsPreviewCopy: { maxWidth: 220 },
   settingsPreviewKicker: { color: '#E9D9A6', fontSize: 8, fontWeight: '800', letterSpacing: 1.8 },
   settingsPreviewTitle: {
