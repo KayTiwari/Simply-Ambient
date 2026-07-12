@@ -76,6 +76,9 @@ import * as Sentry from '@sentry/react-native';
 // source-map upload IS secret and lives only in EAS env vars / .env.local.)
 Sentry.init({
   dsn: 'https://b666bcf55a78f568c3ed434cb8e55cef@o4511389012852736.ingest.us.sentry.io/4511389016195072',
+  // Dev-session noise (Metro red screens, hot-reload parse errors) stays out
+  // of the production crash bucket.
+  enabled: !__DEV__,
   // Don't ship sensitive data. Journal entries / rants must never be auto-attached.
   beforeSend(event) {
     if (event.contexts) delete event.contexts.state;
