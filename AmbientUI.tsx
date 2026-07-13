@@ -463,6 +463,79 @@ function RippleField({
   );
 }
 
+// A horizontal carousel whose clipped edges dissolve instead of slicing
+// cards. The trailing fade lifts as you approach the end; the leading fade
+// appears only once you have scrolled, so a fresh row reads clean.
+export function EdgeFadeCarousel({
+  children,
+  contentContainerStyle,
+  fadeWidth = 44,
+}: {
+  children: React.ReactNode;
+  contentContainerStyle?: StyleProp<ViewStyle>;
+  fadeWidth?: number;
+}) {
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const [viewportW, setViewportW] = React.useState(0);
+  const [contentW, setContentW] = React.useState(0);
+  const maxScroll = Math.max(0, contentW - viewportW);
+  const scrollable = maxScroll > 1;
+
+  const leftOpacity = scrollX.interpolate({
+    inputRange: [0, 28],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+  const rightOpacity = scrollable
+    ? scrollX.interpolate({
+        inputRange: [Math.max(0, maxScroll - 28), maxScroll],
+        outputRange: [1, 0],
+        extrapolate: 'clamp',
+      })
+    : 0;
+
+  return (
+    <View>
+      <Animated.ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={contentContainerStyle}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: true },
+        )}
+        scrollEventThrottle={16}
+        onLayout={e => setViewportW(e.nativeEvent.layout.width)}
+        onContentSizeChange={w => setContentW(w)}
+      >
+        {children}
+      </Animated.ScrollView>
+      <Animated.View
+        pointerEvents="none"
+        style={[shared.carouselFade, shared.carouselFadeLeft, { width: fadeWidth, opacity: leftOpacity }]}
+      >
+        <LinearGradient
+          colors={['rgba(8,9,25,0.82)', 'rgba(8,9,25,0)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+      <Animated.View
+        pointerEvents="none"
+        style={[shared.carouselFade, shared.carouselFadeRight, { width: fadeWidth, opacity: rightOpacity }]}
+      >
+        <LinearGradient
+          colors={['rgba(8,9,25,0)', 'rgba(8,9,25,0.82)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+    </View>
+  );
+}
+
 export function EditorialHeader({
   title,
   subtitle,
@@ -649,12 +722,14 @@ export function StatusStrip({
   detail,
   active = false,
   pulse: pulsing = false,
+  pulseIntensity = 'standard',
 }: {
   accent: string;
   label: string;
   detail?: string;
   active?: boolean;
   pulse?: boolean;
+  pulseIntensity?: 'standard' | 'subtle';
 }) {
   const pulseValue = useRef(new Animated.Value(0)).current;
   const [reduceMotion, setReduceMotion] = React.useState(false);
@@ -674,25 +749,31 @@ export function StatusStrip({
     const loop = Animated.loop(Animated.sequence([
       Animated.timing(pulseValue, {
         toValue: 1,
-        duration: 850,
+        duration: pulseIntensity === 'subtle' ? 1300 : 850,
         easing: Easing.inOut(Easing.sin),
         useNativeDriver: true,
       }),
       Animated.timing(pulseValue, {
         toValue: 0,
-        duration: 850,
+        duration: pulseIntensity === 'subtle' ? 1300 : 850,
         easing: Easing.inOut(Easing.sin),
         useNativeDriver: true,
       }),
     ]));
     loop.start();
     return () => loop.stop();
-  }, [pulseValue, pulsing, reduceMotion]);
+  }, [pulseIntensity, pulseValue, pulsing, reduceMotion]);
 
-  const dotScale = pulseValue.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
+  const subtlePulse = pulseIntensity === 'subtle';
+  const dotScale = pulseValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, subtlePulse ? 1.12 : 1.5],
+  });
   const dotOpacity = pulseValue.interpolate({
     inputRange: [0, 1],
-    outputRange: [active ? 0.72 : 0.48, active ? 1 : 0.48],
+    outputRange: subtlePulse
+      ? [active ? 0.78 : 0.48, active ? 0.94 : 0.58]
+      : [active ? 0.72 : 0.48, active ? 1 : 0.48],
   });
 
   return (
@@ -732,6 +813,9 @@ const shared = StyleSheet.create({
     left: '16%', top: '24%',
     width: '68%', aspectRatio: 1,
   },
+  carouselFade: { position: 'absolute', top: 0, bottom: 0 },
+  carouselFadeLeft: { left: 0 },
+  carouselFadeRight: { right: 0 },
   cornerRing: {
     position: 'absolute', width: 170, height: 170, borderRadius: 85,
     borderWidth: 1, top: -52, right: -66,

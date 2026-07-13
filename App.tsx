@@ -115,6 +115,7 @@ import {
 import {
   AmbientSurface,
   AmbientVeil,
+  EdgeFadeCarousel,
   EditorialHeader,
   EditorialSection,
 } from './AmbientUI';
@@ -1102,6 +1103,23 @@ class WebToneEngine {
   private master: GainNode | null = null;
   private left: OscillatorNode | null = null;
   private right: OscillatorNode | null = null;
+  private volume = 1;
+
+  setVolume(volume: number) {
+    this.volume = clamp01(volume);
+    const ctx = this.ctx;
+    const master = this.master;
+    if (!ctx || !master) return;
+
+    // A short ramp keeps live adjustments free of zipper noise while the
+    // engine remains running. WEB_TONE_GAIN is the established safe output
+    // level; the user-facing control scales it rather than replacing it.
+    const now = ctx.currentTime;
+    const target = WEB_TONE_GAIN * this.volume;
+    try { master.gain.cancelScheduledValues(now); } catch {}
+    try { master.gain.setValueAtTime(master.gain.value, now); } catch {}
+    try { master.gain.linearRampToValueAtTime(target, now + 0.06); } catch {}
+  }
 
   async play(l: number, r: number) {
     if (!this.ctx) {
@@ -1152,7 +1170,7 @@ class WebToneEngine {
     // Short fade-in to avoid a click on start (anchored so the ramp takes effect).
     const t = ctx.currentTime;
     master.gain.setValueAtTime(0, t);
-    master.gain.linearRampToValueAtTime(WEB_TONE_GAIN, t + 0.04);
+    master.gain.linearRampToValueAtTime(WEB_TONE_GAIN * this.volume, t + 0.04);
   }
 
   stop() {
@@ -1800,6 +1818,7 @@ function AppContent() {
 
   const [isTonePlaying, setIsTonePlaying] = useState(false);
   const [isToneLoading, setIsToneLoading] = useState(false);
+  const [toneVolume, setToneVolume] = useState(1);
 
   const [userPresets, setUserPresets] = useState<UserPreset[]>([]);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -2002,6 +2021,11 @@ function AppContent() {
   // Web-only: gapless oscillator engine, created lazily on first play.
   const webToneRef = useRef<WebToneEngine | null>(null);
   const webSoundscapeRef = useRef<WebSoundscapeEngine | null>(null);
+  const toneVolumeRef = useRef(toneVolume);
+
+  useEffect(() => {
+    toneVolumeRef.current = toneVolume;
+  }, [toneVolume]);
 
   // Refs that always reflect latest values, for use inside throttle callbacks.
   const stateRef = useRef({ leftHz, rightHz, isTonePlaying });
@@ -2024,8 +2048,9 @@ function AppContent() {
   const activeSoundscape = activeSoundscapeId
     ? SOUNDSCAPES.find(s => s.id === activeSoundscapeId) ?? null
     : null;
+  const activeRoutineSteps = activeRoutine ? orderedRoutineSteps(activeRoutine.path) : [];
   const activeRoutineStep = activeRoutine
-    ? orderedRoutineSteps(activeRoutine.path)[activeRoutine.stepIndex] ?? null
+    ? activeRoutineSteps[activeRoutine.stepIndex] ?? null
     : null;
   const activeRoutineFrequency = activeRoutine && activeRoutineStep
     ? `${activeRoutineStep.bandTarget.charAt(0).toUpperCase()}${activeRoutineStep.bandTarget.slice(1)} · ${activeRoutineStep.targetHz} Hz`
@@ -2083,6 +2108,7 @@ function AppContent() {
       // seam. Repeated calls (e.g. dragging a slider) glide the frequencies.
       if (Platform.OS === 'web') {
         if (!webToneRef.current) webToneRef.current = new WebToneEngine();
+        webToneRef.current.setVolume(toneVolumeRef.current);
         await webToneRef.current.play(clampHz(l), clampHz(r));
         if (myGen !== tonePlayGenRef.current) {
           // A newer call owns the shared engine now. Do not stop it here;
@@ -2117,14 +2143,18 @@ function AppContent() {
           try { existing.remove?.(); } catch {}
           tonePlayerRef.current = createAudioPlayer(source);
           tonePlayerRef.current.loop = true;
-          tonePlayerRef.current.volume = 1;
+          tonePlayerRef.current.volume = toneVolumeRef.current;
         }
       } else {
         const p = createAudioPlayer(source);
         p.loop = true;
-        p.volume = 1;
+        p.volume = toneVolumeRef.current;
         tonePlayerRef.current = p;
       }
+
+      // replace() retains the existing player instance, so explicitly apply
+      // the latest level for both replacement and newly created paths.
+      if (tonePlayerRef.current) tonePlayerRef.current.volume = toneVolumeRef.current;
 
       if (myGen !== tonePlayGenRef.current) {
         try { tonePlayerRef.current?.pause(); } catch {}
@@ -2692,6 +2722,14 @@ function AppContent() {
     }
   }
 
+  function changeToneVolume(v: number) {
+    const next = clamp01(v);
+    toneVolumeRef.current = next;
+    setToneVolume(next);
+    if (Platform.OS === 'web') webToneRef.current?.setVolume(next);
+    if (tonePlayerRef.current) tonePlayerRef.current.volume = next;
+  }
+
   function stopEverything() {
     setSleepTimer(0);
     stopTones();
@@ -2737,6 +2775,7 @@ function AppContent() {
                 onSetSleepTimer={setSleepTimer}
                 isTonePlaying={isTonePlaying}
                 isToneLoading={isToneLoading}
+                toneVolume={toneVolume}
                 userPresets={userPresets}
                 bgFileName={bgFileName}
                 isBgPlaying={isBgPlaying}
@@ -2754,6 +2793,7 @@ function AppContent() {
                 onDeleteUser={deleteUser}
                 onSave={openSaveModal}
                 onTogglePlay={togglePlay}
+                onChangeToneVolume={changeToneVolume}
                 onPickBg={pickBgFile}
                 onToggleBg={toggleBg}
                 onChangeBgVolume={changeBgVolume}
@@ -2827,7 +2867,11 @@ function AppContent() {
 
         <View
           pointerEvents="box-none"
-          style={[styles.miniPlayerOverlay, { bottom: tabBarHeight }]}
+          style={[
+            styles.miniPlayerOverlay,
+            activeRoutine && styles.miniPlayerOverlayRoutine,
+            { bottom: tabBarHeight },
+          ]}
         >
           <MiniPlayer
             visible={activeRoutine != null || isTonePlaying || isToneLoading || isSoundscapePlaying || isBgPlaying || sleepEndsAt != null}
@@ -2841,6 +2885,9 @@ function AppContent() {
             soundscapePlaying={isSoundscapePlaying}
             routineName={activeRoutine?.path.name ?? null}
             routineFrequency={activeRoutineFrequency}
+            routineSteps={activeRoutineSteps}
+            routineStepIndex={activeRoutine?.stepIndex ?? null}
+            routineStepEndsAt={activeRoutine?.stepEndsAt ?? null}
             hasSoundscape={activeSoundscapeId != null}
             onSoundscapePress={() => {
               if (activeSoundscapeId) {
@@ -3025,6 +3072,11 @@ function formatRemaining(ms: number) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
+function routineStepFrequencyLabel(step: RoutinePathStep) {
+  const bandName = step.bandTarget.charAt(0).toUpperCase() + step.bandTarget.slice(1);
+  return `${bandName} · ${step.targetHz} Hz`;
+}
+
 function MiniPlayer({
   visible,
   title,
@@ -3037,6 +3089,9 @@ function MiniPlayer({
   soundscapePlaying,
   routineName,
   routineFrequency,
+  routineSteps,
+  routineStepIndex,
+  routineStepEndsAt,
   hasSoundscape,
   onSoundscapePress,
   hasBg,
@@ -3057,6 +3112,9 @@ function MiniPlayer({
   soundscapePlaying: boolean;
   routineName: string | null;
   routineFrequency: string | null;
+  routineSteps: RoutinePathStep[];
+  routineStepIndex: number | null;
+  routineStepEndsAt: number | null;
   hasSoundscape: boolean;
   onSoundscapePress: () => void;
   hasBg: boolean;
@@ -3074,13 +3132,13 @@ function MiniPlayer({
   const ringPulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!visible || !sleepEndsAt) return;
+    if (!visible || (!sleepEndsAt && !routineStepEndsAt)) return;
     // Refresh immediately: `now` may be minutes old if the bar has been
     // mounted a while, which would inflate the countdown until the first tick.
     setNow(Date.now());
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
-  }, [visible, sleepEndsAt]);
+  }, [visible, sleepEndsAt, routineStepEndsAt]);
 
   useEffect(() => {
     barOffset.stopAnimation();
@@ -3146,6 +3204,9 @@ function MiniPlayer({
 
   if (!rendered) return null;
   const timerText = sleepEndsAt ? formatRemaining(sleepEndsAt - now) : null;
+  const routineRemainingText = routineStepEndsAt
+    ? formatRemaining(routineStepEndsAt - now)
+    : null;
   const ringScale = ringPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] });
   const ringGlowOpacity = ringPulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.95] });
   const audioIsPlaying = isTonePlaying || soundscapePlaying || bgPlaying;
@@ -3170,9 +3231,14 @@ function MiniPlayer({
         : isTonePlaying
           ? ambientLayers.length ? `${beat.toFixed(0)} Hz tone with ambience` : 'Pure binaural tone'
           : 'Ambient layer playing';
-  const statusLabel = routineName
-    ? 'SESSION PATH'
+  const statusLabel = routineName && routineStepIndex != null
+    ? `${compactPlayer ? 'PATH' : 'SESSION PATH'} · ${routineStepIndex + 1}/${routineSteps.length}`
     : isToneLoading ? 'PREPARING' : audioIsPlaying ? 'NOW PLAYING' : 'TIMER READY';
+  const currentRoutineStep = routineStepIndex != null ? routineSteps[routineStepIndex] ?? null : null;
+  const currentRoutinePosition = routineStepIndex != null ? routineStepIndex + 1 : null;
+  const miniBodyAccessibilityLabel = routineName && currentRoutineStep && currentRoutinePosition != null
+    ? `Open ${routineName}. Step ${currentRoutinePosition} of ${routineSteps.length}, ${routineStepFrequencyLabel(currentRoutineStep)}, ${routineRemainingText ?? 'starting'} remaining.`
+    : 'Open current sound session';
   const showBgControl = hasBg && (!compactPlayer || (bgPlaying && !soundscapePlaying));
   const showSoundscapeControl = !compactPlayer || soundscapePlaying || !bgPlaying;
 
@@ -3191,6 +3257,7 @@ function MiniPlayer({
       <View
         style={[
           styles.miniPlayer,
+          routineName && styles.miniPlayerRoutine,
           {
             borderColor: accent + '70',
             backgroundColor: 'transparent',
@@ -3227,42 +3294,45 @@ function MiniPlayer({
           pointerEvents="none"
         />
         <View style={[styles.miniAura, { backgroundColor: accent + '16' }]} pointerEvents="none" />
-        <TouchableOpacity
-          activeOpacity={0.85}
-          disabled={!visible}
-          onPress={onTogglePlay}
-          style={[styles.miniPlayBtn, { backgroundColor: isTonePlaying ? '#fff' : accent }]}
-          accessibilityRole="button"
-          accessibilityLabel={isTonePlaying ? 'Pause tones' : 'Play tones'}
-        >
-          {isToneLoading ? (
-            <ActivityIndicator color="#0B0B1F" size="small" />
-          ) : (
-            <Text style={styles.miniPlayText}>{isTonePlaying ? 'Ⅱ' : '▶'}</Text>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.miniBody}
-          disabled={!visible}
-          onPress={onOpen}
-          activeOpacity={0.75}
-          accessibilityRole="button"
-          accessibilityLabel="Open current sound session"
-        >
-          <View style={styles.miniStatusRow}>
-            <View
-              style={[
-                styles.miniStatusDot,
-                { backgroundColor: accent, opacity: audioIsPlaying || isToneLoading ? 1 : 0.4 },
-              ]}
-            />
-            <Text numberOfLines={1} style={[styles.miniStatus, { color: accent }]}>{statusLabel}</Text>
-          </View>
-          <Text style={styles.miniTitle} numberOfLines={1}>{sessionTitle}</Text>
-          <Text style={styles.miniMeta} numberOfLines={1}>
-            {sessionMeta}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.miniPlayerMainRow}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            disabled={!visible}
+            onPress={onTogglePlay}
+            style={[styles.miniPlayBtn, { backgroundColor: isTonePlaying ? '#fff' : accent }]}
+            accessibilityRole="button"
+            accessibilityLabel={routineName
+              ? `Stop ${routineName}`
+              : isTonePlaying ? 'Pause tones' : 'Play tones'}
+          >
+            {isToneLoading ? (
+              <ActivityIndicator color="#0B0B1F" size="small" />
+            ) : (
+              <Text style={styles.miniPlayText}>{routineName ? '■' : isTonePlaying ? 'Ⅱ' : '▶'}</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.miniBody}
+            disabled={!visible}
+            onPress={onOpen}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={miniBodyAccessibilityLabel}
+          >
+            <View style={styles.miniStatusRow}>
+              <View
+                style={[
+                  styles.miniStatusDot,
+                  { backgroundColor: accent, opacity: audioIsPlaying || isToneLoading ? 1 : 0.4 },
+                ]}
+              />
+              <Text numberOfLines={1} style={[styles.miniStatus, { color: accent }]}>{statusLabel}</Text>
+            </View>
+            <Text style={styles.miniTitle} numberOfLines={1}>{sessionTitle}</Text>
+            <Text style={styles.miniMeta} numberOfLines={1}>
+              {sessionMeta}
+            </Text>
+          </TouchableOpacity>
         {showBgControl && (
           <TouchableOpacity
             activeOpacity={0.85}
@@ -3329,6 +3399,47 @@ function MiniPlayer({
         >
           <Text style={styles.miniStopText}>×</Text>
         </TouchableOpacity>
+        </View>
+        {routineName && routineSteps.length > 0 ? (
+          <View style={styles.miniRoutineTrack}>
+            {routineSteps.map((step, index) => {
+              const current = index === routineStepIndex;
+              const complete = routineStepIndex != null && index < routineStepIndex;
+              return (
+                <View
+                  key={step.id}
+                  accessible
+                  style={[
+                    styles.miniRoutineStep,
+                    current
+                      ? { borderColor: accent + '8A', backgroundColor: accent + '1C' }
+                      : styles.miniRoutineStepInactive,
+                  ]}
+                  accessibilityLabel={current
+                    ? `Current step ${index + 1}, ${routineStepFrequencyLabel(step)}, ${routineRemainingText ?? 'starting'} remaining`
+                    : complete
+                      ? `Step ${index + 1}, ${routineStepFrequencyLabel(step)}, complete`
+                      : `Step ${index + 1}, ${routineStepFrequencyLabel(step)}, ${step.durationMinutes} minutes, upcoming`}
+                >
+                  <View style={styles.miniRoutineStepTopline}>
+                    <Text style={[styles.miniRoutineStepNumber, current && { color: accent }]}>{String(index + 1).padStart(2, '0')}</Text>
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.miniRoutineStepLabel, current && { color: accent }]}
+                    >
+                      {routineStepFrequencyLabel(step).toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={[styles.miniRoutineStepTime, current && { color: accent }]}>
+                    {current
+                      ? `${routineRemainingText ?? 'STARTING'} LEFT`
+                      : complete ? 'COMPLETE' : `${step.durationMinutes} MIN`}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
       </View>
     </Animated.View>
   );
@@ -3576,6 +3687,7 @@ type FreqViewProps = {
   onSetSleepTimer: (m: number) => void;
   isTonePlaying: boolean;
   isToneLoading: boolean;
+  toneVolume: number;
   userPresets: UserPreset[];
   bgFileName: string | null;
   isBgPlaying: boolean;
@@ -3593,6 +3705,7 @@ type FreqViewProps = {
   onDeleteUser: (p: UserPreset) => void;
   onSave: () => void;
   onTogglePlay: () => void;
+  onChangeToneVolume: (v: number) => void;
   onPickBg: () => void;
   onToggleBg: () => void;
   onChangeBgVolume: (v: number) => void;
@@ -3603,7 +3716,7 @@ function FrequenciesView(props: FreqViewProps) {
   const {
     leftHz, rightHz, beat, band, activeBand, activeTuning, activeChakra, activePresetId,
     sleepMinutes, onSetSleepTimer,
-    isTonePlaying, isToneLoading, userPresets,
+    isTonePlaying, isToneLoading, toneVolume, userPresets,
     bgFileName, isBgPlaying, bgVolume,
     beatColor,
   } = props;
@@ -3746,6 +3859,27 @@ function FrequenciesView(props: FreqViewProps) {
             accessibilityLabel="Carrier pitch"
             accessibilityValue={{ min: carrierMin, max: carrierMax, now: carrierForControl, text: `${carrierForControl} hertz` }}
           />
+          <View style={styles.beatSliderLabelRow}>
+            <Text style={[styles.beatSliderLabel, { color: beatColor }]}>VOLUME · {Math.round(toneVolume * 100)}%</Text>
+          </View>
+          <Slider
+            style={styles.beatSlider}
+            minimumValue={0}
+            maximumValue={1}
+            step={0.01}
+            value={toneVolume}
+            minimumTrackTintColor={beatColor}
+            maximumTrackTintColor="rgba(255,255,255,0.12)"
+            thumbTintColor={beatColor}
+            onValueChange={props.onChangeToneVolume}
+            accessibilityLabel="Binaural tone volume"
+            accessibilityValue={{
+              min: 0,
+              max: 100,
+              now: Math.round(toneVolume * 100),
+              text: `${Math.round(toneVolume * 100)}%`,
+            }}
+          />
         </View>
 
         <TouchableOpacity
@@ -3807,7 +3941,7 @@ function FrequenciesView(props: FreqViewProps) {
         subtitle="Choose a starting point, then fine-tune anything."
         accent={beatColor}
       />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
+      <EdgeFadeCarousel contentContainerStyle={styles.presetRow}>
         {PRESETS.map(p => {
           const active = activePresetId === p.id;
           return (
@@ -3866,7 +4000,7 @@ function FrequenciesView(props: FreqViewProps) {
             </View>
           );
         })}
-      </ScrollView>
+      </EdgeFadeCarousel>
 
       <EditorialSection
         index="02"
@@ -3874,7 +4008,7 @@ function FrequenciesView(props: FreqViewProps) {
         title="Explore resonant associations"
         accent="#d9b35c"
       />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.presetRow}>
+      <EdgeFadeCarousel contentContainerStyle={styles.presetRow}>
         {TUNINGS.map(t => {
           const active = activePresetId === t.id;
           const tuneColor = '#d9b35c';
@@ -3897,7 +4031,7 @@ function FrequenciesView(props: FreqViewProps) {
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </EdgeFadeCarousel>
 
       <EditorialSection
         index="03"
@@ -4672,9 +4806,10 @@ const styles = StyleSheet.create({
     zIndex: 180,
     elevation: 180,
   },
+  miniPlayerOverlayRoutine: { height: 139 },
   miniPlayer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'stretch',
     marginHorizontal: 12,
     marginBottom: 7,
     paddingHorizontal: 10,
@@ -4690,6 +4825,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
   },
+  miniPlayerRoutine: { minHeight: 108 },
+  miniPlayerMainRow: { flexDirection: 'row', alignItems: 'center' },
   miniAura: {
     position: 'absolute', width: 130, height: 130, borderRadius: 65,
     right: -54, top: -78,
@@ -4708,6 +4845,30 @@ const styles = StyleSheet.create({
   miniStatus: { fontSize: 7.5, fontWeight: '900', letterSpacing: 1.5 },
   miniTitle: { color: '#fff', fontSize: 13.5, fontWeight: '800', letterSpacing: 0.25 },
   miniMeta: { color: '#A5A3B2', fontSize: 10.5, marginTop: 2 },
+  miniRoutineTrack: {
+    flexDirection: 'row', gap: 6, marginTop: 6,
+  },
+  miniRoutineStep: {
+    flex: 1, minWidth: 0, borderRadius: 9, borderWidth: 1,
+    paddingHorizontal: 7, paddingVertical: 5,
+  },
+  miniRoutineStepInactive: {
+    borderColor: 'rgba(153,153,170,0.20)',
+    backgroundColor: 'rgba(118,118,137,0.07)',
+    opacity: 0.62,
+  },
+  miniRoutineStepTopline: { flexDirection: 'row', alignItems: 'center' },
+  miniRoutineStepNumber: {
+    color: '#777789', fontSize: 7, fontWeight: '900', letterSpacing: 0.8,
+    marginRight: 5,
+  },
+  miniRoutineStepLabel: {
+    flex: 1, color: '#8B8A99', fontSize: 7.5, fontWeight: '800', letterSpacing: 0.65,
+  },
+  miniRoutineStepTime: {
+    color: '#777685', fontSize: 8, fontWeight: '800', letterSpacing: 0.7,
+    marginTop: 2,
+  },
   miniStopBtn: {
     width: 44,
     height: 44,
