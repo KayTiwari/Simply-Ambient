@@ -4194,10 +4194,68 @@ function HzSignalOrbit({
   }, []);
 
   useEffect(() => {
-    const values = [leftSpin, rightSpin, beatSpin, pulse];
-    if (!playing || reduceMotion) {
-      values.forEach(value => value.stopAnimation());
+    const spinValues = [leftSpin, rightSpin, beatSpin];
+    const values = [...spinValues, pulse];
+
+    if (reduceMotion) {
+      values.forEach(value => {
+        value.stopAnimation();
+        value.setValue(0);
+      });
       return;
+    }
+
+    if (!playing) {
+      let alive = true;
+      const settlers: Animated.CompositeAnimation[] = [];
+
+      // Complete whichever half of the revolution is shortest, then normalize
+      // back to zero. Values 0 and 1 render at the same angle, so the final
+      // normalization is invisible and the next session starts from rest.
+      spinValues.forEach(value => {
+        value.stopAnimation(current => {
+          if (!alive) return;
+          const phase = Math.max(0, Math.min(1, current));
+          const target = phase >= 0.5 ? 1 : 0;
+          const distance = Math.abs(target - phase);
+          if (distance < 0.001) {
+            value.setValue(0);
+            return;
+          }
+          const settle = Animated.timing(value, {
+            toValue: target,
+            duration: Math.round(620 + distance * 680),
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          });
+          settlers.push(settle);
+          settle.start(({ finished }) => {
+            if (finished && alive) value.setValue(0);
+          });
+        });
+      });
+
+      pulse.stopAnimation(current => {
+        if (!alive) return;
+        if (current <= 0.001) {
+          pulse.setValue(0);
+          return;
+        }
+        const settle = Animated.timing(pulse, {
+          toValue: 0,
+          duration: 720,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        });
+        settlers.push(settle);
+        settle.start();
+      });
+
+      return () => {
+        alive = false;
+        settlers.forEach(settle => settle.stop());
+        values.forEach(value => value.stopAnimation());
+      };
     }
 
     // Audible carriers are compressed into a calm visual range: higher Hz
@@ -4214,34 +4272,68 @@ function HzSignalOrbit({
     beatSpin.setValue(0);
     pulse.setValue(0);
 
-    const loops = [
-      Animated.loop(Animated.timing(leftSpin, {
-        toValue: 1, duration: carrierDuration(leftHz), easing: Easing.linear, useNativeDriver: true,
-      })),
-      Animated.loop(Animated.timing(rightSpin, {
-        toValue: 1, duration: carrierDuration(rightHz), easing: Easing.linear, useNativeDriver: true,
-      })),
-      Animated.loop(Animated.timing(beatSpin, {
-        toValue: 1, duration: beatDuration, easing: Easing.linear, useNativeDriver: true,
-      })),
-      Animated.loop(Animated.sequence([
+    let alive = true;
+
+    // Animated.loop around a single timing animation can stop after one pass
+    // on some native drivers. Relaunch each completed revolution explicitly;
+    // the 1 -> 0 reset is visually seamless because those phases are 360° apart.
+    const repeatSpin = (value: Animated.Value, duration: number) => {
+      let current: Animated.CompositeAnimation | null = null;
+      const run = () => {
+        if (!alive) return;
+        value.setValue(0);
+        current = Animated.timing(value, {
+          toValue: 1,
+          duration,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        });
+        current.start(({ finished }) => {
+          current = null;
+          if (finished && alive) run();
+        });
+      };
+      run();
+      return () => current?.stop();
+    };
+
+    let pulseAnimation: Animated.CompositeAnimation | null = null;
+    const runPulse = () => {
+      if (!alive) return;
+      pulse.setValue(0);
+      pulseAnimation = Animated.sequence([
         Animated.timing(pulse, {
           toValue: 1, duration: pulseDuration, easing: Easing.inOut(Easing.sin), useNativeDriver: true,
         }),
         Animated.timing(pulse, {
           toValue: 0, duration: pulseDuration, easing: Easing.inOut(Easing.sin), useNativeDriver: true,
         }),
-      ])),
+      ]);
+      pulseAnimation.start(({ finished }) => {
+        pulseAnimation = null;
+        if (finished && alive) runPulse();
+      });
+    };
+
+    const stopSpins = [
+      repeatSpin(leftSpin, carrierDuration(leftHz)),
+      repeatSpin(rightSpin, carrierDuration(rightHz)),
+      repeatSpin(beatSpin, beatDuration),
     ];
-    loops.forEach(loop => loop.start());
-    return () => loops.forEach(loop => loop.stop());
+    runPulse();
+
+    return () => {
+      alive = false;
+      stopSpins.forEach(stop => stop());
+      pulseAnimation?.stop();
+    };
   }, [beatHz, beatSpin, leftHz, leftSpin, playing, pulse, reduceMotion, rightHz, rightSpin]);
 
   const leftRotation = leftSpin.interpolate({ inputRange: [0, 1], outputRange: ['-8deg', '352deg'] });
   const rightRotation = rightSpin.interpolate({ inputRange: [0, 1], outputRange: ['13deg', '-347deg'] });
   const beatRotation = beatSpin.interpolate({ inputRange: [0, 1], outputRange: ['-20deg', '340deg'] });
   const coreScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.09] });
-  const coreOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1] });
+  const coreOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.82, 1] });
 
   return (
     <View style={styles.signalStage} pointerEvents="none">
@@ -4272,8 +4364,8 @@ function HzSignalOrbit({
           {
             backgroundColor: accent + '1D',
             shadowColor: accent,
-            opacity: playing && !reduceMotion ? coreOpacity : 0.82,
-            transform: [{ scale: playing && !reduceMotion ? coreScale : 1 }],
+            opacity: reduceMotion ? 0.82 : coreOpacity,
+            transform: [{ scale: reduceMotion ? 1 : coreScale }],
           },
         ]}
       />
