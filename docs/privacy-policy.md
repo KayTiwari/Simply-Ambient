@@ -1,30 +1,32 @@
-# Privacy Policy — Simply Ambient
+# Privacy Policy: Simply Ambient
 
-_Last updated: July 8, 2026_
+_Last updated: July 13, 2026_
 
 Simply Ambient ("the app") is a meditation, breath-work, and wellness tool published by **Like Chess**.
 
-This is a short, plain-language privacy policy. The summary: **we don't run user accounts and almost everything stays on your device.** The two exceptions are crash diagnostics (sent automatically to Sentry) and the AI Insights feature (sends only the journal sources you opt in to share, only when you press the analyse button).
+This is a short, plain-language privacy policy. The summary: **we don't run user accounts, show ads, or maintain a journal database.** Your entries and preferences stay on your device unless you deliberately use an online feature described below. The app also sends filtered anonymous crash diagnostics to Sentry.
 
 ## What stays on your device only
 
-The following are stored locally on your device using the operating system's standard local storage. They never leave the device unless you explicitly choose to share them via the AI Insights feature (see below):
+The following are stored locally on your device. Most items use the operating system's standard app storage. On native builds, a Gemini key is kept in the operating system's secure credential store. In the web build, it lasts only for the current browser-tab session. Journal sources leave the device only when they are shown as enabled and you tap Journal Themes. A selected zodiac sign is sent only when the app requests a live horoscope, as described below.
 
 - Your custom frequency presets and which one is active
-- Your background-music selection (only the file path / handle — we never upload the audio)
-- Your selected zodiac sign
+- Your background-music selection. The file picker may create a local playback copy in the app cache; the app never uploads the audio.
+- Your selected zodiac sign and cached horoscope readings
 - Your **mood check-ins** (timestamps + 1–5 ratings)
 - Your **gratitude journal** entries
 - Your **rant** entries (off by default for AI Insights)
 - Your **manifestation** entries
 - Your **birth profile** (name, date, time, location, MBTI result if you take the quiz)
-- A second person's birth profile (only if you fill it in on the Compatibility page)
+- A second person's previously entered birth profile, if one exists from an earlier version. Compatibility is currently disabled, but a prior local entry remains until you wipe app data.
 - Your AI Insights per-source toggles
 - Your streak count and last-activity date
-- Your notification preference
+- Your notification preference and custom reminder time
+- Your pinned More-page shortcuts and selected still-background color
+- Your breath-cue, mala-haptic, tarot-deck, and other practice preferences
 - Your Gemini API key (only if you enter one)
 - Whether you've completed the first-launch onboarding
-- The current tarot card draw
+- The current tarot card draw, spread/deck preference, and last saved AI reflection
 - Rate-prompt counters (number of app opens, completed sessions, and whether the one-time review prompt has already been shown). These decide when the app may ask, once ever, for a Play Store rating. They contain no dates of birth, journal content, or identifiers, and they never leave the device; the rating dialog itself is drawn by Google Play.
 
 ## Network requests we make
@@ -33,11 +35,11 @@ The app contacts a small number of services. None of these requests include pers
 
 | Service | What is sent | What it returns | When |
 |---|---|---|---|
-| `freehoroscopeapi.com` | Your selected zodiac sign and the period (daily / weekly / monthly) | Public horoscope text | Each time you open the Horoscopes tab; cached for 6 h |
-| Developer's proxy (Vercel) | Your selected zodiac sign and, as with any web server, the IP address of the request | Relays the horoscope or tarot response | **Web version only.** Horoscope and tarot requests route through it. It stores nothing and no logs are kept beyond standard hosting. |
-| `generativelanguage.googleapis.com` (Google Gemini) | The journal sources you have toggled ON for AI Insights (any of: mood log, gratitude entries, manifestations, rants) + the API key you entered | A short AI reflection | **Only when you tap "Journal Themes" or "Interpret Tarot" on the AI Insights page.** Rant sharing is OFF by default; the user must explicitly enable it. |
+| `freehoroscopeapi.com` | Your selected zodiac sign and the period (daily / weekly / monthly), or the requested number of random tarot cards | Public horoscope or tarot text | When you open Stars, change a reading period, or draw cards; horoscope responses are cached for 6 h |
+| Developer's proxy (Vercel) | The same horoscope or tarot request and, as with any web server, the IP address of the request | Relays the public response | **Web version only.** It maintains no application database; standard hosting logs may apply. |
+| `generativelanguage.googleapis.com` (Google Gemini) | For Journal Themes: the sources shown as enabled (mood, gratitude, manifestations, or rants). For Interpret Tarot: the drawn card name, orientation, matching meaning, and description. The request also carries the API key you entered in a header. | A short AI reflection | **Only when you tap "Journal Themes" or "Interpret Tarot" on the AI Insights page.** Mood, gratitude, and manifestations begin enabled; rant sharing begins OFF and must be enabled by you. |
 | `formsubmit.co` | Subject and body of your feedback or bug report, plus (only if you leave "Attach app info" on) one line with the app version, platform, and OS version | Forwards to the developer's inbox | Only when you submit the Feedback form |
-| `sentry.io` (Sentry) | Crash diagnostics (stack trace, device model, OS version, app version) | Nothing visible to you | Automatically when the app crashes or encounters an unexpected error. No journal data is attached. |
+| `sentry.io` (Sentry) | Filtered crash diagnostics that may include event time, stack trace, and basic device, OS, and app context | Nothing visible to you | Automatically when the app crashes or encounters an unexpected error. Free-form messages, request data, breadcrumbs, journal content, and saved keys are stripped before sending. |
 
 If sending feedback fails (e.g. you have no network), the app falls back to opening your **mail app** with a pre-filled message that you can choose to send. The destination address is the developer's email; nothing is sent without you pressing your mail app's Send button.
 
@@ -54,18 +56,18 @@ If sending feedback fails (e.g. you have no network), the app falls back to open
 
 You have two ways to delete data the app has stored on your device:
 
-1. **In-app, instantly:** open **More → Safety & Disclaimer**, scroll to **WIPE ALL DATA**, and confirm. This removes every entry stored locally: profile, mood log, gratitude, rants, manifestations, presets, the tarot cache, your Gemini API key, and all settings.
-2. **By uninstalling the app**, which also removes everything the app stored.
+1. **In-app:** open **More → Safety & Disclaimer**, scroll to **WIPE ALL DATA**, and confirm. The app removes profiles, mood log, gratitude, release entries, intentions, presets, cached readings, your Gemini API key, saved AI reflection, pinned pages, settings, and any imported-audio cache copy. It reports success only after the deletion completes.
+2. **By uninstalling the Android app**, which removes its local app storage and cache. For any future iOS build, use Wipe All Data or Remove key first because operating-system credential storage can survive an uninstall. In the web build, closing the tab removes the session-only Gemini key; browser site-data controls remove other local data.
 
-Crash diagnostics that have already been sent to Sentry are retained per Sentry's standard retention policy and are tied to anonymous installation IDs, not to a user account. If you would like a Sentry record removed, contact the developer using the **Feedback** form inside the app or by email (below) with a brief description; we will request deletion from Sentry on your behalf.
+Crash diagnostics that have already been sent to Sentry are retained according to Sentry's retention policy and are not tied to a Simply Ambient account because the app has no accounts. If you have a privacy question about a diagnostic, contact the developer using the **Feedback** form inside the app.
 
 ## Notifications
 
-If you opt in to daily affirmation notifications, they are scheduled **locally on your device** by the operating system. No notification content is sent to a server. Disabling notifications cancels the schedule entirely.
+If you opt in to affirmation or gratitude reminders, they are scheduled **locally on your device** by the operating system. No notification content is sent to a server. Disabling notifications cancels the schedule entirely.
 
 ## Background music
 
-If you pick an audio file from your device for the background music feature, the file is read locally to play it back. No audio is uploaded.
+If you pick an audio file for background music, the platform file picker may copy it into the app's private cache for local playback. No audio is uploaded. Clearing the selection releases it; Wipe All Data and uninstall remove the app-managed cache copy.
 
 ## Children
 

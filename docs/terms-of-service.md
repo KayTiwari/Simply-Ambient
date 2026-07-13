@@ -1,6 +1,6 @@
-# Terms of Service — Simply Ambient
+# Terms of Service: Simply Ambient
 
-_Last updated: May 16, 2026_
+_Last updated: July 13, 2026_
 
 Welcome to Simply Ambient (the "App"), a meditation, breath-work, and wellness tool published by **Like Chess** ("we," "us," "our"). These Terms of Service ("Terms") govern your use of the App. By installing, opening, or using the App you agree to these Terms. If you do not agree, do not use the App.
 
@@ -24,21 +24,21 @@ You should consult a qualified physician before using the App if you are pregnan
 The App produces binaural-beat audio and other tones. Sustained or loud headphone listening can cause permanent hearing damage at any frequency. You agree to:
 - Always begin at a low volume and increase only if needed and comfortable.
 - Stop immediately if any tone feels piercing, sharp, painful, or uncomfortable.
-- Take responsibility for the volume level you choose. The App respects your device's system volume; you control it.
+- Take responsibility for the volume level you choose. The App provides in-app tone, soundscape, and imported-audio controls while also respecting your device's system volume.
 
 **You assume all risk associated with audio playback through the App, including but not limited to hearing damage, tinnitus, or other auditory injury.**
 
 ## 4. Your data
 
-Almost all data you enter into the App (profile, mood log, gratitude, rants, manifestations, presets, settings) is stored only on your device. The App transmits data to third parties only in the specific circumstances described in the [Privacy Policy](privacy-policy.html), and you control whether each AI Insights source is shared. Crash diagnostics are sent automatically to Sentry. See the Privacy Policy for full detail.
+Almost all data you enter into the App (profile, mood log, gratitude, rants, manifestations, presets, settings) is stored only on your device. The App transmits data to third parties only in the specific circumstances described in the [Privacy Policy](privacy-policy.html). Journal Themes uses the source controls shown in AI Insights; Interpret Tarot sends the drawn card name, orientation, matching meaning, and description after you tap that action. Filtered crash diagnostics are sent automatically to Sentry. See the Privacy Policy for full detail.
 
-You can delete all locally stored data at any time using **More → Safety & Disclaimer → Wipe all data**, or by uninstalling the App.
+You can delete locally stored data using **More → Safety & Disclaimer → Wipe all data**. Android uninstall also removes app storage; browser site-data controls remove web storage. For a future iOS build, use the in-app wipe before uninstalling because operating-system credential storage can persist across installation changes.
 
 ## 5. Third-party services
 
 When you use the App, certain features rely on third-party services:
-- **Google Gemini** (when you tap an AI Insights analyse button) — subject to Google's terms.
-- **Sentry** (crash diagnostics) — subject to Sentry's terms.
+- **Google Gemini** (when you tap an AI Insights analyse button), subject to Google's terms.
+- **Sentry** (crash diagnostics), subject to Sentry's terms.
 - **freehoroscopeapi.com** and **formsubmit.co**, public APIs used as described in the Privacy Policy. Daily affirmations are generated on your device and use no third-party service.
 
 We are not responsible for the practices, terms, or content of any third-party service.
@@ -87,7 +87,7 @@ We may update these Terms from time to time. If we make material changes, the "L
 
 ## 13. Contact
 
-For questions about these Terms, contact the developer through the **Report a Bug** form inside the App, which routes to the developer's email.
+For questions about these Terms, contact the developer through the **Feedback** form inside the App, which routes to the developer's email.
 
 ---
 

@@ -49,14 +49,28 @@ To edit a sign's local fallback, change its `intention`. Daily, weekly, and mont
 
 ## Soundscapes
 
-Soundscapes stay in `App.tsx` because they tie into the audio engine. Adding one takes four steps:
+Soundscapes stay in `App.tsx` because they tie into the audio engine. Adding one touches both audio implementations and the visual scene system:
 
 1. Add the id to the `SoundscapeKey` union.
 2. Append an entry to `SOUNDSCAPES` (id, name, blurb, phosphor `Icon`, color).
-3. If it ships as a bundled file, add a `require('./assets/soundscapes/<file>.mp3')` entry to `BUNDLED_SOUNDSCAPES` and drop the file in `assets/soundscapes/`.
-4. Add a loudness entry to `SOUNDSCAPE_GAIN` so the new bed sits at a comparable level to the others.
+3. If it ships as a bundled file, add a `require('./assets/soundscapes/<file>.mp3')` entry to `BUNDLED_SOUNDSCAPES` and drop the file in `assets/soundscapes/`. Otherwise add or adapt its native synthesis path.
+4. Add the equivalent browser source to `WebSoundscapeEngine`; web playback does not use the native file/synthesis path automatically.
+5. Add a loudness entry to `SOUNDSCAPE_GAIN`, compare it against every existing layer at the same slider position, and test the transition into and out of broadband noise.
+6. Add the scene artwork case in `SoundscapeScenes.tsx`. Verify both the large active-player scene and the compact More-hub tile treatment.
 
 Licensing: every bundled audio file needs an entry in `assets/soundscapes/ATTRIBUTION.md` with its source URL and license. Prefer CC0 or CC BY material and follow the format already in that file.
+
+## Listening routines
+
+Routine types and the three bundled paths live in `MoreView.tsx` as `RoutinePathPayload` and `SAMPLE_ROUTINES`. Every step needs a stable id, one-based order, a real preset id, a supported band target, target beat in Hz, and duration in whole minutes.
+
+The sequencer runs in `App.tsx`, not inside the card. When adding or changing a path:
+
+1. Keep step ids unique across the app and orders contiguous from 1.
+2. Confirm the preset id and target beat describe the same band.
+3. Update the routine card total and miniplayer expectations together.
+4. Test the first step, automatic boundary, background/resume reconciliation, manual stop, final completion, and Reduce Motion behavior.
+5. Update `CHANGELOG.md`, the store listing, and any advertised duration if the shipped path changes.
 
 ## Affirmations
 

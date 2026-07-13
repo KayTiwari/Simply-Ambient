@@ -21,6 +21,13 @@ export type PinnableMorePageId = Exclude<
   'compatibility' | 'natal' | 'support' | 'safety' | 'bug' | 'settings'
 >;
 
+export type InitialMoreNavigationState = {
+  page: MorePageId | null;
+  hubReveal: 0 | 1;
+  pageReveal: 0 | 1;
+  destination: 'hub' | 'page';
+};
+
 export const MORE_PAGE_META: Record<MorePageId, {
   label: string;
   shortLabel: string;
@@ -177,6 +184,35 @@ export const MORE_HEADER_TO_PAGE_ID: Record<string, MorePageId> = {
   Feedback: 'bug',
   Settings: 'settings',
 };
+
+const UNAVAILABLE_MORE_PAGE_IDS = new Set<MorePageId>(['natal', 'compatibility']);
+
+export function isUnavailableMorePage(id: MorePageId): boolean {
+  return UNAVAILABLE_MORE_PAGE_IDS.has(id);
+}
+
+/**
+ * Resolves the very first More render before effects run. Pinned destinations
+ * must start with the hub fully hidden, otherwise its accent can paint for one
+ * browser/native frame underneath the requested room's glass header.
+ *
+ * The runtime membership check also makes a stale persisted page id fall back
+ * to the hub instead of mounting an empty page layer.
+ */
+export function resolveInitialMoreNavigationState(
+  requestedPage: MorePageId | 'hub' | string | null | undefined,
+): InitialMoreNavigationState {
+  const validPage = typeof requestedPage === 'string'
+    && Object.prototype.hasOwnProperty.call(MORE_PAGE_META, requestedPage)
+    && requestedPage !== 'hub'
+    && !isUnavailableMorePage(requestedPage as MorePageId)
+      ? requestedPage as MorePageId
+      : null;
+
+  return validPage === null
+    ? { page: null, hubReveal: 1, pageReveal: 0, destination: 'hub' }
+    : { page: validPage, hubReveal: 0, pageReveal: 1, destination: 'page' };
+}
 
 export function isPinnableMorePage(id: string): id is PinnableMorePageId {
   return Object.prototype.hasOwnProperty.call(MORE_PAGE_META, id)

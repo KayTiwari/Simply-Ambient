@@ -72,7 +72,7 @@ await page.getByText('GOOD TO KNOW', { exact: true }).first().waitFor({ state: '
 await tap('ENTER SIMPLY AMBIENT');
 
 const exerciseRooms = async width => {
-  await page.getByText('Shape the signal', { exact: true }).waitFor({ state: 'visible' });
+  await page.getByText('Binaural frequency generator', { exact: true }).waitFor({ state: 'visible' });
   await assertNoRootOverflow(`${width} tones`);
 
   await tap('Breathe');
@@ -138,7 +138,7 @@ const exerciseRooms = async width => {
 
   const pin = page.getByLabel('Pin Soundscapes to the app navbar', { exact: true });
   await pin.click();
-  await page.getByText('Sound', { exact: true }).waitFor({ state: 'visible' });
+  await page.getByText('Scape', { exact: true }).waitFor({ state: 'visible' });
   await assertNoRootOverflow(`${width} six-tab navbar`);
   await page.getByLabel('Unpin Soundscapes from the app navbar', { exact: true }).click();
 };

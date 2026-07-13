@@ -112,7 +112,7 @@ await page.getByLabel('Stop all audio', { exact: true }).click();
 await page.waitForTimeout(500);
 await back();
 
-// 7. Profile identity atlas, seeded for the cosmic pages that follow.
+// 7. Profile identity atlas.
 await tap('Profile', { exact: true });
 await page.getByPlaceholder('YYYY-MM-DD').fill('1990-06-15');
 await page.getByPlaceholder('HH:MM').fill('08:30');
@@ -120,54 +120,44 @@ await page.getByPlaceholder('City, country').fill('Detroit, USA');
 await shot('07-profile-atlas.png');
 await back();
 
-// 8. Honest natal wheel (Sun sign only).
-await tap('Natal', { exact: true });
-await shot('08-natal-wheel.png');
-await back();
-
-// 9. Settings atmosphere preview.
+// 8. Settings atmosphere preview.
 await tap('Settings', { exact: true });
-await shot('09-settings-preview.png');
+await shot('08-settings-preview.png');
 await back();
 
-// 10. Scannable safety guide.
+// 9. Scannable safety guide.
 await tap('Safety', { exact: true });
-await shot('10-safety-guide.png');
+await shot('09-safety-guide.png');
 await back();
 
-// 11. Feedback postcard.
+// 10. Feedback postcard.
 await tap('Feedback', { exact: true });
-await shot('11-feedback-postcard.png');
+await shot('10-feedback-postcard.png');
 await back();
 
-// 12. Maker letter and visual roadmap.
+// 11. Maker letter and visual roadmap.
 await tap('Support', { exact: true });
-await shot('12-support-maker-letter.png');
+await shot('11-support-maker-letter.png');
 await back();
 
-// 13. Reading room and data-ingredient tray.
+// 12. Reading room and data-ingredient tray.
 await tap('AI Insights', { exact: true });
-await shot('13-insights-reading-room.png');
+await shot('12-insights-reading-room.png');
 await back();
 
-// 14. Themed routine paths.
+// 13. Themed routine paths.
 await tap('Routines', { exact: true });
-await shot('14-routine-paths.png');
+await shot('13-routine-paths.png');
 await back();
 
-// 15. Dual-orbit compatibility composer.
-await tap('Compatibility', { exact: true });
-await shot('15-compatibility-orbits.png');
-await back();
-
-// 16. Daily affirmation talisman.
+// 14. Daily affirmation talisman.
 await tap('Affirmation', { exact: true });
-await shot('16-affirmation-talisman.png');
+await shot('14-affirmation-talisman.png');
 await back();
 
-// 17. Intention seed and orbit archive.
+// 15. Intention seed and orbit archive.
 await tap('Intentions', { exact: true });
-await shot('17-intention-seed.png');
+await shot('15-intention-seed.png');
 
 await browser.close();
 server.close();

@@ -23,3 +23,7 @@ These audio files are bundled so the app's core soundscape functionality works o
 
 - `white-noise.mp3` - "White Noise" by Joseph Sardin / BigSoundBank, CC0 public domain.
   Source: https://bigsoundbank.com/white-noise-s1037.html
+
+- `distant-thunder.mp3` - "distant rain and thunder" by bastipictures, CC0 public domain.
+  Source: https://freesound.org/people/bastipictures/sounds/243777/
+  License: https://creativecommons.org/publicdomain/zero/1.0/

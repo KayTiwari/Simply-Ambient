@@ -1,50 +1,72 @@
 <svg width="1024" height="500" viewBox="0 0 1024 500" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="50%" r="80%">
-      <stop offset="0%"  stop-color="#FFFFFF"/>
-      <stop offset="60%" stop-color="#FAF7EE"/>
-      <stop offset="100%" stop-color="#F0EBDD"/>
+    <linearGradient id="night" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#10152e"/>
+      <stop offset="0.5" stop-color="#20284a"/>
+      <stop offset="1" stop-color="#3a325f"/>
+    </linearGradient>
+    <radialGradient id="blueGlow" cx="0.82" cy="0.18" r="0.64">
+      <stop offset="0" stop-color="#8fb8de" stop-opacity="0.58"/>
+      <stop offset="0.48" stop-color="#8f97de" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#8f97de" stop-opacity="0"/>
     </radialGradient>
+    <radialGradient id="violetGlow" cx="0.58" cy="1" r="0.74">
+      <stop offset="0" stop-color="#b39be0" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#b39be0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="0.5" stop-color="#8fb8de" stop-opacity="0.07"/>
+      <stop offset="1" stop-color="#07091a" stop-opacity="0.34"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8fb8de"/>
+      <stop offset="0.5" stop-color="#b39be0"/>
+      <stop offset="1" stop-color="#9dc7ac"/>
+    </linearGradient>
+    <filter id="softGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="13"/>
+    </filter>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#050612" flood-opacity="0.46"/>
+    </filter>
   </defs>
 
-  <rect width="1024" height="500" fill="url(#bg)"/>
+  <rect width="1024" height="500" fill="url(#night)"/>
+  <rect width="1024" height="500" fill="url(#blueGlow)"/>
+  <rect width="1024" height="500" fill="url(#violetGlow)"/>
 
-  <!-- Icon: chakra wheel + stemmed leaf, transplanted from icon-master.svg.
-       Original is 1024x1024 centred at (512,512); placed here scaled 0.42
-       around (240,250). -->
-  <g transform="translate(-9 35) scale(0.42)">
-    <!-- chakra wheel: faint connecting ring + 7 chakra-coloured dots -->
-    <circle cx="512" cy="512" r="300" fill="none" stroke="#000000" stroke-opacity="0.12" stroke-width="4"/>
-    <circle cx="512.0" cy="212.0" r="27" fill="#FF3838"/>
-    <circle cx="746.6" cy="325.0" r="27" fill="#FF8A38"/>
-    <circle cx="804.5" cy="578.8" r="27" fill="#FFD000"/>
-    <circle cx="642.2" cy="782.3" r="27" fill="#3FE07F"/>
-    <circle cx="381.8" cy="782.3" r="27" fill="#3FB6FF"/>
-    <circle cx="219.5" cy="578.8" r="27" fill="#5B6CFF"/>
-    <circle cx="277.5" cy="325.0" r="27" fill="#A45BFF"/>
-
-    <!-- stem (brown), leaf (vibrant green), vein (white) -->
-    <path d="M 349 675 Q 305 717 295 758"
-          fill="none" stroke="#8A5A2C" stroke-width="19" stroke-linecap="round"/>
-    <path d="M 349 675 Q 703 703 675 349 Q 321 321 349 675 Z" fill="#20C94E"/>
-    <path d="M 349 675 L 675 349" fill="none" stroke="#FFFFFF"
-          stroke-width="18" stroke-linecap="round"/>
+  <g fill="none" stroke="#b6d8f4" stroke-opacity="0.17" stroke-width="1.5">
+    <ellipse cx="817" cy="225" rx="208" ry="108" transform="rotate(-12 817 225)"/>
+    <ellipse cx="817" cy="225" rx="190" ry="132" transform="rotate(18 817 225)"/>
+    <ellipse cx="817" cy="225" rx="150" ry="182" transform="rotate(45 817 225)"/>
+    <circle cx="817" cy="225" r="205" stroke-opacity="0.08"/>
   </g>
 
-  <!-- Wordmark -->
-  <text x="476" y="225" font-family="Georgia, 'Times New Roman', serif"
-        font-size="68" fill="#1A1A2F" letter-spacing="1.5">Simply Ambient</text>
+  <circle cx="817" cy="225" r="118" fill="#8fb8de" fill-opacity="0.12" filter="url(#softGlow)"/>
+  <g filter="url(#shadow)">
+    <circle cx="817" cy="225" r="111" fill="url(#glass)" stroke="#d8ebff" stroke-opacity="0.28" stroke-width="1.5"/>
+    <circle cx="817" cy="225" r="75" fill="#11162f" fill-opacity="0.42" stroke="#8fb8de" stroke-opacity="0.43" stroke-width="1.5"/>
+  </g>
 
-  <!-- Thin gold divider -->
-  <line x1="478" y1="260" x2="540" y2="260" stroke="#C39A3E" stroke-width="1.5" opacity="0.85"/>
+  <path d="M759 225 C773 225 773 190 787 190 C801 190 801 261 815 261 C829 261 829 204 843 204 C857 204 857 240 871 240"
+        fill="none" stroke="url(#wave)" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="759" cy="225" r="5" fill="#8fb8de"/>
+  <circle cx="871" cy="240" r="5" fill="#9dc7ac"/>
 
-  <!-- Tagline -->
-  <text x="554" y="266" font-family="Georgia, 'Times New Roman', serif"
-        font-size="22" font-style="italic" fill="#5A5570" letter-spacing="2">Your spiritual center</text>
+  <g transform="translate(76 0)">
+    <text x="0" y="146" font-family="Georgia, 'Times New Roman', serif"
+          font-size="68" fill="#fffdfd" letter-spacing="1.4">Simply Ambient</text>
+    <line x1="2" y1="179" x2="76" y2="179" stroke="#8fb8de" stroke-width="3" stroke-linecap="round"/>
+    <text x="96" y="187" font-family="Helvetica, Arial, sans-serif"
+          font-size="15" font-weight="700" fill="#a8cdeb" letter-spacing="5">VERSION 2.0</text>
+    <text x="0" y="253" font-family="Georgia, 'Times New Roman', serif"
+          font-size="35" fill="#f4f0fa">Sound, breath, and a little room to return.</text>
+    <text x="0" y="318" font-family="Helvetica, Arial, sans-serif"
+          font-size="18" font-weight="600" fill="#c1c4d3" letter-spacing="2.6">TONES  ·  SOUNDSCAPES  ·  BREATH</text>
+    <text x="0" y="358" font-family="Helvetica, Arial, sans-serif"
+          font-size="18" font-weight="600" fill="#c1c4d3" letter-spacing="2.6">ROUTINES  ·  PRIVATE REFLECTION</text>
+  </g>
 
-  <!-- Subtitle -->
-  <text x="478" y="320" font-family="Helvetica, Arial, sans-serif"
-        font-size="20" fill="#4a4757" letter-spacing="0.4">Binaural frequencies · Breathwork · Chakras</text>
-  <text x="478" y="352" font-family="Helvetica, Arial, sans-serif"
-        font-size="20" fill="#4a4757" letter-spacing="0.4">Horoscopes · Grounded daily practice</text>
+  <rect x="24" y="24" width="976" height="452" rx="38" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
 </svg>

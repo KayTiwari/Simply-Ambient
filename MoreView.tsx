@@ -53,12 +53,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CornerRipples, HeaderGlass } from './AmbientUI';
 
 import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
+import {
+  buildTarotInterpretationPrompt,
+  GEMINI_ERRORS,
+  GeminiRequestError,
+  isAbortError,
+  requestGeminiReflection,
+} from './lib/gemini';
+import {
+  loadGeminiApiKey,
+  removeGeminiApiKey,
+  saveGeminiApiKey,
+} from './lib/geminiKeyStorage';
 import { openStoreListing } from './lib/rateApp';
 import { ZODIAC, type BandKey, type Zodiac } from './lib/content';
 import {
   MORE_HEADER_TO_PAGE_ID,
   MORE_PAGE_META,
   isPinnableMorePage,
+  isUnavailableMorePage,
+  resolveInitialMoreNavigationState,
   type MorePageId,
   type PinnableMorePageId,
 } from './moreNavigation';
@@ -66,10 +80,6 @@ import {
 // The store the current platform rates on. The app ships on Google Play
 // today; a future iOS build gets truthful copy for free.
 const STORE_NAME = Platform.OS === 'ios' ? 'the App Store' : 'Google Play';
-
-// Every AsyncStorage key this app writes starts with one of these, so the
-// wipe below stays correct as new keys are added.
-const STORAGE_PREFIXES = ['@simply_ambient_', '@binaural_'];
 
 const STORAGE_MOOD = '@simply_ambient_mood_log_v1';
 const STORAGE_GRAT = '@simply_ambient_gratitude_v1';
@@ -181,6 +191,10 @@ type Props = {
   onChangeSingleColor: (c: string | null) => void;
   // Re-show the first-run walkthrough (replay mode skips legal + profile).
   onReplayOnboarding: () => void;
+  // App owns cross-tab state, audio players, notifications, cache files, and
+  // persistence. More clears its local journal mirrors only after this
+  // verified destructive operation resolves.
+  onWipeAllData: () => Promise<void>;
 };
 
 type SoundscapeOption = {
@@ -201,14 +215,8 @@ type PinnedMorePagesContextValue = {
 const PinnedMorePagesContext = React.createContext<PinnedMorePagesContextValue | null>(null);
 const ReducedMotionContext = React.createContext(false);
 
-// These rooms remain visible in More as a preview of what is coming, but they
-// are not destinations yet. Keeping the guard next to navigation also makes
-// stale persisted navbar requests harmless.
-const UNAVAILABLE_MORE_PAGES = new Set<MorePageId>(['natal', 'compatibility']);
-
 const STORAGE_PROFILE = '@simply_ambient_profile_v1';
 const STORAGE_PARTNER = '@simply_ambient_partner_v1';
-const STORAGE_GEMINI_KEY = '@simply_ambient_gemini_key_v1';
 // Written by onboarding: what brings the user here (sleep/focus/calm/energy).
 const STORAGE_INTENT = '@simply_ambient_intent_v1';
 
@@ -402,6 +410,7 @@ export default function MoreView({
   ambientAccent,
   onChangeSingleColor,
   onReplayOnboarding,
+  onWipeAllData,
 }: Props) {
   const [moodLog, setMoodLog] = useState<MoodEntry[]>([]);
   const [gratitude, setGratitude] = useState<GratEntry[]>([]);
@@ -532,40 +541,36 @@ export default function MoreView({
     AsyncStorage.setItem(STORAGE_GRAT, JSON.stringify(next)).catch(() => {});
   }
 
-  // Full wipe, used by the Safety page. Removes every app key by prefix (so
-  // new keys are covered automatically) AND resets the in-memory arrays: the
-  // save paths above write those arrays back wholesale, so stale state here
-  // would silently resurrect wiped entries on the user's next save.
+  // App verifies the destructive cross-tab cleanup. Clear these local mirrors
+  // after every attempt, including a partial platform failure, so a later save
+  // cannot resurrect entries that another cleanup step already removed. The
+  // original rejection still reaches Safety, which never reports success.
   async function wipeAllData() {
     try {
-      const keys = await AsyncStorage.getAllKeys();
-      const mine = keys.filter(k => STORAGE_PREFIXES.some(p => k.startsWith(p)));
-      if (mine.length) await AsyncStorage.multiRemove([...mine]);
-    } catch {}
-    setMoodLog([]);
-    setGratitude([]);
-    setRants([]);
-    setManifestations([]);
-    setStreak(0);
-    setProfileName(null);
-    setIntent(null);
-    onClearPinnedMorePages();
-    onChangeSingleColor(null);
-    onChangeNotifPref('off');
-    // Notification prefs were part of the wipe, so stop their schedules too.
-    if (Platform.OS !== 'web') {
-      try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch {}
+      await onWipeAllData();
+    } finally {
+      setMoodLog([]);
+      setGratitude([]);
+      setRants([]);
+      setManifestations([]);
+      setStreak(0);
+      setProfileName(null);
+      setIntent(null);
     }
   }
 
   // More-page navigation. Individual rooms stay in the same mounted layer;
   // only their opacity and a tiny vertical settle change between destinations.
-  const [page, setPage] = useState<SubPage>(null);
+  // A pinned More shortcut mounts this view with its destination already in
+  // props. Seed both layers at that destination so the hub's accent never
+  // paints for one frame before the requested room appears.
+  const initialNavigation = useRef(resolveInitialMoreNavigationState(requestedPage)).current;
+  const [page, setPage] = useState<SubPage>(initialNavigation.page);
   const [pageHistory, setPageHistory] = useState<Array<Exclude<SubPage, null>>>([]);
-  const hubReveal = useRef(new Animated.Value(1)).current;
-  const pageReveal = useRef(new Animated.Value(0)).current;
+  const hubReveal = useRef(new Animated.Value(initialNavigation.hubReveal)).current;
+  const pageReveal = useRef(new Animated.Value(initialNavigation.pageReveal)).current;
   const transitionToken = useRef(0);
-  const transitionDestination = useRef<'hub' | 'page'>('hub');
+  const transitionDestination = useRef<'hub' | 'page'>(initialNavigation.destination);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [pageTransitioning, setPageTransitioning] = useState(false);
 
@@ -635,7 +640,7 @@ export default function MoreView({
   }
 
   function open(p: Exclude<SubPage, null>) {
-    if (UNAVAILABLE_MORE_PAGES.has(p)) {
+    if (isUnavailableMorePage(p)) {
       closeToHub();
       return;
     }
@@ -654,7 +659,7 @@ export default function MoreView({
   // External destinations (navbar and mini player) behave like roots, not
   // nested More links: Back always returns to the hub.
   function openRoot(p: Exclude<SubPage, null>) {
-    if (UNAVAILABLE_MORE_PAGES.has(p)) {
+    if (isUnavailableMorePage(p)) {
       closeToHub();
       return;
     }
@@ -729,8 +734,9 @@ export default function MoreView({
   // Honor deep links into a specific sub-page (mini player -> Soundscapes).
   useEffect(() => {
     if (requestedPage) {
-      if (requestedPage === 'hub' || UNAVAILABLE_MORE_PAGES.has(requestedPage)) closeToHub();
-      else openRoot(requestedPage);
+      const requestedNavigation = resolveInitialMoreNavigationState(requestedPage);
+      if (requestedNavigation.page === null) closeToHub();
+      else openRoot(requestedNavigation.page);
       onRequestedPageHandled?.();
     }
   }, [requestedPage]);
@@ -3325,7 +3331,11 @@ const ROADMAP: Array<{
     shipped: true,
     items: [
       { title: 'Built-in soundscapes', blurb: 'Thirteen offline layers, including rain, thunder, forest, travel hum, and steady noise.' },
-      { title: 'Settings page with a still background option', blurb: 'Pin the backdrop to one calm color any time.' },
+      { title: 'Listening paths', blurb: 'Morning Focus, Evening Wind-down, and Deep Sleep now advance through their tones automatically.' },
+      { title: 'Eyes-closed breath cues', blurb: 'Optional inhale, hold, and exhale tones make the practice possible without watching the screen.' },
+      { title: 'Tarot spreads and lunar countdowns', blurb: 'Draw richer spreads and see which major moon phase comes next.' },
+      { title: 'Pinnable reflection rooms', blurb: 'Keep the More tools you use most inside the scrollable app navbar.' },
+      { title: 'Still background colors', blurb: 'Pin the backdrop to one calm color any time.' },
     ],
   },
 ];
@@ -3472,9 +3482,10 @@ export function SafetyContent() {
       <SafetyPanel number="03" title="Your data, plainly" accent="#9DC7AC">
         <Text style={styles.safetyBody}>
           Journals, mood, manifestations, and profile stay on this device. Horoscopes
-          send only sign and period. Crash reports contain device/app diagnostics, not
-          journals. AI Insights sends only sources you toggle on and only after you tap
-          analyse. Feedback travels through a simple mail relay to the developer.
+          send only sign and period. Filtered crash diagnostics exclude journals and
+          saved keys. Journal Themes sends sources shown as enabled only after you tap
+          analyse. Interpret Tarot sends the drawn card name, orientation, matching
+          meaning, and description. Feedback travels through a simple mail relay.
         </Text>
       </SafetyPanel>
 
@@ -3541,8 +3552,9 @@ const PRIVACY_FACTS: string[] = [
   'Journals, mood, profile, and presets stay on this device.',
   'No account, no sign-in, no ads, no tracking across apps.',
   'Horoscopes send only your sign and the period.',
-  'Crash reports hold device model, app version, and the stack trace. Your journals stay out of them.',
-  'AI Insights shares only sources you toggle on, only when you tap analyse.',
+  'Filtered crash diagnostics may include a stack trace and basic device, OS, and app context. Journals and saved keys stay out.',
+  'Journal Themes sends sources shown as enabled only when you tap analyse.',
+  'Interpret Tarot sends the drawn card name, orientation, matching meaning, and description only when you tap it.',
   'Feedback messages reach the developer through a simple mail relay. Journals never ride along.',
 ];
 
@@ -3883,14 +3895,26 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
   // and Terms of Service links so we have one confirm modal, two triggers.
   const [pendingOpenUrl, setPendingOpenUrl] = useState<string | null>(null);
   const [confirmWipe, setConfirmWipe] = useState(false);
+  const [isWiping, setIsWiping] = useState(false);
 
   async function wipeAllData() {
-    await onWipe();
-    setConfirmWipe(false);
-    notify(
-      'Data wiped',
-      'Everything the app stored on this device has been deleted, including journals, profile, presets, settings, and your saved AI key. Restarting the app gives you a clean start.',
-    );
+    if (isWiping) return;
+    setIsWiping(true);
+    try {
+      await onWipe();
+      setConfirmWipe(false);
+      notify(
+        'Data wiped',
+        'Everything the app stored on this device has been deleted, including journals, profile, presets, settings, imported audio copies, and your saved AI key. Restarting the app gives you a clean start.',
+      );
+    } catch {
+      notify(
+        'Wipe not completed',
+        'Simply Ambient could not verify that every local item was deleted. Nothing has been reported as fully wiped. Please try again.',
+      );
+    } finally {
+      setIsWiping(false);
+    }
   }
 
   return (
@@ -3947,7 +3971,7 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
         <Text style={styles.safetyBody}>
           Permanently delete everything the app stores on this device: journals
           (mood, gratitude, rants, manifestations), profile, presets, settings,
-          and your saved AI key. Cannot be undone.
+          imported audio cache copies, and your saved AI key. Cannot be undone.
         </Text>
         <TouchableOpacity
           activeOpacity={0.85}
@@ -3966,21 +3990,22 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
         visible={confirmWipe}
         transparent
         animationType="fade"
-        onRequestClose={() => setConfirmWipe(false)}
+        onRequestClose={() => { if (!isWiping) setConfirmWipe(false); }}
       >
         <View style={styles.linkConfirmBackdrop}>
           <View style={styles.linkConfirmCard}>
             <Text style={styles.linkConfirmTitle}>Wipe all data?</Text>
             <Text style={styles.linkConfirmHint}>
               This permanently deletes your journals (mood, gratitude, rants,
-              manifestations), profile, presets, settings, and your saved AI key
-              from this device. There is no undo.
+              manifestations), profile, presets, settings, imported audio cache
+              copies, and your saved AI key from this device. There is no undo.
             </Text>
             <View style={styles.linkConfirmActions}>
               <TouchableOpacity
                 activeOpacity={0.85}
-                onPress={() => setConfirmWipe(false)}
-                style={styles.linkConfirmCancelBtn}
+                onPress={() => { if (!isWiping) setConfirmWipe(false); }}
+                disabled={isWiping}
+                style={[styles.linkConfirmCancelBtn, isWiping && { opacity: 0.48 }]}
                 accessibilityLabel="Cancel wipe"
                 accessibilityRole="button"
               >
@@ -3989,11 +4014,21 @@ function SafetyPage({ onBack, onWipe }: { onBack: () => void; onWipe: () => Prom
               <TouchableOpacity
                 activeOpacity={0.85}
                 onPress={wipeAllData}
-                style={[styles.linkConfirmOpenBtn, { backgroundColor: '#E07A66' }]}
+                disabled={isWiping}
+                style={[
+                  styles.linkConfirmOpenBtn,
+                  { backgroundColor: '#E07A66' },
+                  isWiping && { opacity: 0.72 },
+                ]}
                 accessibilityLabel="Confirm wipe all data"
                 accessibilityRole="button"
+                accessibilityState={{ disabled: isWiping, busy: isWiping }}
               >
-                <Text style={styles.linkConfirmOpenText}>WIPE</Text>
+                {isWiping ? (
+                  <ActivityIndicator color="#111426" size="small" />
+                ) : (
+                  <Text style={styles.linkConfirmOpenText}>WIPE</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -5250,163 +5285,6 @@ function CompatibilityPage({ onBack }: { onBack: () => void }) {
 const GEMINI_KEY_URL = 'https://aistudio.google.com/apikey';
 const STORAGE_TAROT = '@simply_ambient_tarot_v1';
 const STORAGE_LAST_REFLECTION = '@simply_ambient_last_reflection_v1';
-// Keep the model in one place so a retired endpoint cannot silently break both
-// journal and tarot readings. This is the current stable model used in Google's
-// generateContent REST example.
-const GEMINI_MODEL = 'gemini-3.5-flash';
-const GEMINI_GENERATE_URL =
-  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
-
-const GEMINI_ERRORS = {
-  invalidRequest:
-    'Gemini did not accept the key or request. Review this key in Google AI Studio and try again.',
-  precondition:
-    'Gemini needs billing enabled for this project or is unavailable in your region. Check the project in Google AI Studio.',
-  unauthenticated:
-    'Gemini could not authenticate this key. Create or review it in Google AI Studio and try again.',
-  permission:
-    'This key does not have permission to use Gemini. Review its project and Gemini API access in Google AI Studio.',
-  notFound:
-    'This Gemini service or model is unavailable. Update the app, then try again.',
-  quota:
-    'This Gemini project has reached a rate or usage limit. Wait a little or check its quota in Google AI Studio.',
-  unavailable:
-    'Gemini is temporarily unavailable. Please try again in a little while.',
-  timeout:
-    'Gemini took too long to respond. Check your connection and try again.',
-  network:
-    'Could not reach Gemini. Check your connection and try again.',
-  blocked:
-    'Gemini\'s safety filters did not return a reflection for this selection. Try fewer or different sources.',
-  empty:
-    'Gemini returned no reflection. Please try again.',
-  generic:
-    'Gemini could not process this request. Please try again.',
-} as const;
-
-class GeminiRequestError extends Error {
-  constructor(readonly userMessage: string) {
-    super(userMessage);
-    this.name = 'GeminiRequestError';
-  }
-}
-
-function geminiApiStatus(payload: unknown): string | null {
-  if (!payload || typeof payload !== 'object') return null;
-  const error = (payload as { error?: unknown }).error;
-  if (!error || typeof error !== 'object') return null;
-  const status = (error as { status?: unknown }).status;
-  return typeof status === 'string' ? status : null;
-}
-
-// Backend messages can contain project details, so the UI uses only the HTTP
-// code and Google's documented status enum. Raw payloads are never displayed
-// or logged.
-function geminiHttpErrorMessage(httpStatus: number, payload: unknown): string {
-  const apiStatus = geminiApiStatus(payload);
-
-  if (apiStatus === 'FAILED_PRECONDITION') {
-    return GEMINI_ERRORS.precondition;
-  }
-  if (apiStatus === 'UNAUTHENTICATED') {
-    return GEMINI_ERRORS.unauthenticated;
-  }
-  if (apiStatus === 'PERMISSION_DENIED') {
-    return GEMINI_ERRORS.permission;
-  }
-  if (apiStatus === 'NOT_FOUND') {
-    return GEMINI_ERRORS.notFound;
-  }
-  if (apiStatus === 'DEADLINE_EXCEEDED') {
-    return GEMINI_ERRORS.timeout;
-  }
-  if (apiStatus === 'RESOURCE_EXHAUSTED') {
-    return GEMINI_ERRORS.quota;
-  }
-  if (apiStatus === 'INTERNAL' || apiStatus === 'UNAVAILABLE') {
-    return GEMINI_ERRORS.unavailable;
-  }
-  if (apiStatus === 'INVALID_ARGUMENT') return GEMINI_ERRORS.invalidRequest;
-
-  if (httpStatus === 400) return GEMINI_ERRORS.invalidRequest;
-  if (httpStatus === 401) return GEMINI_ERRORS.unauthenticated;
-  if (httpStatus === 403) return GEMINI_ERRORS.permission;
-  if (httpStatus === 404) return GEMINI_ERRORS.notFound;
-  if (httpStatus === 408 || httpStatus === 504) return GEMINI_ERRORS.timeout;
-  if (httpStatus === 429) return GEMINI_ERRORS.quota;
-  if (httpStatus >= 500) return GEMINI_ERRORS.unavailable;
-  return GEMINI_ERRORS.generic;
-}
-
-function geminiResponseText(payload: unknown): string {
-  if (!payload || typeof payload !== 'object') {
-    throw new GeminiRequestError(GEMINI_ERRORS.empty);
-  }
-  const response = payload as {
-    promptFeedback?: { blockReason?: unknown };
-    candidates?: Array<{
-      finishReason?: unknown;
-      content?: { parts?: Array<{ text?: unknown }> };
-    }>;
-  };
-  const promptBlockReason = response.promptFeedback?.blockReason;
-  const candidate = Array.isArray(response.candidates) ? response.candidates[0] : undefined;
-  const finishReason = candidate?.finishReason;
-  const blockedFinishReasons = new Set([
-    'SAFETY',
-    'BLOCKLIST',
-    'PROHIBITED_CONTENT',
-    'SPII',
-    'IMAGE_SAFETY',
-  ]);
-  if (
-    (typeof promptBlockReason === 'string' && promptBlockReason !== 'BLOCK_REASON_UNSPECIFIED') ||
-    (typeof finishReason === 'string' && blockedFinishReasons.has(finishReason))
-  ) {
-    throw new GeminiRequestError(GEMINI_ERRORS.blocked);
-  }
-
-  const parts = candidate?.content?.parts;
-  const text = Array.isArray(parts)
-    ? parts
-        .map(part => typeof part?.text === 'string' ? part.text : '')
-        .filter(Boolean)
-        .join('\n')
-        .trim()
-    : '';
-  if (!text) throw new GeminiRequestError(GEMINI_ERRORS.empty);
-  return text;
-}
-
-function isAbortError(error: unknown): boolean {
-  return !!error && typeof error === 'object' &&
-    (error as { name?: unknown }).name === 'AbortError';
-}
-
-async function requestGeminiReflection(apiKey: string, prompt: string): Promise<string> {
-  // Time-boxed: a stalled connection would otherwise spin forever with both
-  // analyse buttons disabled. The key stays in a header so it cannot enter URL
-  // logging, and neither the key nor journal payload is ever logged here.
-  const abort = new AbortController();
-  const timeout = setTimeout(() => abort.abort(), 20000);
-  try {
-    const res = await fetch(GEMINI_GENERATE_URL, {
-      method: 'POST',
-      signal: abort.signal,
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-      }),
-    });
-    const payload: unknown = await res.json().catch(() => null);
-    if (!res.ok) {
-      throw new GeminiRequestError(geminiHttpErrorMessage(res.status, payload));
-    }
-    return geminiResponseText(payload);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
 
 // Shown before a key is saved, so the page demonstrates its value first.
 const EXAMPLE_REFLECTION =
@@ -5435,7 +5313,7 @@ function InsightsPage({
   const [hasTarot, setHasTarot] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_GEMINI_KEY).then(v => {
+    loadGeminiApiKey().then(v => {
       if (v) {
         setSavedKey(v);
         setKeyDraft(v);
@@ -5475,14 +5353,21 @@ function InsightsPage({
     if (!trimmed) return;
     if (!hasKey) setKeyInputOpen(true); // Keep the field visible as the layout switches.
     setSavedKey(trimmed);
-    AsyncStorage.setItem(STORAGE_GEMINI_KEY, trimmed).catch(() => {});
+    saveGeminiApiKey(trimmed).catch(() => {});
   }
 
-  function removeKey() {
-    setSavedKey('');
-    setKeyDraft('');
-    setKeyInputOpen(false);
-    AsyncStorage.removeItem(STORAGE_GEMINI_KEY).catch(() => {});
+  async function removeKey() {
+    try {
+      await removeGeminiApiKey();
+      setSavedKey('');
+      setKeyDraft('');
+      setKeyInputOpen(false);
+    } catch {
+      notify(
+        'Could not remove key',
+        'Secure storage did not confirm the deletion. Please try again.',
+      );
+    }
   }
 
   function toggleSource(k: AISourceKey) {
@@ -5559,24 +5444,14 @@ function InsightsPage({
           sections.join('\n\n');
       } else {
         const tarotRaw = await AsyncStorage.getItem(STORAGE_TAROT);
-        type TarotCardLite = { name?: string; meaning_up?: string; desc?: string };
-        const tarotParsed = safeParse<{ card?: TarotCardLite }>(tarotRaw, {});
-        const card: TarotCardLite | null =
-          (tarotParsed && typeof tarotParsed === 'object' && tarotParsed.card && typeof tarotParsed.card === 'object')
-            ? tarotParsed.card
-            : null;
-        if (!card) {
-          notify('No card drawn', 'Open the Horoscopes tab and draw a card first.');
+        const tarotParsed = safeParse<unknown>(tarotRaw, null);
+        const tarotPrompt = buildTarotInterpretationPrompt(tarotParsed);
+        if (!tarotPrompt) {
+          notify('No card drawn', 'Open Stars and draw a card first.');
           setLoading(false);
           return;
         }
-        prompt =
-          'You are a thoughtful tarot interpreter. The user drew the following card. ' +
-          'Give a calm, grounded interpretation in plain language. What it might invite ' +
-          'them to notice today. Avoid clichés or fortune-telling claims. Under 180 words.\n\n' +
-          `Card: ${card.name}\n` +
-          `Upright meaning: ${card.meaning_up ?? ''}\n` +
-          `Description: ${(card.desc ?? '').slice(0, 600)}`;
+        prompt = tarotPrompt;
       }
 
       const text = await requestGeminiReflection(savedKey.trim(), prompt);
@@ -5619,7 +5494,7 @@ function InsightsPage({
             <GlowCard accent="#8FB8DE" style={{ marginTop: 16, padding: 22, alignItems: 'center' }}>
               <Text style={styles.supportHeadline}>A quiet reader for your journal</Text>
               <Text style={[styles.supportText, { marginBottom: 0 }]}>
-                Your mood, gratitude, and manifestations already hold patterns. With a free
+                Your mood, gratitude, and manifestations already hold patterns. With your own
                 Gemini key, this page writes you a short reflection in the style of a dream
                 journal. Everything stays on this device until you choose to share it.
               </Text>
@@ -5651,7 +5526,11 @@ function InsightsPage({
           <View style={styles.settingRow}>
             <View style={{ flex: 1, paddingRight: 12 }}>
               <Text style={styles.settingLabel}>Gemini key</Text>
-              <Text style={styles.bugAppInfoPreview}>Stored locally without app-level encryption</Text>
+              <Text style={styles.bugAppInfoPreview}>
+                {Platform.OS === 'web'
+                  ? 'Available for this browser session only'
+                  : 'Protected in this device\'s secure storage'}
+              </Text>
             </View>
             <TouchableOpacity
               activeOpacity={0.85}
@@ -5669,7 +5548,9 @@ function InsightsPage({
             <Text style={styles.linkText} onPress={() => setConfirmOpenLink(true)}>
               aistudio.google.com
             </Text>
-            . The app stores it locally without app-level encryption.
+            {Platform.OS === 'web'
+              ? '. The key stays only for this browser session.'
+              : '. The key is protected in this device\'s secure storage.'}
           </Text>
         )}
         {!hasKey || keyInputOpen ? (
@@ -5696,6 +5577,10 @@ function InsightsPage({
             <Text style={styles.rantLetGoText}>Remove key</Text>
           </TouchableOpacity>
         ) : null}
+        <Text style={styles.notifHint}>
+          Use a current auth key from Google AI Studio. If Google marks a key exposed or blocked,
+          remove it here, revoke it there, and create a replacement.
+        </Text>
 
         <Text style={styles.sectionLabel}>SHARE WITH AI</Text>
         <Text style={styles.sectionSub}>
@@ -5769,7 +5654,7 @@ function InsightsPage({
           <Text style={[styles.aiBtnText, styles.aiBtnGhostText]}>INTERPRET TODAY'S TAROT</Text>
         </TouchableOpacity>
         {!hasTarot ? (
-          <Text style={styles.notifHint}>Draw a card in Horoscopes first.</Text>
+          <Text style={styles.notifHint}>Draw a card in Stars first.</Text>
         ) : null}
         </GlowCard>
 
@@ -5805,8 +5690,10 @@ function InsightsPage({
 
         <Text style={styles.aiFootnote}>
           Powered by Google Gemini with your own key. Journal analysis sends only the sources
-          you toggle on. Tarot interpretation sends the drawn card. Nothing is sent until you
-          tap a button. Your key is stored locally without app-level encryption.
+          shown as enabled. Tarot interpretation sends the drawn card name, orientation,
+          matching meaning, and description. Nothing is sent until you tap a button. {Platform.OS === 'web'
+            ? 'Your key is kept only for this browser session.'
+            : 'Your key is protected by this device\'s secure storage.'}
         </Text>
       </StickySubpageScroll>
 

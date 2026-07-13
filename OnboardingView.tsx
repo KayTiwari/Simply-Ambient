@@ -276,7 +276,7 @@ export default function OnboardingView({
                     label="YOUR DATA"
                     color="#9DC7AC"
                     last
-                    body="Everything you enter (profile, mood, gratitude, rants, manifestations) is stored only on this device. Horoscopes send only your sign; crash reports carry only anonymous diagnostics, and your journals stay out of them. Beyond that, nothing leaves the app unless you explicitly tap an analyse button on the AI Insights page, which sends only the data sources you toggle on to Google Gemini using your own API key."
+                    body="Everything you enter (profile, mood, gratitude, rants, manifestations) is stored only on this device. Horoscopes send your sign and period. Filtered crash diagnostics never include your journals or saved key. AI Insights contacts Google Gemini only after you tap an action: Journal Themes sends the sources shown as enabled, while Interpret Tarot sends the drawn card, orientation, matching meaning, and description."
                   />
                 </AmbientSurface>
 

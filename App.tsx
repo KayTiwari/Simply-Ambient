@@ -78,15 +78,45 @@ Sentry.init({
   // Dev-session noise (Metro red screens, hot-reload parse errors) stays out
   // of the production crash bucket.
   enabled: !__DEV__,
-  // Don't ship sensitive data. Journal entries / rants must never be auto-attached.
+  sendDefaultPii: false,
+  maxBreadcrumbs: 0,
+  enableAutoSessionTracking: false,
+  // Keep reports deliberately narrow. Stack frames plus basic app/device/OS
+  // context are enough to diagnose a crash; free-form fields could contain a
+  // journal value, selected sign, imported filename, or service response.
   beforeSend(event) {
-    if (event.contexts) delete event.contexts.state;
+    delete event.message;
+    delete event.logentry;
+    delete event.user;
+    delete event.request;
+    delete event.extra;
+    delete event.tags;
+    delete event.breadcrumbs;
+    delete event.transaction;
+    delete event.transaction_info;
+    delete event.fingerprint;
+    if (event.contexts) {
+      Object.keys(event.contexts).forEach(key => {
+        if (!['app', 'device', 'os'].includes(key)) delete event.contexts?.[key];
+      });
+    }
+    const stripFrameContext = (frame: Record<string, unknown>) => {
+      delete frame.vars;
+      delete frame.pre_context;
+      delete frame.context_line;
+      delete frame.post_context;
+    };
+    event.exception?.values?.forEach(value => {
+      delete value.value;
+      value.stacktrace?.frames?.forEach(frame => stripFrameContext(frame as unknown as Record<string, unknown>));
+    });
+    event.threads?.values?.forEach(thread => {
+      thread.stacktrace?.frames?.forEach(frame => stripFrameContext(frame as unknown as Record<string, unknown>));
+    });
     return event;
   },
-  // The in-app privacy copy enumerates exactly what a crash report carries
-  // (device model, OS and app version, stack trace). Default breadcrumbs
-  // would add console lines and network URLs, and the horoscope URL embeds
-  // the user's sign, so drop breadcrumbs entirely to keep that list true.
+  // Default breadcrumbs would add console lines and network URLs, and the
+  // horoscope URL embeds the user's sign, so drop breadcrumbs entirely.
   beforeBreadcrumb() {
     return null;
   },
@@ -268,6 +298,11 @@ import {
   btoaFallback,
 } from './lib/binauralMath';
 import { NOTIF_AFFIRMATIONS } from './lib/affirmations';
+import {
+  appOwnedDocumentPickerCacheUri,
+  removeAndVerifyAppStorage,
+} from './lib/appDataWipe';
+import { removeGeminiApiKey } from './lib/geminiKeyStorage';
 import { recordAppOpen, recordSessionCompleted } from './lib/rateApp';
 import { CHAKRAS, DOSHAS, ZODIAC, type BandKey, type Chakra, type Dosha, type Zodiac } from './lib/content';
 const STORAGE_KEY = '@binaural_user_presets_v1';
@@ -696,6 +731,20 @@ if (!IS_EXPO_GO && Platform.OS !== 'web') {
 // cancel their own notifications without wiping the other's.
 const AFFIRM_NOTIF_PREFIX = 'affirm-';
 const GRAT_NOTIF_PREFIX = 'grat-reminder-';
+let affirmationScheduleGeneration = 0;
+let gratitudeScheduleGeneration = 0;
+const pendingNotificationOperations = new Set<Promise<void>>();
+
+function invalidateNotificationScheduling() {
+  affirmationScheduleGeneration += 1;
+  gratitudeScheduleGeneration += 1;
+}
+
+function trackNotificationOperation(operation: Promise<void>): Promise<void> {
+  pendingNotificationOperations.add(operation);
+  void operation.finally(() => pendingNotificationOperations.delete(operation)).catch(() => {});
+  return operation;
+}
 
 async function cancelScheduledByPrefix(prefix: string) {
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
@@ -706,13 +755,16 @@ async function cancelScheduledByPrefix(prefix: string) {
   }
 }
 
-async function scheduleAffirmationNotifs(pref: NotifPref) {
+async function scheduleAffirmationNotifsNow(pref: NotifPref) {
   if (Platform.OS === 'web') return; // Local scheduled notifs aren't supported in the browser
   if (IS_EXPO_GO) return; // No scheduling in Expo Go on SDK 53+
+  const generation = ++affirmationScheduleGeneration;
   try {
     await cancelScheduledByPrefix(AFFIRM_NOTIF_PREFIX);
+    if (generation !== affirmationScheduleGeneration) return;
     if (pref === 'off') return;
     const { status } = await Notifications.requestPermissionsAsync();
+    if (generation !== affirmationScheduleGeneration) return;
     if (status !== 'granted') return;
     const times = pref === 'daily'
       ? [{ hour: 9, minute: 0 }]
@@ -723,6 +775,7 @@ async function scheduleAffirmationNotifs(pref: NotifPref) {
     const now = new Date();
     for (let day = 0; day < 14; day++) {
       for (const t of times) {
+        if (generation !== affirmationScheduleGeneration) return;
         const fireAt = new Date(
           now.getFullYear(), now.getMonth(), now.getDate() + day,
           t.hour, t.minute, 0,
@@ -743,13 +796,19 @@ async function scheduleAffirmationNotifs(pref: NotifPref) {
   }
 }
 
+function scheduleAffirmationNotifs(pref: NotifPref): Promise<void> {
+  return trackNotificationOperation(scheduleAffirmationNotifsNow(pref));
+}
+
 // Evening gratitude nudge. Accepts legacy whole-hour values such as "21"
 // and precise 24-hour clock values such as "21:35".
-export async function scheduleGratitudeReminder(pref: string) {
+async function scheduleGratitudeReminderNow(pref: string) {
   if (Platform.OS === 'web') return;
   if (IS_EXPO_GO) return;
+  const generation = ++gratitudeScheduleGeneration;
   try {
     await cancelScheduledByPrefix(GRAT_NOTIF_PREFIX);
+    if (generation !== gratitudeScheduleGeneration) return;
     if (pref === 'off') return;
     const match = /^(\d{1,2})(?::(\d{2}))?$/.exec(pref);
     if (!match) return;
@@ -758,6 +817,7 @@ export async function scheduleGratitudeReminder(pref: string) {
     if (!Number.isInteger(hour) || hour < 0 || hour > 23) return;
     if (!Number.isInteger(minute) || minute < 0 || minute > 59) return;
     const { status } = await Notifications.requestPermissionsAsync();
+    if (generation !== gratitudeScheduleGeneration) return;
     if (status !== 'granted') return;
     await Notifications.scheduleNotificationAsync({
       identifier: `${GRAT_NOTIF_PREFIX}${String(hour).padStart(2, '0')}-${String(minute).padStart(2, '0')}`,
@@ -774,6 +834,10 @@ export async function scheduleGratitudeReminder(pref: string) {
   } catch (e) {
     console.warn('gratitude reminder scheduling failed', e);
   }
+}
+
+export function scheduleGratitudeReminder(pref: string): Promise<void> {
+  return trackNotificationOperation(scheduleGratitudeReminderNow(pref));
 }
 
 function randomAffirmation() {
@@ -2015,8 +2079,11 @@ function AppContent() {
 
   const tonePlayerRef = useRef<AudioPlayer | null>(null);
   const tonePlayGenRef = useRef(0);
+  const pendingToneWritesRef = useRef(new Set<Promise<void>>());
   const bgPlayerRef = useRef<AudioPlayer | null>(null);
   const soundscapePlayerRef = useRef<AudioPlayer | null>(null);
+  const soundscapePlayGenRef = useRef(0);
+  const pendingSoundscapeSourcesRef = useRef(new Set<Promise<AudioSource>>());
   const soundscapeCacheRef = useRef<Partial<Record<SoundscapeKey, string>>>({});
   // Web-only: gapless oscillator engine, created lazily on first play.
   const webToneRef = useRef<WebToneEngine | null>(null);
@@ -2093,8 +2160,16 @@ function AppContent() {
   // would wipe saved presets if the app is killed in the window (or if the
   // load fails).
   const presetsHydratedRef = useRef(false);
+  // A successful destructive wipe resets the in-memory preset array. Skip the
+  // persistence effect for that one reset so it cannot recreate a just-removed
+  // AsyncStorage key as an empty JSON array.
+  const skipNextPresetPersistRef = useRef(false);
   useEffect(() => {
     if (!presetsHydratedRef.current) return;
+    if (skipNextPresetPersistRef.current) {
+      skipNextPresetPersistRef.current = false;
+      return;
+    }
     AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(userPresets)).catch(() => {});
   }, [userPresets]);
 
@@ -2126,9 +2201,15 @@ function AppContent() {
 
       // Native writes the synthesized WAV to a cache file and plays the file
       // URI (with a cache-busting query so the audio system re-reads it).
-      await FileSystem.writeAsStringAsync(TONE_FILE_PATH, base64, {
+      const toneWrite = FileSystem.writeAsStringAsync(TONE_FILE_PATH, base64, {
         encoding: FileSystem.EncodingType.Base64,
       });
+      pendingToneWritesRef.current.add(toneWrite);
+      try {
+        await toneWrite;
+      } finally {
+        pendingToneWritesRef.current.delete(toneWrite);
+      }
       if (myGen !== tonePlayGenRef.current) return;
       const source = { uri: `${TONE_FILE_PATH}?v=${Date.now()}` };
 
@@ -2669,15 +2750,25 @@ function AppContent() {
   }
 
   async function playSoundscape(id: SoundscapeKey) {
+    const myGeneration = ++soundscapePlayGenRef.current;
     try {
       if (Platform.OS === 'web') {
         if (!webSoundscapeRef.current) webSoundscapeRef.current = new WebSoundscapeEngine();
         await webSoundscapeRef.current.play(id, soundscapeVolume);
+        if (myGeneration !== soundscapePlayGenRef.current) return;
         setActiveSoundscapeId(id);
         setIsSoundscapePlaying(true);
         return;
       }
-      const source = await ensureSoundscapeSource(id);
+      const sourcePromise = ensureSoundscapeSource(id);
+      pendingSoundscapeSourcesRef.current.add(sourcePromise);
+      let source: AudioSource;
+      try {
+        source = await sourcePromise;
+      } finally {
+        pendingSoundscapeSourcesRef.current.delete(sourcePromise);
+      }
+      if (myGeneration !== soundscapePlayGenRef.current) return;
       if (!soundscapePlayerRef.current || activeSoundscapeId !== id) {
         try { soundscapePlayerRef.current?.release(); } catch {}
         try { soundscapePlayerRef.current?.remove?.(); } catch {}
@@ -2697,6 +2788,7 @@ function AppContent() {
   }
 
   function stopSoundscape() {
+    soundscapePlayGenRef.current += 1;
     if (Platform.OS === 'web') {
       try { webSoundscapeRef.current?.stop(); } catch {}
       setIsSoundscapePlaying(false);
@@ -2737,6 +2829,143 @@ function AppContent() {
     if (isBgPlaying) {
       try { bgPlayerRef.current?.pause(); } catch {}
       setIsBgPlaying(false);
+    }
+  }
+
+  async function deleteWipeAudioCaches() {
+    if (Platform.OS === 'web') {
+      if (bgUri?.startsWith('blob:') && typeof globalThis.URL?.revokeObjectURL === 'function') {
+        globalThis.URL.revokeObjectURL(bgUri);
+      }
+      return;
+    }
+
+    // A procedural soundscape may still be finishing its cache write when the
+    // user confirms the wipe. Let that write settle before deleting known
+    // cache paths so it cannot recreate a file after successful verification.
+    await Promise.allSettled([
+      ...pendingToneWritesRef.current,
+      ...pendingSoundscapeSourcesRef.current,
+    ]);
+
+    const documentPickerCache = appOwnedDocumentPickerCacheUri(FileSystem.cacheDirectory);
+    const generatedSoundscapes = SOUNDSCAPES
+      .filter(item => !BUNDLED_SOUNDSCAPES[item.id])
+      .map(item => `${SOUNDSCAPE_FILE_PREFIX}${item.id}.wav`);
+    const paths = [documentPickerCache, TONE_FILE_PATH, ...generatedSoundscapes]
+      .filter((path): path is string => Boolean(path));
+
+    const results = await Promise.allSettled(
+      paths.map(path => FileSystem.deleteAsync(path, { idempotent: true })),
+    );
+    // Never retain paths that this wipe attempted to delete, even when one
+    // unrelated cache deletion failed and the overall wipe must reject.
+    soundscapeCacheRef.current = {};
+    if (results.some(result => result.status === 'rejected')) {
+      throw new Error('An app audio cache could not be deleted.');
+    }
+  }
+
+  function stopAndReleaseAudioForWipe() {
+    setSleepTimer(0);
+    stopTones();
+    stopSoundscape();
+
+    try { webToneRef.current?.stop(); } catch {}
+    try { webSoundscapeRef.current?.stop(); } catch {}
+    webToneRef.current = null;
+    webSoundscapeRef.current = null;
+
+    const bgPlayer = bgPlayerRef.current;
+    bgPlayerRef.current = null;
+    if (bgPlayer) {
+      try { bgPlayer.pause(); } catch {}
+      try { bgPlayer.release(); } catch {
+        try { bgPlayer.remove?.(); } catch {}
+      }
+    }
+
+    const soundscapePlayer = soundscapePlayerRef.current;
+    soundscapePlayerRef.current = null;
+    if (soundscapePlayer) {
+      try { soundscapePlayer.pause(); } catch {}
+      try { soundscapePlayer.release(); } catch {
+        try { soundscapePlayer.remove?.(); } catch {}
+      }
+    }
+
+    setIsBgPlaying(false);
+    setIsSoundscapePlaying(false);
+  }
+
+  async function wipeAllAppData() {
+    // Stop every timer/player before deleting cache files they may still hold.
+    stopAndReleaseAudioForWipe();
+    invalidateNotificationScheduling();
+
+    const failures: unknown[] = [];
+    const attempt = async (operation: () => Promise<void>) => {
+      try {
+        await operation();
+      } catch (error) {
+        failures.push(error);
+      }
+    };
+
+    // Keep all cleanup attempts independent so one unavailable subsystem does
+    // not prevent deletion from the others. Any failure still rejects the
+    // overall action and Safety will not claim that the wipe succeeded.
+    await attempt(removeGeminiApiKey);
+    await attempt(() => removeAndVerifyAppStorage(AsyncStorage));
+    await attempt(deleteWipeAudioCaches);
+    if (Platform.OS !== 'web' && !IS_EXPO_GO) {
+      await attempt(async () => {
+        await Promise.allSettled([...pendingNotificationOperations]);
+        await Notifications.cancelAllScheduledNotificationsAsync();
+      });
+    }
+
+    // Reset App-owned state directly. Calling the normal preference handlers
+    // here would immediately write their defaults back into AsyncStorage. Do
+    // this even after a partial subsystem failure so stale in-memory App state
+    // cannot resurrect data that another cleanup step did remove. Safety still
+    // receives a rejection and never reports a complete wipe in that case.
+    pinnedMorePagesTouched.current = true;
+    pinnedMorePagesRef.current = [];
+    setPinnedMorePages([]);
+    setNewlyPinnedMorePage(null);
+    setMorePageRequest(null);
+    setSingleColor(null);
+    setNotifPref('off');
+    setAffirmation(null);
+    setAffLoading(false);
+    setMySignId(null);
+
+    // setUserPresets receives a fresh empty array even when it was already
+    // empty, so always suppress the resulting persistence effect.
+    skipNextPresetPersistRef.current = true;
+    setUserPresets([]);
+    setLeftHz(DEFAULT_LEFT);
+    setRightHz(DEFAULT_RIGHT);
+    setActivePresetId(null);
+    setActiveBand('none');
+    toneVolumeRef.current = 1;
+    setToneVolume(1);
+    setShowSaveModal(false);
+    setSaveName('');
+
+    setBgUri(null);
+    setBgFileName(null);
+    setBgVolume(0.5);
+    setActiveSoundscapeId(null);
+    setSoundscapeVolume(0.42);
+    setAudioSafetyAck(false);
+    setShowAudioSafetyModal(false);
+    pendingRoutineRef.current = null;
+    setOnboardingIsReplay(false);
+
+    if (failures.length > 0) {
+      throw new Error('Simply Ambient could not verify a complete data wipe.');
     }
   }
 
@@ -2860,6 +3089,7 @@ function AppContent() {
                 ambientAccent={beatColor}
                 onChangeSingleColor={setSingleColorPref}
                 onReplayOnboarding={replayOnboarding}
+                onWipeAllData={wipeAllAppData}
               />
             )}
           </Animated.View>
