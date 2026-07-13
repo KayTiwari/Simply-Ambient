@@ -24,7 +24,6 @@ import Svg, { Circle as SvgCircle, Path as SvgPath } from 'react-native-svg';
 import { StatusBar } from 'expo-status-bar';
 import Slider from '@react-native-community/slider';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import {
   createAudioPlayer,
   setAudioModeAsync,
@@ -118,6 +117,7 @@ import {
   EdgeFadeCarousel,
   EditorialHeader,
   EditorialSection,
+  HeaderGlass,
 } from './AmbientUI';
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
@@ -3258,42 +3258,9 @@ function MiniPlayer({
         style={[
           styles.miniPlayer,
           routineName && styles.miniPlayerRoutine,
-          {
-            borderColor: accent + '70',
-            backgroundColor: 'transparent',
-          },
         ]}
       >
-        {Platform.OS === 'web' ? (
-          <View
-            style={[
-              StyleSheet.absoluteFill,
-              { backgroundColor: accent + '0D' },
-              ({
-                backdropFilter: 'blur(46px) saturate(145%)',
-                WebkitBackdropFilter: 'blur(46px) saturate(145%)',
-              } as any),
-            ]}
-            pointerEvents="none"
-          />
-        ) : (
-          <BlurView
-            intensity={46}
-            tint="dark"
-            experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
-        )}
-        <LinearGradient
-          colors={[accent + '24', 'rgba(13,15,32,0.11)', accent + '0A']}
-          locations={[0, 0.46, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-        <View style={[styles.miniAura, { backgroundColor: accent + '16' }]} pointerEvents="none" />
+        <HeaderGlass accent={accent} variant="soft" />
         <View style={styles.miniPlayerMainRow}>
           <TouchableOpacity
             activeOpacity={0.85}
@@ -4817,7 +4784,8 @@ const styles = StyleSheet.create({
     minHeight: 76,
     borderRadius: 24,
     borderWidth: 1,
-    backgroundColor: 'rgba(8,8,22,0.12)',
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(8,9,25,0.07)',
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.22,
@@ -4827,10 +4795,6 @@ const styles = StyleSheet.create({
   },
   miniPlayerRoutine: { minHeight: 108 },
   miniPlayerMainRow: { flexDirection: 'row', alignItems: 'center' },
-  miniAura: {
-    position: 'absolute', width: 130, height: 130, borderRadius: 65,
-    right: -54, top: -78,
-  },
   miniPlayBtn: {
     width: 48,
     height: 48,
