@@ -20,7 +20,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import Slider from '@react-native-community/slider';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Circle as SvgCircle, Line as SvgLine, Path as SvgPath } from 'react-native-svg';
 import {
   CaretLeft,
   CaretRight,
@@ -4680,6 +4680,72 @@ const SAMPLE_ROUTINES: Routine[] = [
   },
 ];
 
+// Hand-drawn backdrop sigils, one per routine journey: a rising sun for the
+// morning path, a setting sun for the wind-down, a crescent over deep water
+// for sleep. Same stroke language as the chakra sigils.
+function RoutineSigil({ routineId, color, size }: { routineId: string; color: string; size: number }) {
+  const stroke = {
+    fill: 'none' as const,
+    stroke: color,
+    strokeWidth: 1.1,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  };
+  let mark: React.ReactNode;
+  switch (routineId) {
+    case 'morning-focus':
+      mark = (
+        <>
+          {/* Sun climbing above the horizon, rays reaching up */}
+          <SvgLine x1={3} y1={16} x2={21} y2={16} {...stroke} />
+          <SvgPath d="M7.5 16 A4.5 4.5 0 0 1 16.5 16" {...stroke} />
+          <SvgLine x1={12} y1={6} x2={12} y2={8.4} {...stroke} />
+          <SvgLine x1={5.8} y1={8.6} x2={7.4} y2={10.2} {...stroke} />
+          <SvgLine x1={18.2} y1={8.6} x2={16.6} y2={10.2} {...stroke} />
+          <SvgCircle cx={12} cy={19} r={0.9} fill={color} />
+        </>
+      );
+      break;
+    case 'evening-windown':
+      mark = (
+        <>
+          {/* Sun slipping below the horizon, last light settling */}
+          <SvgLine x1={3} y1={11} x2={21} y2={11} {...stroke} />
+          <SvgPath d="M7.5 11 A4.5 4.5 0 0 0 16.5 11" {...stroke} />
+          <SvgLine x1={8.2} y1={7.6} x2={9.4} y2={8.8} {...stroke} strokeOpacity={0.65} />
+          <SvgLine x1={12} y1={6.6} x2={12} y2={8.2} {...stroke} strokeOpacity={0.65} />
+          <SvgLine x1={15.8} y1={7.6} x2={14.6} y2={8.8} {...stroke} strokeOpacity={0.65} />
+          <SvgPath d="M5 19 C8 17.6 10.5 20 13.5 18.6 S19 17.6 21 18.8" {...stroke} strokeOpacity={0.55} />
+        </>
+      );
+      break;
+    default:
+      mark = (
+        <>
+          {/* Crescent over deep water, two far stars */}
+          <SvgPath d="M14.5 4.5 A5.6 5.6 0 1 0 14.5 15.5 A4.4 4.4 0 1 1 14.5 4.5 Z" {...stroke} />
+          <SvgCircle cx={18.6} cy={6.4} r={0.7} fill={color} />
+          <SvgCircle cx={20.2} cy={10.2} r={0.5} fill={color} opacity={0.7} />
+          <SvgPath d="M3.5 18.4 C6 17 8.5 19.4 11.5 18 S17 17 19.5 18.2" {...stroke} strokeOpacity={0.7} />
+          <SvgPath d="M5 21 C7.5 19.8 10 21.8 13 20.6 S18 19.8 20.5 20.8" {...stroke} strokeOpacity={0.4} />
+        </>
+      );
+  }
+  return (
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      pointerEvents="none"
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      {mark}
+    </Svg>
+  );
+}
+
 type RoutinesPageProps = {
   onBack: () => void;
   activeRoutineId: RoutinePathId | null;
@@ -4738,7 +4804,9 @@ function RoutinesPage({
                   ? [styles.routineCard, { borderColor: r.color, borderWidth: 2 }]
                   : styles.routineCard}
               >
-                <Text style={[styles.routineBackdropGlyph, { color: r.color + '24' }]}>△</Text>
+                <View style={styles.routineBackdropSigil} pointerEvents="none">
+                  <RoutineSigil routineId={r.id} color={r.color} size={150} />
+                </View>
                 <Text style={[styles.routineEyebrow, { color: r.color }]}>SESSION PATH</Text>
                 <View style={styles.routineTitleRow}>
                   <Text style={[styles.routineName, { color: r.color }]}>{r.name}</Text>
@@ -6565,9 +6633,9 @@ const styles = StyleSheet.create({
   routineCard: {
     padding: 17, marginBottom: 12, minHeight: 190,
   },
-  routineBackdropGlyph: {
-    position: 'absolute', right: -15, top: -38,
-    fontSize: 170, lineHeight: 190, transform: [{ rotate: '8deg' }],
+  routineBackdropSigil: {
+    position: 'absolute', right: -18, top: -26,
+    opacity: 0.3, transform: [{ rotate: '6deg' }],
   },
   routineEyebrow: { fontSize: 8, fontWeight: '800', letterSpacing: 1.7, marginBottom: 7 },
   routineTitleRow: {
