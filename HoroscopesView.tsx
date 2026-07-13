@@ -882,6 +882,8 @@ export default function HoroscopesView({
                 label="CURRENT READING"
                 detail={horoscopeTs != null ? freshnessLabel(horoscopeTs) : 'held locally'}
                 active
+                pulse
+                pulseIntensity="subtle"
               />
             </>
           ) : (
