@@ -373,7 +373,10 @@ function sunSignFromBirthDate(birthDate: string | undefined): Zodiac | null {
 // close on classic nav bars and short on tall insets.
 function useSubBodyPad() {
   const insets = useSafeAreaInsets();
-  return { paddingBottom: insets.bottom + 96 };
+  // Clearance for the tallest bottom obstruction: the tab bar in its
+  // six-tab form plus a docked mini player. Short of measuring the real
+  // bar, generous beats a calendar row trapped underneath it.
+  return { paddingBottom: insets.bottom + 148 };
 }
 
 export default function MoreView({
