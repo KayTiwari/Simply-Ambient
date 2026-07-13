@@ -464,75 +464,94 @@ function RippleField({
 }
 
 // A horizontal carousel whose clipped edges dissolve instead of slicing
-// cards. The trailing fade lifts as you approach the end; the leading fade
-// appears only once you have scrolled, so a fresh row reads clean.
+// cards. Each card fades its own opacity as it nears a clipped edge, so the
+// live background behind the row is never painted over; the field stays
+// pristine while cards ghost in and out of the viewport.
 export function EdgeFadeCarousel({
   children,
   contentContainerStyle,
-  fadeWidth = 44,
+  fadeZone = 64,
 }: {
   children: React.ReactNode;
   contentContainerStyle?: StyleProp<ViewStyle>;
-  fadeWidth?: number;
+  fadeZone?: number;
 }) {
   const scrollX = useRef(new Animated.Value(0)).current;
   const [viewportW, setViewportW] = React.useState(0);
   const [contentW, setContentW] = React.useState(0);
-  const maxScroll = Math.max(0, contentW - viewportW);
-  const scrollable = maxScroll > 1;
-
-  const leftOpacity = scrollX.interpolate({
-    inputRange: [0, 28],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-  const rightOpacity = scrollable
-    ? scrollX.interpolate({
-        inputRange: [Math.max(0, maxScroll - 28), maxScroll],
-        outputRange: [1, 0],
-        extrapolate: 'clamp',
-      })
-    : 0;
+  const scrollable = contentW - viewportW > 1;
 
   return (
-    <View>
-      <Animated.ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={contentContainerStyle}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-          { useNativeDriver: true },
-        )}
-        scrollEventThrottle={16}
-        onLayout={e => setViewportW(e.nativeEvent.layout.width)}
-        onContentSizeChange={w => setContentW(w)}
-      >
-        {children}
-      </Animated.ScrollView>
-      <Animated.View
-        pointerEvents="none"
-        style={[shared.carouselFade, shared.carouselFadeLeft, { width: fadeWidth, opacity: leftOpacity }]}
-      >
-        <LinearGradient
-          colors={['rgba(8,9,25,0.82)', 'rgba(8,9,25,0)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={StyleSheet.absoluteFill}
-        />
-      </Animated.View>
-      <Animated.View
-        pointerEvents="none"
-        style={[shared.carouselFade, shared.carouselFadeRight, { width: fadeWidth, opacity: rightOpacity }]}
-      >
-        <LinearGradient
-          colors={['rgba(8,9,25,0)', 'rgba(8,9,25,0.82)']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={StyleSheet.absoluteFill}
-        />
-      </Animated.View>
-    </View>
+    <Animated.ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={contentContainerStyle}
+      onScroll={Animated.event(
+        [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+        { useNativeDriver: true },
+      )}
+      scrollEventThrottle={16}
+      onLayout={e => setViewportW(e.nativeEvent.layout.width)}
+      onContentSizeChange={w => setContentW(w)}
+    >
+      {React.Children.map(children, child => (
+        <FadingCarouselItem
+          scrollX={scrollX}
+          viewportW={viewportW}
+          scrollable={scrollable}
+          fadeZone={fadeZone}
+        >
+          {child}
+        </FadingCarouselItem>
+      ))}
+    </Animated.ScrollView>
+  );
+}
+
+function FadingCarouselItem({
+  scrollX,
+  viewportW,
+  scrollable,
+  fadeZone,
+  children,
+}: {
+  scrollX: Animated.Value;
+  viewportW: number;
+  scrollable: boolean;
+  fadeZone: number;
+  children: React.ReactNode;
+}) {
+  const [geom, setGeom] = React.useState<{ x: number; w: number } | null>(null);
+
+  let opacity: Animated.Value | Animated.AnimatedInterpolation<number> | Animated.AnimatedMultiplication<number> | number = 1;
+  if (geom && viewportW > 0 && scrollable) {
+    // Fade out while exiting the left edge, and stay faded until the card
+    // has fully entered from the right. The two zones never overlap for one
+    // card, so each fade sits at 1 outside its zone and a multiply combines
+    // them safely.
+    const exitingLeft = scrollX.interpolate({
+      inputRange: [geom.x + geom.w - fadeZone, geom.x + geom.w - 12],
+      outputRange: [1, 0.05],
+      extrapolate: 'clamp',
+    });
+    const enteringRight = scrollX.interpolate({
+      inputRange: [geom.x - viewportW + 12, geom.x - viewportW + fadeZone],
+      outputRange: [0.05, 1],
+      extrapolate: 'clamp',
+    });
+    opacity = Animated.multiply(exitingLeft, enteringRight);
+  }
+
+  return (
+    <Animated.View
+      onLayout={e => {
+        const { x, width } = e.nativeEvent.layout;
+        setGeom(prev => (prev && prev.x === x && prev.w === width ? prev : { x, w: width }));
+      }}
+      style={{ opacity }}
+    >
+      {children}
+    </Animated.View>
   );
 }
 
@@ -813,9 +832,6 @@ const shared = StyleSheet.create({
     left: '16%', top: '24%',
     width: '68%', aspectRatio: 1,
   },
-  carouselFade: { position: 'absolute', top: 0, bottom: 0 },
-  carouselFadeLeft: { left: 0 },
-  carouselFadeRight: { right: 0 },
   cornerRing: {
     position: 'absolute', width: 170, height: 170, borderRadius: 85,
     borderWidth: 1, top: -52, right: -66,
