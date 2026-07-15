@@ -116,16 +116,20 @@ function useLoop(active: boolean, duration: number, lead = 0): Animated.Value {
   useEffect(() => {
     if (!active) { v.stopAnimation(); v.setValue(0); return; }
     let alive = true;
+    // Cleanup stops the composite, never v directly: during the lead the
+    // delay runs on an internal value, so v.stopAnimation() would miss it
+    // and the queued pass would still fire on a paused scene.
+    let anim: Animated.CompositeAnimation | null = null;
     const run = () => {
       v.setValue(0);
       const pass = Animated.timing(v, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: true });
-      (lead ? Animated.sequence([Animated.delay(lead), pass]) : pass)
-        .start(({ finished }) => {
-          if (finished && alive) run();
-        });
+      anim = lead ? Animated.sequence([Animated.delay(lead), pass]) : pass;
+      anim.start(({ finished }) => {
+        if (finished && alive) run();
+      });
     };
     run();
-    return () => { alive = false; v.stopAnimation(); v.setValue(0); };
+    return () => { alive = false; anim?.stop(); v.setValue(0); };
   }, [active, duration, lead, v]);
   return v;
 }
@@ -219,7 +223,7 @@ function WrapXLayer({
   render: (xOff: number) => React.ReactNode;
 }) {
   const loop = useLoop(playing, duration);
-  const bob = useYoyo(playing, bobDuration);
+  const bob = useYoyo(playing && bobAmplitude !== 0, bobDuration);
   if (!w || !h) return null;
   const period = W * coverScale(w, h);
   const translateX = loop.interpolate({ inputRange: [0, 1], outputRange: [0, direction * period] });
