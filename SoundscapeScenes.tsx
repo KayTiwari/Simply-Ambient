@@ -4,14 +4,19 @@
 // layers, and the lower-left text zone stays quiet.
 //
 // While the layer is audibly playing, scenes drift: rain falls, swells roll,
-// embers rise, static shimmers. Paused or idle scenes hold still, matching
-// the app's rule that motion accompanies sound. All animation drives plain
-// Animated.View transforms and opacity (native driver); nothing animates
-// SVG props, so it stays smooth on old Android and on web.
+// embers rise, fireflies wander, static shimmers. Paused or idle scenes hold
+// still, matching the app's rule that motion accompanies sound. All animation
+// drives plain Animated.View transforms and opacity (native driver); nothing
+// animates SVG props, so it stays smooth on old Android and on web.
 //
 // Seamless wraps: a wrapping layer renders its pattern twice in an oversized
 // Svg and translates by exactly one period. The period is derived from the
 // same cover-scale the base layer uses, so the two stay pixel-aligned.
+//
+// Point elements (dapple orbs, motes, fireflies, stars, cabin windows) are
+// sprites: each is a tiny standalone Svg pinned to its viewBox point with the
+// same cover-scale math, free to wander, glitter, or flicker on its own
+// native-driver transform.
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
@@ -104,39 +109,44 @@ function SceneSvg({
 
 // A 0..1 sawtooth while active; parked at 0 otherwise. Self-restarting from
 // the completion callback, since Animated.loop around a lone timing stops
-// after its first pass on some platforms.
-function useLoop(active: boolean, duration: number): Animated.Value {
+// after its first pass on some platforms. The optional lead holds the value
+// at 0 before every pass (stream glints rest between runs).
+function useLoop(active: boolean, duration: number, lead = 0): Animated.Value {
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!active) { v.stopAnimation(); v.setValue(0); return; }
     let alive = true;
     const run = () => {
       v.setValue(0);
-      Animated.timing(v, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: true })
+      const pass = Animated.timing(v, { toValue: 1, duration, easing: Easing.linear, useNativeDriver: true });
+      (lead ? Animated.sequence([Animated.delay(lead), pass]) : pass)
         .start(({ finished }) => {
           if (finished && alive) run();
         });
     };
     run();
     return () => { alive = false; v.stopAnimation(); v.setValue(0); };
-  }, [active, duration, v]);
+  }, [active, duration, lead, v]);
   return v;
 }
 
-// Eased there-and-back 0..1..0 while active; parked at 0 otherwise.
-function useYoyo(active: boolean, duration: number): Animated.Value {
+// Eased there-and-back 0..1..0 while active; parked at 0 otherwise. The
+// optional lead delays the first swing so a field of elements starts out of
+// phase.
+function useYoyo(active: boolean, duration: number, lead = 0): Animated.Value {
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!active) { v.stopAnimation(); v.setValue(0); return; }
-    const anim = Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(v, { toValue: 1, duration: duration / 2, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
         Animated.timing(v, { toValue: 0, duration: duration / 2, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
       ]),
     );
+    const anim = lead ? Animated.sequence([Animated.delay(lead), loop]) : loop;
     anim.start();
     return () => { anim.stop(); v.setValue(0); };
-  }, [active, duration, v]);
+  }, [active, duration, lead, v]);
   return v;
 }
 
@@ -197,25 +207,30 @@ function WrapYLayer({
   );
 }
 
-// A horizontally wrapping layer (stream shimmer, train streaks).
+// A horizontally wrapping layer (stream shimmer, breeze gusts, train
+// streaks). The optional bob lifts the whole band up and back as it drifts,
+// so water and wind undulate while they travel.
 function WrapXLayer({
-  playing, duration, w, h, direction = -1, opacity = 1, render,
+  playing, duration, w, h, direction = -1, opacity = 1, bobAmplitude = 0, bobDuration = 6000, render,
 }: {
   playing: boolean; duration: number; w: number; h: number;
   direction?: 1 | -1; opacity?: number;
+  bobAmplitude?: number; bobDuration?: number;
   render: (xOff: number) => React.ReactNode;
 }) {
   const loop = useLoop(playing, duration);
+  const bob = useYoyo(playing, bobDuration);
   if (!w || !h) return null;
   const period = W * coverScale(w, h);
   const translateX = loop.interpolate({ inputRange: [0, 1], outputRange: [0, direction * period] });
+  const translateY = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -bobAmplitude * coverScale(w, h)] });
   return (
     <Animated.View
       pointerEvents="none"
       style={{
         position: 'absolute', top: 0, bottom: 0,
         left: -period, width: period * 2 + w,
-        opacity, transform: [{ translateX }],
+        opacity, transform: [{ translateX }, { translateY }],
       }}
     >
       <SceneSvg vbW={W * 3}>
@@ -227,22 +242,129 @@ function WrapXLayer({
   );
 }
 
-// A layer that sways sideways and back (swells, breeze ribbons).
-function SwayLayer({
-  playing, duration, amplitude, children, opacityRange,
+// A tiny standalone Svg pinned to one viewBox point via the shared
+// cover-scale math, so a single element can carry its own native-driver
+// transform. Local coordinates run 0..size with the element centered.
+function Sprite({
+  cx, cy, size, w, h, style, children,
 }: {
-  playing: boolean; duration: number; amplitude: number;
-  children: React.ReactNode; opacityRange?: [number, number];
+  cx: number; cy: number; size: number; w: number; h: number;
+  style?: React.ComponentProps<typeof Animated.View>['style'];
+  children: React.ReactNode;
 }) {
-  const yoyo = useYoyo(playing, duration);
-  const translateX = yoyo.interpolate({ inputRange: [0, 1], outputRange: [-amplitude, amplitude] });
+  if (!w || !h) return null;
+  const s = coverScale(w, h);
+  const px = size * s;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: 'absolute',
+          left: cx * s + (w - W * s) / 2 - px / 2,
+          top: cy * s + (h - H * s) / 2 - px / 2,
+          width: px,
+          height: px,
+        },
+        style,
+      ]}
+    >
+      <Svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`}>
+        {children}
+      </Svg>
+    </Animated.View>
+  );
+}
+
+// A sprite that wanders like a firefly: the x and y bobs run on different
+// periods, so the combined path traces a slow looping drift. Both axes rest
+// at 0, and a paused scene holds the authored composition.
+function DriftSprite({
+  playing, cx, cy, size, w, h, motion, opacityRange, children,
+}: {
+  playing: boolean; cx: number; cy: number; size: number; w: number; h: number;
+  motion: Motion; opacityRange?: [number, number]; children: React.ReactNode;
+}) {
+  const s = coverScale(w, h);
+  const xYoyo = useYoyo(playing, motion.xDur, motion.lead);
+  const yYoyo = useYoyo(playing, motion.yDur, motion.lead * 0.6);
+  const translateX = xYoyo.interpolate({ inputRange: [0, 1], outputRange: [0, motion.xAmp * s] });
+  const translateY = yYoyo.interpolate({ inputRange: [0, 1], outputRange: [0, -motion.yAmp * s] });
   const opacity = opacityRange
-    ? yoyo.interpolate({ inputRange: [0, 1], outputRange: opacityRange })
+    ? yYoyo.interpolate({ inputRange: [0, 1], outputRange: opacityRange })
     : 1;
   return (
-    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity, transform: [{ translateX }] }]}>
-      <SceneSvg>{children}</SceneSvg>
-    </Animated.View>
+    <Sprite cx={cx} cy={cy} size={size} w={w} h={h} style={{ opacity, transform: [{ translateX }, { translateY }] }}>
+      {children}
+    </Sprite>
+  );
+}
+
+// A sprite that glitters: a quick bright pop that settles back down, with a
+// slight scale-up at the peak, each star on its own timetable.
+type Twinkle = { lead: number; rise: number; fall: number; rest: number };
+function TwinkleSprite({
+  playing, cx, cy, size, w, h, timing, baseOpacity, pop = 1.6, children,
+}: {
+  playing: boolean; cx: number; cy: number; size: number; w: number; h: number;
+  timing: Twinkle; baseOpacity: number; pop?: number; children: React.ReactNode;
+}) {
+  const spark = useSequenceLoop(playing, [
+    { delay: timing.lead },
+    { to: 1, duration: timing.rise },
+    { to: 0, duration: timing.fall },
+    { delay: timing.rest },
+  ]);
+  const opacity = spark.interpolate({ inputRange: [0, 1], outputRange: [baseOpacity, 1] });
+  const scale = spark.interpolate({ inputRange: [0, 1], outputRange: [1, pop] });
+  return (
+    <Sprite cx={cx} cy={cy} size={size} w={w} h={h} style={{ opacity, transform: [{ scale }] }}>
+      {children}
+    </Sprite>
+  );
+}
+
+// A sprite whose light dips and recovers at odd intervals (cabin windows).
+type Flicker = { lead: number; dipA: number; dipB: number; rest: number };
+function FlickerSprite({
+  playing, cx, cy, size, w, h, flicker, children,
+}: {
+  playing: boolean; cx: number; cy: number; size: number; w: number; h: number;
+  flicker: Flicker; children: React.ReactNode;
+}) {
+  const glow = useSequenceLoop(playing, [
+    { delay: flicker.lead },
+    { to: flicker.dipA, duration: 90 },
+    { to: 1, duration: 160 },
+    { to: flicker.dipB, duration: 70 },
+    { to: 1, duration: 140 },
+    { delay: flicker.rest },
+  ], 1);
+  return (
+    <Sprite cx={cx} cy={cy} size={size} w={w} h={h} style={{ opacity: glow }}>
+      {children}
+    </Sprite>
+  );
+}
+
+// A glint riding the current: it slides downstream while fading in and out,
+// rests, then runs again. Travel matches the leftward drift of the flow
+// bands.
+function GlintSprite({
+  playing, cx, cy, w, h, run, duration, lead, r,
+}: {
+  playing: boolean; cx: number; cy: number; w: number; h: number;
+  run: number; duration: number; lead: number; r: number;
+}) {
+  const t = useLoop(playing, duration, lead);
+  const s = coverScale(w, h);
+  const translateX = t.interpolate({ inputRange: [0, 1], outputRange: [0, -run * s] });
+  const opacity = t.interpolate({ inputRange: [0, 0.15, 0.85, 1], outputRange: [0, 0.8, 0.8, 0] });
+  const size = r * 2 + 1;
+  return (
+    <Sprite cx={cx} cy={cy} size={size} w={w} h={h} style={{ opacity, transform: [{ translateX }] }}>
+      <Circle cx={size / 2} cy={size / 2} r={r} fill="#ffffff" />
+    </Sprite>
   );
 }
 
@@ -269,8 +391,10 @@ function PulseLayer({
 type Streak = { x: number; y: number; w: number; h: number; o: number };
 function makeStreaks(seed: number, count: number, wMin: number, wMax: number, hMin: number, hMax: number, oMin: number, oMax: number, ySpread: number): Streak[] {
   const r = prng(seed);
-  return Array.from({ length: count }, () => ({
-    x: 6 + r() * 308,
+  // Stratified x placement: one streak per equal column, jittered inside it,
+  // so the rain reads evenly across the card.
+  return Array.from({ length: count }, (_, i) => ({
+    x: 6 + ((i + r()) / count) * 308,
     y: r() * ySpread,
     w: wMin + r() * (wMax - wMin),
     h: hMin + r() * (hMax - hMin),
@@ -293,10 +417,27 @@ const NOISE_WHITE = makeDots(31, 260, 0.5, 1.2);
 const NOISE_PINK = makeDots(37, 150, 0.9, 1.9);
 const NOISE_BROWN = makeDots(41, 80, 1.4, 2.8);
 
+// Per-sprite wander tunings: mismatched x/y periods bend each path into a
+// slow open loop, staggered leads keep neighbors out of phase, and drift
+// sets the reach in viewBox units. Amplitude signs flip per sprite so the
+// field circulates both ways.
+type Motion = { xDur: number; yDur: number; lead: number; xAmp: number; yAmp: number };
+function makeMotion(seed: number, count: number, drift: number): Motion[] {
+  const r = prng(seed);
+  return Array.from({ length: count }, () => ({
+    xDur: 6400 + r() * 5200,
+    yDur: 4600 + r() * 3800,
+    lead: r() * 2600,
+    xAmp: drift * (0.7 + r() * 0.6) * (r() < 0.5 ? -1 : 1),
+    yAmp: drift * (0.8 + r() * 0.7),
+  }));
+}
+
 const FOREST_DAPPLE = (() => {
   const r = prng(11);
   return Array.from({ length: 13 }, () => ({ x: 12 + r() * 296, y: 6 + r() * 62, r: 4 + r() * 12, o: 0.16 + r() * 0.14 }));
 })();
+const DAPPLE_MOTION = makeMotion(111, FOREST_DAPPLE.length, 7);
 
 const FIRE_EMBERS = (() => {
   const r = prng(9);
@@ -307,18 +448,25 @@ const NIGHT_STARS = (() => {
   const r = prng(17);
   return Array.from({ length: 11 }, () => ({ x: 8 + r() * 220, y: 8 + r() * 70, halo: 2.6 + r() * 2, core: 0.7 + r() * 0.5, o: 0.55 + r() * 0.3 }));
 })();
+const STAR_MOTION = makeMotion(119, NIGHT_STARS.length, 4);
 const NIGHT_FLIES = (() => {
   const r = prng(18);
   return Array.from({ length: 3 }, () => ({ x: 30 + r() * 260, y: 100 + r() * 12 }));
 })();
+const FLY_MOTION = makeMotion(117, NIGHT_FLIES.length, 11);
 
 const STREAM_PEBBLES = (() => {
   const r = prng(5);
   return Array.from({ length: 4 }, () => ({ x: 40 + r() * 240, y: 108 + r() * 6, rx: 7 + r() * 8, ry: 3.5 + r() * 2 }));
 })();
-const STREAM_GLINTS = (() => {
+// Glints ride the current: each has a start point, a downstream run, and its
+// own pace and rest.
+const STREAM_SPARKS = (() => {
   const r = prng(6);
-  return Array.from({ length: 3 }, () => ({ x: 50 + r() * 220, y: 70 + r() * 20 }));
+  return Array.from({ length: 6 }, () => ({
+    x: 24 + r() * 230, y: 62 + r() * 34, run: 46 + r() * 60,
+    dur: 3200 + r() * 2800, lead: r() * 2600, r: 0.8 + r() * 0.5,
+  }));
 })();
 
 const OCEAN_FOAM = (() => {
@@ -330,10 +478,47 @@ const BREEZE_MOTES = (() => {
   const r = prng(13);
   return Array.from({ length: 4 }, () => ({ x: 40 + r() * 250, y: 20 + r() * 80, r: 1 + r() }));
 })();
+const MOTE_MOTION = makeMotion(113, BREEZE_MOTES.length, 9);
+
+// Wind ribbons that tile seamlessly when they wrap: two identical humps per
+// 320-unit period, with the seam tangent matching the start tangent. The
+// bottom edge repeats the top curve offset by the thickness.
+function ribbonPath(y: number, a: number, th: number): string {
+  return [
+    `M0 ${y}`,
+    `C 53 ${y - a} 107 ${y + a} 160 ${y}`,
+    `C 213 ${y - a} 267 ${y + a} 320 ${y}`,
+    `L320 ${y + th}`,
+    `C 267 ${y + th + a} 213 ${y + th - a} 160 ${y + th}`,
+    `C 107 ${y + th + a} 53 ${y + th - a} 0 ${y + th}`,
+    'Z',
+  ].join(' ');
+}
+const BREEZE_RIBBONS = [
+  { y: 26, a: 9, th: 6, o: 0.8, dur: 6200, bobAmp: 4, bobDur: 5200 },
+  { y: 58, a: 7, th: 5, o: 0.6, dur: 9400, bobAmp: 3, bobDur: 6800 },
+  { y: 92, a: 5, th: 4, o: 0.4, dur: 12800, bobAmp: 2.5, bobDur: 8200 },
+].map(rb => ({ ...rb, d: ribbonPath(rb.y, rb.a, rb.th) }));
 
 const CABIN_STARS = (() => {
   const r = prng(23);
   return Array.from({ length: 8 }, () => ({ x: r() * 320, y: 6 + r() * 48, r: 0.8 + r() * 0.6, o: 0.25 + r() * 0.3 }));
+})();
+// Glitter and flicker timetables: stars pop bright and settle, windows dip
+// twice and recover, each on its own clock.
+const CABIN_TWINKLES = (() => {
+  const r = prng(24);
+  return CABIN_STARS.map(() => ({
+    lead: 400 + r() * 4200, rise: 120 + r() * 140,
+    fall: 280 + r() * 320, rest: 700 + r() * 2600,
+  }));
+})();
+const CABIN_FLICKERS = (() => {
+  const r = prng(25);
+  return Array.from({ length: 4 }, () => ({
+    lead: 1200 + r() * 3600, dipA: 0.4 + r() * 0.25,
+    dipB: 0.55 + r() * 0.25, rest: 900 + r() * 2400,
+  }));
 })();
 
 const TRAIN_STREAKS = (() => {
@@ -459,7 +644,7 @@ function OceanScene({ color, playing }: SceneProps) {
   );
 }
 
-function ForestScene({ color, playing }: SceneProps) {
+function ForestScene({ color, playing, w, h }: SceneProps) {
   return (
     <>
       <SceneSvg>
@@ -471,16 +656,15 @@ function ForestScene({ color, playing }: SceneProps) {
         <Path d="M236 2 L242 2 L248 120 L228 120 Z" fill="url(#fTrunk)" opacity={0.35} />
         <Ellipse cx={160} cy={126} rx={180} ry={26} fill="url(#fFloor)" />
       </SceneSvg>
-      <PulseLayer playing={playing} duration={6400} range={[0.7, 1]}>
-        <Defs>
-          {FOREST_DAPPLE.map((d, i) => (
-            <RGrad key={i} id={`fDap${i}`} color={color} stops={[[0, d.o], [1, 0]]} />
-          ))}
-        </Defs>
-        {FOREST_DAPPLE.map((d, i) => (
-          <Circle key={i} cx={d.x} cy={d.y} r={d.r} fill={`url(#fDap${i})`} />
-        ))}
-      </PulseLayer>
+      {FOREST_DAPPLE.map((d, i) => (
+        <DriftSprite
+          key={i} playing={playing} cx={d.x} cy={d.y} size={d.r * 2}
+          w={w} h={h} motion={DAPPLE_MOTION[i]} opacityRange={[0.65, 1]}
+        >
+          <Defs><RGrad id={`fDap${i}`} color={color} stops={[[0, d.o], [1, 0]]} /></Defs>
+          <Circle cx={d.r} cy={d.r} r={d.r} fill={`url(#fDap${i})`} />
+        </DriftSprite>
+      ))}
     </>
   );
 }
@@ -498,23 +682,24 @@ function StreamScene({ color, playing, w, h }: SceneProps) {
           <Ellipse key={i} cx={p.x} cy={p.y} rx={p.rx} ry={p.ry} fill={`url(#sPeb${i})`} />
         ))}
       </SceneSvg>
-      <WrapXLayer playing={playing} duration={7000} w={w} h={h} render={xOff => (
+      <WrapXLayer playing={playing} duration={7000} w={w} h={h} bobAmplitude={3} bobDuration={5200} render={xOff => (
         <>
           <Defs><HGrad id="sFlow" color={color} stops={[[0, 0], [0.18, 0.3], [0.45, 0.12], [0.7, 0.32], [1, 0]]} /></Defs>
           <Path transform={`translate(${xOff},0)`} d="M0 82 C60 70 110 96 180 84 S280 66 320 80 L320 102 C270 90 210 108 150 98 S60 92 0 102 Z" fill="url(#sFlow)" />
         </>
       )} />
-      <WrapXLayer playing={playing} duration={10400} w={w} h={h} render={xOff => (
+      <WrapXLayer playing={playing} duration={10400} w={w} h={h} bobAmplitude={2} bobDuration={7400} render={xOff => (
         <>
           <Defs><HGrad id="sFlow2" color={color} stops={[[0, 0], [0.3, 0.16], [0.6, 0.07], [0.85, 0.18], [1, 0]]} /></Defs>
           <Path transform={`translate(${xOff},0)`} d="M0 64 C70 56 130 74 200 66 S290 54 320 62 L320 74 C260 66 200 82 140 76 S50 72 0 78 Z" fill="url(#sFlow2)" />
         </>
       )} />
-      <PulseLayer playing={playing} duration={2600} range={[0.4, 1]}>
-        {STREAM_GLINTS.map((g, i) => (
-          <Circle key={i} cx={g.x} cy={g.y} r={0.9} fill="#ffffff" opacity={0.35} />
-        ))}
-      </PulseLayer>
+      {STREAM_SPARKS.map((g, i) => (
+        <GlintSprite
+          key={i} playing={playing} cx={g.x} cy={g.y} w={w} h={h}
+          run={g.run} duration={g.dur} lead={g.lead} r={g.r}
+        />
+      ))}
     </>
   );
 }
@@ -561,30 +746,37 @@ function StippleScene({ color, playing, dots, flicker }: { color: string; playin
   );
 }
 
-function BreezeScene({ color, playing }: SceneProps) {
-  const ribbons = [
-    { d: 'M0 30 C60 18 120 40 190 28 S290 16 320 26 L320 31 C280 22 230 34 180 34 S70 26 0 35 Z', o: 0.85, amp: 10, dur: 8200 },
-    { d: 'M0 62 C70 50 140 70 210 58 S300 48 320 56 L320 62 C290 52 240 66 180 64 S60 58 0 68 Z', o: 0.63, amp: 8, dur: 10600 },
-    { d: 'M0 94 C60 84 130 102 200 92 S300 82 320 90 L320 95 C280 86 220 98 160 96 S60 90 0 100 Z', o: 0.41, amp: 6, dur: 13000 },
-  ];
+function BreezeScene({ color, playing, w, h }: SceneProps) {
   return (
     <>
-      {ribbons.map((rb, i) => (
-        <SwayLayer key={i} playing={playing} duration={rb.dur} amplitude={rb.amp}>
-          <Defs><HGrad id={`bRib${i}`} color={color} stops={[[0, 0], [0.3, 0.3], [0.7, 0.3], [1, 0]]} /></Defs>
-          <Path d={rb.d} fill={`url(#bRib${i})`} opacity={rb.o} transform="translate(-12,0) scale(1.08,1)" />
-        </SwayLayer>
+      {BREEZE_RIBBONS.map((rb, i) => (
+        <WrapXLayer
+          key={i} playing={playing} duration={rb.dur} w={w} h={h} direction={1}
+          opacity={rb.o} bobAmplitude={rb.bobAmp} bobDuration={rb.bobDur}
+          render={xOff => (
+            <>
+              <Defs><HGrad id={`bRib${i}`} color={color} stops={[[0, 0], [0.25, 0.32], [0.6, 0.22], [1, 0]]} /></Defs>
+              <Path transform={`translate(${xOff},0)`} d={rb.d} fill={`url(#bRib${i})`} />
+            </>
+          )}
+        />
       ))}
-      <PulseLayer playing={playing} duration={4200} range={[0.5, 1]}>
-        {BREEZE_MOTES.map((m, i) => (
-          <Circle key={i} cx={m.x} cy={m.y} r={m.r} fill={color} opacity={0.3} />
-        ))}
-      </PulseLayer>
+      {BREEZE_MOTES.map((m, i) => {
+        const size = m.r * 2 + 2;
+        return (
+          <DriftSprite
+            key={i} playing={playing} cx={m.x} cy={m.y} size={size}
+            w={w} h={h} motion={MOTE_MOTION[i]} opacityRange={[0.4, 1]}
+          >
+            <Circle cx={size / 2} cy={size / 2} r={m.r} fill={color} opacity={0.35} />
+          </DriftSprite>
+        );
+      })}
     </>
   );
 }
 
-function NightScene({ color, playing }: SceneProps) {
+function NightScene({ color, playing, w, h }: SceneProps) {
   return (
     <>
       <SceneSvg>
@@ -596,21 +788,29 @@ function NightScene({ color, playing }: SceneProps) {
         <Circle cx={252} cy={34} r={34} fill="url(#nHalo)" />
         <Path d="M252 12 A22 22 0 1 0 252 56 A17.5 17.5 0 1 1 252 12 Z" fill={color} opacity={0.75} />
       </SceneSvg>
-      <PulseLayer playing={playing} duration={4600} range={[0.55, 1]}>
-        <Defs><RGrad id="nTwinkle" color="#ffffff" stops={[[0, 0.2], [1, 0]]} /></Defs>
-        {NIGHT_STARS.map((s, i) => (
-          <React.Fragment key={i}>
-            <Circle cx={s.x} cy={s.y} r={s.halo} fill="url(#nTwinkle)" />
-            <Circle cx={s.x} cy={s.y} r={s.core} fill="#ffffff" opacity={s.o} />
-          </React.Fragment>
-        ))}
-      </PulseLayer>
-      <PulseLayer playing={playing} duration={3200} range={[0.35, 1]}>
-        <Defs><RGrad id="nFly" color="#E8D28A" stops={[[0, 0.5], [1, 0]]} /></Defs>
-        {NIGHT_FLIES.map((f, i) => (
-          <Circle key={i} cx={f.x} cy={f.y} r={2.4} fill="url(#nFly)" />
-        ))}
-      </PulseLayer>
+      {NIGHT_STARS.map((s, i) => {
+        const size = s.halo * 2 + 2;
+        const c = size / 2;
+        return (
+          <DriftSprite
+            key={i} playing={playing} cx={s.x} cy={s.y} size={size}
+            w={w} h={h} motion={STAR_MOTION[i]} opacityRange={[0.55, 1]}
+          >
+            <Defs><RGrad id={`nTw${i}`} color="#ffffff" stops={[[0, 0.2], [1, 0]]} /></Defs>
+            <Circle cx={c} cy={c} r={s.halo} fill={`url(#nTw${i})`} />
+            <Circle cx={c} cy={c} r={s.core} fill="#ffffff" opacity={s.o} />
+          </DriftSprite>
+        );
+      })}
+      {NIGHT_FLIES.map((f, i) => (
+        <DriftSprite
+          key={i} playing={playing} cx={f.x} cy={f.y} size={6}
+          w={w} h={h} motion={FLY_MOTION[i]} opacityRange={[0.3, 1]}
+        >
+          <Defs><RGrad id={`nFly${i}`} color="#E8D28A" stops={[[0, 0.5], [1, 0]]} /></Defs>
+          <Circle cx={3} cy={3} r={2.4} fill={`url(#nFly${i})`} />
+        </DriftSprite>
+      ))}
     </>
   );
 }
@@ -656,7 +856,7 @@ function ThunderScene({ color, playing, w, h }: SceneProps) {
   );
 }
 
-function CabinScene({ color, playing }: SceneProps) {
+function CabinScene({ color, playing, w, h }: SceneProps) {
   const strobe = useSequenceLoop(playing, [
     { to: 1, duration: 80 },
     { to: 0, duration: 160 },
@@ -669,25 +869,27 @@ function CabinScene({ color, playing }: SceneProps) {
         <Rect x={0} y={40} width={320} height={80} fill="url(#cDawn)" />
         <Rect x={0} y={82} width={320} height={1.4} fill={color} opacity={0.3} />
       </PulseLayer>
-      <SceneSvg>
-        <Defs>
-          {[0, 1, 2, 3].map(i => (
-            <RGrad key={i} id={`cWin${i}`} color={color} stops={[[0, 0.34 - i * 0.06], [1, 0]]} />
-          ))}
-        </Defs>
-        {CABIN_STARS.map((s, i) => (
-          <Circle key={i} cx={s.x} cy={s.y} r={s.r} fill="#ffffff" opacity={s.o} />
-        ))}
-        {[0, 1, 2, 3].map(i => {
-          const x = 36 + i * 66;
-          return (
-            <React.Fragment key={i}>
-              <Ellipse cx={x} cy={104} rx={17} ry={11} fill={`url(#cWin${i})`} />
-              <Rect x={x - 7} y={98} width={14} height={12} rx={6} fill={color} opacity={0.2 - i * 0.03} />
-            </React.Fragment>
-          );
-        })}
-      </SceneSvg>
+      {CABIN_STARS.map((s, i) => {
+        const size = s.r * 2 + 2;
+        return (
+          <TwinkleSprite
+            key={i} playing={playing} cx={s.x} cy={s.y} size={size}
+            w={w} h={h} timing={CABIN_TWINKLES[i]} baseOpacity={s.o}
+          >
+            <Circle cx={size / 2} cy={size / 2} r={s.r} fill="#ffffff" />
+          </TwinkleSprite>
+        );
+      })}
+      {[0, 1, 2, 3].map(i => (
+        <FlickerSprite
+          key={i} playing={playing} cx={36 + i * 66} cy={104} size={40}
+          w={w} h={h} flicker={CABIN_FLICKERS[i]}
+        >
+          <Defs><RGrad id={`cWin${i}`} color={color} stops={[[0, 0.34 - i * 0.06], [1, 0]]} /></Defs>
+          <Ellipse cx={20} cy={20} rx={17} ry={11} fill={`url(#cWin${i})`} />
+          <Rect x={13} y={14} width={14} height={12} rx={6} fill={color} opacity={0.2 - i * 0.03} />
+        </FlickerSprite>
+      ))}
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: strobe }]}>
         <SceneSvg>
           <Defs><RGrad id="cStrobe" color="#ffffff" stops={[[0, 0.5], [1, 0]]} /></Defs>
