@@ -624,490 +624,492 @@ export default function HoroscopesView({
       accentTransitionMs={920}
     >
       <Animated.View style={[styles.signThemeLayer, { opacity: signThemeReveal }]}>
-      <EditorialHeader
-        mode="REFLECT"
-        title="Read the sky"
-        accent={accent}
-      />
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 104 }]}
         showsVerticalScrollIndicator={false}
       >
-        <AmbientSurface accent={accent} quiet showOrb={false} style={styles.modeSurface}>
+        <EditorialHeader
+          mode="REFLECT"
+          title="Read the sky"
+          accent={accent}
+        />
+        <View style={styles.body}>
+          <AmbientSurface accent={accent} quiet showOrb={false} style={styles.modeSurface}>
+            <View
+              style={styles.modeRow}
+              accessibilityRole="tablist"
+              onLayout={event => {
+                const nextWidth = event.nativeEvent.layout.width;
+                setModeRowWidth(current => Math.abs(current - nextWidth) > 0.5 ? nextWidth : current);
+              }}
+            >
+              {modeSegmentWidth > 0 ? (
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.modeSelectionPill,
+                    {
+                      width: modeSegmentWidth,
+                      borderColor: accent + '66',
+                      backgroundColor: accent + '18',
+                      shadowColor: accent,
+                      transform: [{
+                        translateX: modePosition.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, modeSegmentTravel],
+                        }),
+                      }],
+                    },
+                  ]}
+                />
+              ) : null}
+              {([
+                { id: 'horoscope', label: 'HOROSCOPE', hint: 'Sign & moon', glyph: '☉', color: mySign.color },
+                { id: 'tarot', label: 'TAROT', hint: 'Cards & spreads', glyph: '✦', color: '#B39BE0' },
+              ] as Array<{ id: ReadingMode; label: string; hint: string; glyph: string; color: string }>).map(item => {
+                const active = readingMode === item.id;
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    onPress={() => selectReadingMode(item.id)}
+                    activeOpacity={0.84}
+                    accessibilityRole="tab"
+                    accessibilityLabel={`${item.label}. ${item.hint}`}
+                    accessibilityState={{ selected: active }}
+                    style={styles.modeButton}
+                  >
+                    <View
+                      style={[
+                        styles.modeGlyphWrap,
+                        {
+                          borderColor: item.color + (active ? '66' : '35'),
+                          backgroundColor: active ? item.color + '10' : 'transparent',
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.modeGlyph, { color: item.color }]}>{item.glyph}</Text>
+                    </View>
+                    <View style={styles.modeCopy}>
+                      <Text style={[styles.modeLabel, active && { color: item.color }]}>{item.label}</Text>
+                      <Text style={styles.modeHint}>{item.hint}</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </AmbientSurface>
+
+          <Animated.View
+            style={[
+              styles.modeContent,
+              {
+                opacity: contentReveal,
+                transform: [{
+                  translateX: contentReveal.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [contentDirection.current * 14, 0],
+                  }),
+                }],
+              },
+            ]}
+          >
+            {readingMode === 'horoscope' ? (
+            <>
+              <EditorialSection
+                index="01"
+                eyebrow="CELESTIAL WEATHER"
+                title="Your sign, under today's moon"
+                accent={mySign.color}
+              />
+          {/* Today / week / month widget */}
+          <AmbientSurface accent={mySign.color} showOrb={false} style={styles.todayCard}>
+            <View style={styles.todayRow}>
+              <View style={[styles.signBadge, { borderColor: mySign.color + '88', backgroundColor: mySign.color + '16' }]}>
+                <Text style={[styles.signBadgeGlyph, { color: mySign.color }]}>{textGlyph(mySign.glyph)}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={[styles.todayLabel, { color: mySign.color }]}>YOUR SIGN</Text>
+                <Text style={styles.todaySignName}>{mySign.name}</Text>
+                <Text style={styles.metaText}>
+                  {mySign.element} · {mySign.qualities}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setPickerOpen(o => !o)}
+                style={[styles.changeSignBtn, pickerOpen && { borderColor: mySign.color + '77' }]}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={pickerOpen ? 'Close sign picker' : 'Change your zodiac sign'}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[styles.changeSignText, pickerOpen && { color: mySign.color }]}>
+                  {pickerOpen ? 'CLOSE' : 'CHANGE'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.skyRule} />
+            <View style={styles.todayMoon}>
+              <View style={[styles.moonDiscWrap, { borderColor: mySign.color + '35' }]}>
+                <MoonDisc phase={lunar.phase} size={34} />
+              </View>
+              <View style={styles.moonCopy}>
+                <Text style={styles.todayLabel}>LUNAR WEATHER</Text>
+                <Text style={styles.todayMoonName}>{lunar.name}</Text>
+                <Text style={styles.todayMoonText}>{lunarCountdown}</Text>
+              </View>
+              <View style={[styles.illuminationBadge, { borderColor: mySign.color + '44' }]}>
+                <Text style={[styles.illuminationNumber, { color: mySign.color }]}>{illumPct}%</Text>
+                <Text style={styles.illuminationLabel}>LIT</Text>
+              </View>
+            </View>
+          </AmbientSurface>
+
+          {pickerOpen ? (
+            <>
+              <EditorialSection
+                eyebrow="YOUR LENS"
+                title="Choose your sign"
+                subtitle="Choose a sign; you can change it whenever you need."
+                accent={mySign.color}
+              />
+              <AmbientSurface accent={mySign.color} quiet showOrb={false} style={styles.pickerSurface}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.zodiacRow}
+                >
+                  {zodiac.map(z => {
+                    const active = mySign.id === z.id;
+                    return (
+                      <TouchableOpacity
+                        key={z.id}
+                        activeOpacity={0.85}
+                        onPress={() => selectZodiacSign(z)}
+                        disabled={signTransitioning}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Set ${z.name} as your sign, ${z.element}`}
+                        accessibilityState={{ selected: active }}
+                        style={[
+                          styles.zodiacChip,
+                          {
+                            borderColor: active ? z.color : z.color + '45',
+                            backgroundColor: active ? z.color + '1D' : 'rgba(255,255,255,0.025)',
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.zGlyph, { color: z.color }]}>{textGlyph(z.glyph)}</Text>
+                        <Text style={styles.zName}>{z.name}</Text>
+                        <Text style={[styles.zElement, { color: z.color }]}>{z.element}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </AmbientSurface>
+            </>
+          ) : null}
+
+          <EditorialSection
+            index="02"
+            eyebrow="THE READING"
+            title={forecastTitle}
+            accent={mySign.color}
+          />
+
           <View
-            style={styles.modeRow}
+            style={styles.periodRow}
             accessibilityRole="tablist"
             onLayout={event => {
               const nextWidth = event.nativeEvent.layout.width;
-              setModeRowWidth(current => Math.abs(current - nextWidth) > 0.5 ? nextWidth : current);
+              setPeriodRowWidth(current => Math.abs(current - nextWidth) > 0.5 ? nextWidth : current);
             }}
           >
-            {modeSegmentWidth > 0 ? (
+            {periodSegmentWidth > 0 ? (
               <Animated.View
                 pointerEvents="none"
                 style={[
-                  styles.modeSelectionPill,
+                  styles.periodSelectionPill,
                   {
-                    width: modeSegmentWidth,
-                    borderColor: accent + '66',
-                    backgroundColor: accent + '18',
-                    shadowColor: accent,
+                    width: periodSegmentWidth,
+                    borderColor: mySign.color + '70',
+                    backgroundColor: mySign.color + '1C',
+                    shadowColor: mySign.color,
                     transform: [{
-                      translateX: modePosition.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0, modeSegmentTravel],
+                      translateX: periodPosition.interpolate({
+                        inputRange: [0, 1, 2],
+                        outputRange: [0, periodSegmentWidth, periodSegmentWidth * 2],
                       }),
                     }],
                   },
                 ]}
               />
             ) : null}
-            {([
-              { id: 'horoscope', label: 'HOROSCOPE', hint: 'Sign & moon', glyph: '☉', color: mySign.color },
-              { id: 'tarot', label: 'TAROT', hint: 'Cards & spreads', glyph: '✦', color: '#B39BE0' },
-            ] as Array<{ id: ReadingMode; label: string; hint: string; glyph: string; color: string }>).map(item => {
-              const active = readingMode === item.id;
+            {PERIODS.map(p => {
+              const active = p === period;
               return (
                 <TouchableOpacity
-                  key={item.id}
-                  onPress={() => selectReadingMode(item.id)}
-                  activeOpacity={0.84}
+                  key={p}
+                  activeOpacity={0.85}
+                  onPress={() => selectPeriod(p)}
                   accessibilityRole="tab"
-                  accessibilityLabel={`${item.label}. ${item.hint}`}
+                  accessibilityLabel={`Show ${p} horoscope`}
                   accessibilityState={{ selected: active }}
-                  style={styles.modeButton}
+                  style={styles.periodBtn}
                 >
-                  <View
-                    style={[
-                      styles.modeGlyphWrap,
-                      {
-                        borderColor: item.color + (active ? '66' : '35'),
-                        backgroundColor: active ? item.color + '10' : 'transparent',
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.modeGlyph, { color: item.color }]}>{item.glyph}</Text>
-                  </View>
-                  <View style={styles.modeCopy}>
-                    <Text style={[styles.modeLabel, active && { color: item.color }]}>{item.label}</Text>
-                    <Text style={styles.modeHint}>{item.hint}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </AmbientSurface>
-
-        <Animated.View
-          style={[
-            styles.modeContent,
-            {
-              opacity: contentReveal,
-              transform: [{
-                translateX: contentReveal.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [contentDirection.current * 14, 0],
-                }),
-              }],
-            },
-          ]}
-        >
-          {readingMode === 'horoscope' ? (
-          <>
-            <EditorialSection
-              index="01"
-              eyebrow="CELESTIAL WEATHER"
-              title="Your sign, under today's moon"
-              accent={mySign.color}
-            />
-        {/* Today / week / month widget */}
-        <AmbientSurface accent={mySign.color} showOrb={false} style={styles.todayCard}>
-          <View style={styles.todayRow}>
-            <View style={[styles.signBadge, { borderColor: mySign.color + '88', backgroundColor: mySign.color + '16' }]}>
-              <Text style={[styles.signBadgeGlyph, { color: mySign.color }]}>{textGlyph(mySign.glyph)}</Text>
-            </View>
-            <View style={{ flex: 1, marginLeft: 14 }}>
-              <Text style={[styles.todayLabel, { color: mySign.color }]}>YOUR SIGN</Text>
-              <Text style={styles.todaySignName}>{mySign.name}</Text>
-              <Text style={styles.metaText}>
-                {mySign.element} · {mySign.qualities}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setPickerOpen(o => !o)}
-              style={[styles.changeSignBtn, pickerOpen && { borderColor: mySign.color + '77' }]}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel={pickerOpen ? 'Close sign picker' : 'Change your zodiac sign'}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={[styles.changeSignText, pickerOpen && { color: mySign.color }]}>
-                {pickerOpen ? 'CLOSE' : 'CHANGE'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.skyRule} />
-          <View style={styles.todayMoon}>
-            <View style={[styles.moonDiscWrap, { borderColor: mySign.color + '35' }]}>
-              <MoonDisc phase={lunar.phase} size={34} />
-            </View>
-            <View style={styles.moonCopy}>
-              <Text style={styles.todayLabel}>LUNAR WEATHER</Text>
-              <Text style={styles.todayMoonName}>{lunar.name}</Text>
-              <Text style={styles.todayMoonText}>{lunarCountdown}</Text>
-            </View>
-            <View style={[styles.illuminationBadge, { borderColor: mySign.color + '44' }]}>
-              <Text style={[styles.illuminationNumber, { color: mySign.color }]}>{illumPct}%</Text>
-              <Text style={styles.illuminationLabel}>LIT</Text>
-            </View>
-          </View>
-        </AmbientSurface>
-
-        {pickerOpen ? (
-          <>
-            <EditorialSection
-              eyebrow="YOUR LENS"
-              title="Choose your sign"
-              subtitle="Choose a sign; you can change it whenever you need."
-              accent={mySign.color}
-            />
-            <AmbientSurface accent={mySign.color} quiet showOrb={false} style={styles.pickerSurface}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.zodiacRow}
-              >
-                {zodiac.map(z => {
-                  const active = mySign.id === z.id;
-                  return (
-                    <TouchableOpacity
-                      key={z.id}
-                      activeOpacity={0.85}
-                      onPress={() => selectZodiacSign(z)}
-                      disabled={signTransitioning}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Set ${z.name} as your sign, ${z.element}`}
-                      accessibilityState={{ selected: active }}
-                      style={[
-                        styles.zodiacChip,
-                        {
-                          borderColor: active ? z.color : z.color + '45',
-                          backgroundColor: active ? z.color + '1D' : 'rgba(255,255,255,0.025)',
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.zGlyph, { color: z.color }]}>{textGlyph(z.glyph)}</Text>
-                      <Text style={styles.zName}>{z.name}</Text>
-                      <Text style={[styles.zElement, { color: z.color }]}>{z.element}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </AmbientSurface>
-          </>
-        ) : null}
-
-        <EditorialSection
-          index="02"
-          eyebrow="THE READING"
-          title={forecastTitle}
-          accent={mySign.color}
-        />
-
-        <View
-          style={styles.periodRow}
-          accessibilityRole="tablist"
-          onLayout={event => {
-            const nextWidth = event.nativeEvent.layout.width;
-            setPeriodRowWidth(current => Math.abs(current - nextWidth) > 0.5 ? nextWidth : current);
-          }}
-        >
-          {periodSegmentWidth > 0 ? (
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.periodSelectionPill,
-                {
-                  width: periodSegmentWidth,
-                  borderColor: mySign.color + '70',
-                  backgroundColor: mySign.color + '1C',
-                  shadowColor: mySign.color,
-                  transform: [{
-                    translateX: periodPosition.interpolate({
-                      inputRange: [0, 1, 2],
-                      outputRange: [0, periodSegmentWidth, periodSegmentWidth * 2],
-                    }),
-                  }],
-                },
-              ]}
-            />
-          ) : null}
-          {PERIODS.map(p => {
-            const active = p === period;
-            return (
-              <TouchableOpacity
-                key={p}
-                activeOpacity={0.85}
-                onPress={() => selectPeriod(p)}
-                accessibilityRole="tab"
-                accessibilityLabel={`Show ${p} horoscope`}
-                accessibilityState={{ selected: active }}
-                style={styles.periodBtn}
-              >
-                <Text style={[styles.periodText, active && { color: mySign.color }]}>
-                  {p.toUpperCase()}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <AmbientSurface accent={mySign.color} showOrb={false} style={styles.manuscript}>
-          <View style={styles.manuscriptHeading}>
-            <Text style={[styles.manuscriptKicker, { color: mySign.color }]}>{periodLabel}</Text>
-            <Text style={[styles.manuscriptGlyph, { color: mySign.color }]}>{textGlyph(mySign.glyph)}</Text>
-          </View>
-          <View style={[styles.manuscriptRule, { backgroundColor: mySign.color + '45' }]} />
-          {loading && !horoscope ? (
-            <View style={styles.readingState}>
-              <ActivityIndicator color={mySign.color} />
-              <Text style={styles.stateTitle}>Reading the sky…</Text>
-              <Text style={styles.stateHint}>Checking for the latest reflection.</Text>
-            </View>
-          ) : horoscope ? (
-            <>
-              <Text style={styles.manuscriptBody}>{horoscope}</Text>
-              <StatusStrip
-                accent={mySign.color}
-                label="CURRENT READING"
-                detail={horoscopeTs != null ? freshnessLabel(horoscopeTs) : 'held locally'}
-                active
-                pulse
-                pulseIntensity="subtle"
-              />
-            </>
-          ) : (
-            <>
-              <Text style={styles.fallbackQuote}>“{mySign.intention}”</Text>
-              <View style={styles.fallbackNote}>
-                <Text style={styles.fallbackNoteTitle}>The service is quiet right now.</Text>
-                <Text style={styles.fallbackNoteText}>
-                  Showing the intention already held in your sign instead.
-                </Text>
-              </View>
-            </>
-          )}
-        </AmbientSurface>
-          </>
-        ) : (
-          <>
-            <EditorialSection
-              index="01"
-              eyebrow="CARD OF THE MOMENT"
-              title="Turn one card, when you're ready"
-              accent="#B39BE0"
-            />
-
-        {/* TAROT CARD OF THE DAY */}
-        <AmbientSurface accent="#B39BE0" showOrb={false} style={styles.tarotCard}>
-          <View style={styles.tarotHeaderRow}>
-            <View>
-              <Text style={styles.cardLabel}>DAILY DRAW</Text>
-              <Text style={styles.tarotRoomTitle}>Card of the moment</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => drawTarot()}
-              style={styles.tarotRefreshBtn}
-              accessibilityLabel="Draw a new tarot card"
-              accessibilityRole="button"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <ArrowsClockwise size={17} color="#C6B6EC" weight="regular" />
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            onPress={toggleIncludeMinor}
-            activeOpacity={0.85}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: includeMinor }}
-            accessibilityLabel="Shuffle the minor arcana into the deck"
-            style={[styles.arcanaToggle, includeMinor && { borderColor: '#B39BE0', backgroundColor: '#B39BE022' }]}
-          >
-            <View style={styles.deckChoiceCopy}>
-              <Text style={styles.deckChoiceLabel}>THE DECK</Text>
-              <Text style={styles.deckChoiceTitle}>
-                {includeMinor ? 'Major + minor arcana' : 'Major arcana only'}
-              </Text>
-            </View>
-            <View style={[styles.deckChoiceState, includeMinor && { backgroundColor: '#B39BE0' }]}>
-              <Text style={[styles.deckChoiceStateText, includeMinor && { color: '#111225' }]}>
-                {includeMinor ? 'ALL' : 'MAJOR'}
-              </Text>
-            </View>
-          </TouchableOpacity>
-          {tarotLoading ? (
-            <View style={styles.readingState}>
-              <ActivityIndicator color="#B39BE0" />
-              <Text style={styles.stateTitle}>Shuffling the deck…</Text>
-              <Text style={styles.stateHint}>A card will rest here in a moment.</Text>
-            </View>
-          ) : tarot ? (
-            <View style={styles.tarotStage}>
-              <FlipCard
-                width={156}
-                height={252}
-                revealed={tarotRevealed}
-                onReveal={() => setTarotRevealed(true)}
-                label={tarotRevealed ? `${tarot.name}, ${tarotReversed ? 'reversed' : 'upright'}` : 'Reveal your card'}
-                back={<CardBack width={156} height={252} />}
-                face={<CardFace name={tarot.name} reversed={tarotReversed} />}
-              />
-              {!tarotRevealed ? (
-                <View style={styles.tarotPrompt}>
-                  <Text style={styles.tarotPromptTitle}>A card is waiting face down.</Text>
-                  <Text style={styles.tarotPromptText}>Turn it when you are ready to notice what it brings up.</Text>
-                  <StatusStrip accent="#B39BE0" label="FACE DOWN" detail="tap the card to reveal" active />
-                </View>
-              ) : (
-                <View style={styles.tarotInterpretation}>
-                  <Text style={styles.tarotInterpretationLabel}>WHAT IT MAY INVITE</Text>
-                  <Text style={styles.tarotMeaningLead}>
-                    {(tarotReversed ? tarot.meaning_rev : tarot.meaning_up) ?? tarot.meaning_up ?? ''}
+                  <Text style={[styles.periodText, active && { color: mySign.color }]}>
+                    {p.toUpperCase()}
                   </Text>
-                  {tarot.desc ? <Text style={styles.tarotDesc}>{tarot.desc}</Text> : null}
-                  <StatusStrip
-                    accent={tarotReversed ? '#D68097' : '#9DC7AC'}
-                    label={tarotReversed ? 'REVERSED' : 'UPRIGHT'}
-                    detail={tarot.name}
-                    active
-                  />
-                </View>
-              )}
-            </View>
-          ) : tarotError ? (
-            <View style={styles.readingState}>
-              <Text style={styles.stateGlyph}>◇</Text>
-              <Text style={styles.stateTitle}>The cards could not arrive.</Text>
-              <Text style={styles.stateHint}>Check your connection, then use the redraw button above.</Text>
-            </View>
-          ) : (
-            <View style={styles.readingState}>
-              <Text style={styles.stateGlyph}>✦</Text>
-              <Text style={styles.stateTitle}>The table is ready.</Text>
-              <Text style={styles.stateHint}>Draw a card and pause for a moment.</Text>
-            </View>
-          )}
-        </AmbientSurface>
-
-        {/* TAROT SPREADS */}
-        <EditorialSection
-          index="02"
-          eyebrow="SPREADS"
-          title="Lay out a wider question"
-          subtitle="Choose a shape, then turn each position in its own time."
-          accent="#B39BE0"
-        />
-        <AmbientSurface accent="#B39BE0" quiet showOrb={false} style={styles.spreadRoom}>
-          <Text style={styles.spreadChoiceLabel}>CHOOSE THE SHAPE</Text>
-          <View style={styles.spreadBtnRow}>
-            {SPREAD_SIZES.map(n => {
-              const active = spreadSize === n;
-              return (
-                <TouchableOpacity
-                  key={n}
-                  onPress={() => drawSpread(n)}
-                  style={[styles.spreadBtn, active && { borderColor: '#B39BE0', backgroundColor: '#B39BE022' }]}
-                  accessibilityLabel={`Draw ${n}-card spread`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                >
-                  <Text style={[styles.spreadBtnText, active && { color: '#C6B6EC' }]}>{n}</Text>
-                  <Text style={[styles.spreadBtnSub, active && { color: '#C6B6EC99' }]}>cards</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          {spreadLoading ? (
-            <View style={styles.readingState}>
-              <ActivityIndicator color="#B39BE0" />
-              <Text style={styles.stateTitle}>Laying out the cards…</Text>
+          <AmbientSurface accent={mySign.color} showOrb={false} style={styles.manuscript}>
+            <View style={styles.manuscriptHeading}>
+              <Text style={[styles.manuscriptKicker, { color: mySign.color }]}>{periodLabel}</Text>
+              <Text style={[styles.manuscriptGlyph, { color: mySign.color }]}>{textGlyph(mySign.glyph)}</Text>
             </View>
-          ) : spread && spreadSize ? (
-            <>
-              <Text style={styles.spreadGuide}>The cards are face down. Turn each in its own time.</Text>
-              {/* Wrapping rows sized so nothing scrolls or clips: 3 across,
-                  5 as 3+2, 7 as 4+3. Meanings collect in a list below as
-                  cards are revealed. */}
-              <View style={styles.spreadGrid}>
-                {spread.map((item, i) => {
-                  const revealed = spreadRevealed[i] === true;
-                  const pos = SPREAD_POSITIONS[spreadSize][i] ?? `Card ${i + 1}`;
-                  const cw = spreadSize === 7 ? 70 : 90;
-                  const ch = spreadSize === 7 ? 114 : 146;
-                  return (
-                    <View key={i} style={styles.spreadSlot}>
-                      <Text style={styles.spreadPos} numberOfLines={1}>{pos}</Text>
-                      <FlipCard
-                        width={cw}
-                        height={ch}
-                        revealed={revealed}
-                        onReveal={() =>
-                          setSpreadRevealed(prev => prev.map((v, j) => (j === i ? true : v)))
-                        }
-                        label={revealed ? `${item.card.name}, ${item.reversed ? 'reversed' : 'upright'}` : `Turn the ${pos} card`}
-                        back={<CardBack width={cw} height={ch} compact />}
-                        face={<CardFace name={item.card.name} reversed={item.reversed} compact small={spreadSize === 7} />}
-                      />
-                    </View>
-                  );
-                })}
+            <View style={[styles.manuscriptRule, { backgroundColor: mySign.color + '45' }]} />
+            {loading && !horoscope ? (
+              <View style={styles.readingState}>
+                <ActivityIndicator color={mySign.color} />
+                <Text style={styles.stateTitle}>Reading the sky…</Text>
+                <Text style={styles.stateHint}>Checking for the latest reflection.</Text>
               </View>
-              {spread.some((_, i) => spreadRevealed[i]) ? (
-                <View style={styles.spreadReadList}>
-                  <Text style={styles.spreadReadHeading}>THE READING SO FAR</Text>
+            ) : horoscope ? (
+              <>
+                <Text style={styles.manuscriptBody}>{horoscope}</Text>
+                <StatusStrip
+                  accent={mySign.color}
+                  label="CURRENT READING"
+                  detail={horoscopeTs != null ? freshnessLabel(horoscopeTs) : 'held locally'}
+                  active
+                  pulse
+                  pulseIntensity="subtle"
+                />
+              </>
+            ) : (
+              <>
+                <Text style={styles.fallbackQuote}>“{mySign.intention}”</Text>
+                <View style={styles.fallbackNote}>
+                  <Text style={styles.fallbackNoteTitle}>The service is quiet right now.</Text>
+                  <Text style={styles.fallbackNoteText}>
+                    Showing the intention already held in your sign instead.
+                  </Text>
+                </View>
+              </>
+            )}
+          </AmbientSurface>
+            </>
+          ) : (
+            <>
+              <EditorialSection
+                index="01"
+                eyebrow="CARD OF THE MOMENT"
+                title="Turn one card, when you're ready"
+                accent="#B39BE0"
+              />
+
+          {/* TAROT CARD OF THE DAY */}
+          <AmbientSurface accent="#B39BE0" showOrb={false} style={styles.tarotCard}>
+            <View style={styles.tarotHeaderRow}>
+              <View>
+                <Text style={styles.cardLabel}>DAILY DRAW</Text>
+                <Text style={styles.tarotRoomTitle}>Card of the moment</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => drawTarot()}
+                style={styles.tarotRefreshBtn}
+                accessibilityLabel="Draw a new tarot card"
+                accessibilityRole="button"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <ArrowsClockwise size={17} color="#C6B6EC" weight="regular" />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              onPress={toggleIncludeMinor}
+              activeOpacity={0.85}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: includeMinor }}
+              accessibilityLabel="Shuffle the minor arcana into the deck"
+              style={[styles.arcanaToggle, includeMinor && { borderColor: '#B39BE0', backgroundColor: '#B39BE022' }]}
+            >
+              <View style={styles.deckChoiceCopy}>
+                <Text style={styles.deckChoiceLabel}>THE DECK</Text>
+                <Text style={styles.deckChoiceTitle}>
+                  {includeMinor ? 'Major + minor arcana' : 'Major arcana only'}
+                </Text>
+              </View>
+              <View style={[styles.deckChoiceState, includeMinor && { backgroundColor: '#B39BE0' }]}>
+                <Text style={[styles.deckChoiceStateText, includeMinor && { color: '#111225' }]}>
+                  {includeMinor ? 'ALL' : 'MAJOR'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+            {tarotLoading ? (
+              <View style={styles.readingState}>
+                <ActivityIndicator color="#B39BE0" />
+                <Text style={styles.stateTitle}>Shuffling the deck…</Text>
+                <Text style={styles.stateHint}>A card will rest here in a moment.</Text>
+              </View>
+            ) : tarot ? (
+              <View style={styles.tarotStage}>
+                <FlipCard
+                  width={156}
+                  height={252}
+                  revealed={tarotRevealed}
+                  onReveal={() => setTarotRevealed(true)}
+                  label={tarotRevealed ? `${tarot.name}, ${tarotReversed ? 'reversed' : 'upright'}` : 'Reveal your card'}
+                  back={<CardBack width={156} height={252} />}
+                  face={<CardFace name={tarot.name} reversed={tarotReversed} />}
+                />
+                {!tarotRevealed ? (
+                  <View style={styles.tarotPrompt}>
+                    <Text style={styles.tarotPromptTitle}>A card is waiting face down.</Text>
+                    <Text style={styles.tarotPromptText}>Turn it when you are ready to notice what it brings up.</Text>
+                    <StatusStrip accent="#B39BE0" label="FACE DOWN" detail="tap the card to reveal" active />
+                  </View>
+                ) : (
+                  <View style={styles.tarotInterpretation}>
+                    <Text style={styles.tarotInterpretationLabel}>WHAT IT MAY INVITE</Text>
+                    <Text style={styles.tarotMeaningLead}>
+                      {(tarotReversed ? tarot.meaning_rev : tarot.meaning_up) ?? tarot.meaning_up ?? ''}
+                    </Text>
+                    {tarot.desc ? <Text style={styles.tarotDesc}>{tarot.desc}</Text> : null}
+                    <StatusStrip
+                      accent={tarotReversed ? '#D68097' : '#9DC7AC'}
+                      label={tarotReversed ? 'REVERSED' : 'UPRIGHT'}
+                      detail={tarot.name}
+                      active
+                    />
+                  </View>
+                )}
+              </View>
+            ) : tarotError ? (
+              <View style={styles.readingState}>
+                <Text style={styles.stateGlyph}>◇</Text>
+                <Text style={styles.stateTitle}>The cards could not arrive.</Text>
+                <Text style={styles.stateHint}>Check your connection, then use the redraw button above.</Text>
+              </View>
+            ) : (
+              <View style={styles.readingState}>
+                <Text style={styles.stateGlyph}>✦</Text>
+                <Text style={styles.stateTitle}>The table is ready.</Text>
+                <Text style={styles.stateHint}>Draw a card and pause for a moment.</Text>
+              </View>
+            )}
+          </AmbientSurface>
+
+          {/* TAROT SPREADS */}
+          <EditorialSection
+            index="02"
+            eyebrow="SPREADS"
+            title="Lay out a wider question"
+            subtitle="Choose a shape, then turn each position in its own time."
+            accent="#B39BE0"
+          />
+          <AmbientSurface accent="#B39BE0" quiet showOrb={false} style={styles.spreadRoom}>
+            <Text style={styles.spreadChoiceLabel}>CHOOSE THE SHAPE</Text>
+            <View style={styles.spreadBtnRow}>
+              {SPREAD_SIZES.map(n => {
+                const active = spreadSize === n;
+                return (
+                  <TouchableOpacity
+                    key={n}
+                    onPress={() => drawSpread(n)}
+                    style={[styles.spreadBtn, active && { borderColor: '#B39BE0', backgroundColor: '#B39BE022' }]}
+                    accessibilityLabel={`Draw ${n}-card spread`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                  >
+                    <Text style={[styles.spreadBtnText, active && { color: '#C6B6EC' }]}>{n}</Text>
+                    <Text style={[styles.spreadBtnSub, active && { color: '#C6B6EC99' }]}>cards</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {spreadLoading ? (
+              <View style={styles.readingState}>
+                <ActivityIndicator color="#B39BE0" />
+                <Text style={styles.stateTitle}>Laying out the cards…</Text>
+              </View>
+            ) : spread && spreadSize ? (
+              <>
+                <Text style={styles.spreadGuide}>The cards are face down. Turn each in its own time.</Text>
+                {/* Wrapping rows sized so nothing scrolls or clips: 3 across,
+                    5 as 3+2, 7 as 4+3. Meanings collect in a list below as
+                    cards are revealed. */}
+                <View style={styles.spreadGrid}>
                   {spread.map((item, i) => {
-                    if (!spreadRevealed[i]) return null;
+                    const revealed = spreadRevealed[i] === true;
                     const pos = SPREAD_POSITIONS[spreadSize][i] ?? `Card ${i + 1}`;
+                    const cw = spreadSize === 7 ? 70 : 90;
+                    const ch = spreadSize === 7 ? 114 : 146;
                     return (
-                      <View key={i} style={styles.spreadReadItem}>
-                        <Text style={styles.spreadPos}>
-                          {pos} · {item.card.name}{item.reversed ? ' · reversed' : ''}
-                        </Text>
-                        <Text style={styles.spreadReadMeaning}>
-                          {(item.reversed ? item.card.meaning_rev : item.card.meaning_up) ?? item.card.meaning_up ?? ''}
-                        </Text>
+                      <View key={i} style={styles.spreadSlot}>
+                        <Text style={styles.spreadPos} numberOfLines={1}>{pos}</Text>
+                        <FlipCard
+                          width={cw}
+                          height={ch}
+                          revealed={revealed}
+                          onReveal={() =>
+                            setSpreadRevealed(prev => prev.map((v, j) => (j === i ? true : v)))
+                          }
+                          label={revealed ? `${item.card.name}, ${item.reversed ? 'reversed' : 'upright'}` : `Turn the ${pos} card`}
+                          back={<CardBack width={cw} height={ch} compact />}
+                          face={<CardFace name={item.card.name} reversed={item.reversed} compact small={spreadSize === 7} />}
+                        />
                       </View>
                     );
                   })}
                 </View>
-              ) : null}
+                {spread.some((_, i) => spreadRevealed[i]) ? (
+                  <View style={styles.spreadReadList}>
+                    <Text style={styles.spreadReadHeading}>THE READING SO FAR</Text>
+                    {spread.map((item, i) => {
+                      if (!spreadRevealed[i]) return null;
+                      const pos = SPREAD_POSITIONS[spreadSize][i] ?? `Card ${i + 1}`;
+                      return (
+                        <View key={i} style={styles.spreadReadItem}>
+                          <Text style={styles.spreadPos}>
+                            {pos} · {item.card.name}{item.reversed ? ' · reversed' : ''}
+                          </Text>
+                          <Text style={styles.spreadReadMeaning}>
+                            {(item.reversed ? item.card.meaning_rev : item.card.meaning_up) ?? item.card.meaning_up ?? ''}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </>
+            ) : spreadError ? (
+              <View style={styles.readingState}>
+                <Text style={styles.stateGlyph}>◇</Text>
+                <Text style={styles.stateTitle}>The spread could not be laid.</Text>
+                <Text style={styles.stateHint}>Check your connection and choose the spread again.</Text>
+              </View>
+            ) : (
+              <View style={styles.spreadEmpty}>
+                <Text style={styles.spreadEmptyGlyph}>⌁</Text>
+                <Text style={styles.spreadEmptyTitle}>No cards on the table yet.</Text>
+                <Text style={styles.spreadEmptyText}>Three is concise. Five adds context. Seven opens the widest lens.</Text>
+              </View>
+            )}
+          </AmbientSurface>
             </>
-          ) : spreadError ? (
-            <View style={styles.readingState}>
-              <Text style={styles.stateGlyph}>◇</Text>
-              <Text style={styles.stateTitle}>The spread could not be laid.</Text>
-              <Text style={styles.stateHint}>Check your connection and choose the spread again.</Text>
-            </View>
-          ) : (
-            <View style={styles.spreadEmpty}>
-              <Text style={styles.spreadEmptyGlyph}>⌁</Text>
-              <Text style={styles.spreadEmptyTitle}>No cards on the table yet.</Text>
-              <Text style={styles.spreadEmptyText}>Three is concise. Five adds context. Seven opens the widest lens.</Text>
-            </View>
-          )}
-        </AmbientSurface>
-          </>
-          )}
-        </Animated.View>
+            )}
+          </Animated.View>
 
-        <View style={styles.closing}>
-          <View style={[styles.closingLine, { backgroundColor: accent + '40' }]} />
-          <Text style={[styles.closingGlyph, { color: accent }]}>{readingMode === 'horoscope' ? '☾' : '✦'}</Text>
-          <View style={[styles.closingLine, { backgroundColor: accent + '40' }]} />
-          <Text style={styles.footnote}>
-            Horoscopes and tarot come from a free public API. Take what resonates, leave the rest.
-          </Text>
+          <View style={styles.closing}>
+            <View style={[styles.closingLine, { backgroundColor: accent + '40' }]} />
+            <Text style={[styles.closingGlyph, { color: accent }]}>{readingMode === 'horoscope' ? '☾' : '✦'}</Text>
+            <View style={[styles.closingLine, { backgroundColor: accent + '40' }]} />
+            <Text style={styles.footnote}>
+              Horoscopes and tarot come from a free public API. Take what resonates, leave the rest.
+            </Text>
+          </View>
         </View>
       </ScrollView>
       </Animated.View>
@@ -1263,7 +1265,8 @@ function CardFace({
 
 const styles = StyleSheet.create({
   signThemeLayer: { flex: 1 },
-  scrollContent: { paddingHorizontal: 20 },
+  scrollContent: { flexGrow: 1 },
+  body: { paddingHorizontal: 20 },
   modeSurface: { padding: 5, marginBottom: 2 },
   modeRow: { flexDirection: 'row', gap: MODE_SEGMENT_GAP, position: 'relative' },
   modeSelectionPill: {
