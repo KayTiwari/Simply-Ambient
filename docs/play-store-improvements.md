@@ -63,6 +63,12 @@ Draft web captures in `docs/screenshots/` are useful for framing but are not sub
 
 ## Release notes for Play Console
 
+### 2.0.1
+
+> The soundscape scenes are now alive: forest light and breeze motes wander like fireflies, cabin stars glitter while the window lights flicker, and stream glints ride the current. The Stars page header now scrolls with the page, paused scenes hold perfectly still, and the app targets Android 16.
+
+### 2.0.0
+
 > Simply Ambient is now a complete ambient studio. Version 2.0 adds 13 offline soundscapes, three auto-advancing listening paths, a rebuilt tone chamber with its own volume control, eyes-closed breath cues, richer tarot, pinnable reflection rooms, and a calmer sound-responsive design throughout.
 
 ## Post-upload closed-test sweep
