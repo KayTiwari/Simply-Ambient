@@ -2,6 +2,13 @@
 
 This file records user-facing Simply Ambient releases. Version 2.0.0 is compared with the previous finished Android production build, 1.0.5.
 
+## 2.0.1 · July 2026
+
+- Scene elements now animate individually: forest light and breeze motes wander like fireflies, Summer Night glows drift, Airplane Cabin stars glitter while the window lights flicker, stream glints ride the current, breeze ribbons stream and undulate, and rain falls evenly across the card.
+- Paused soundscapes hold perfectly still; a resting stream glint no longer drifts across a frozen card.
+- The Stars header now scrolls away with the page instead of staying pinned, matching Chakras.
+- Android builds target API 36 (Android 16), meeting the August 2026 Google Play requirement.
+
 ## 2.0.0 · July 2026
 
 ### Audio and listening
@@ -11,7 +18,6 @@ This file records user-facing Simply Ambient releases. Version 2.0.0 is compared
 - Added continuously rotating frequency orbits whose motion responds to the current frequencies and eases back to rest after pause.
 - Expanded the offline soundscape library from 8 to 13 with Night Breeze, Summer Night, Distant Thunder, Airplane Cabin, and Night Train.
 - Added animated scene artwork to the active soundscape panel.
-- Scene elements now animate individually: forest light and breeze motes wander like fireflies, Summer Night glows drift, Airplane Cabin stars glitter while the window lights flicker, stream glints ride the current, breeze ribbons stream and undulate, and rain falls evenly across the card.
 - Rebalanced soundscape gains, especially the noise layers and quieter travel/night recordings.
 - Replaced Distant Thunder with a bundled CC0 field recording and rebuilt Summer Night around discrete cricket chirps.
 - Added independent tone, soundscape, and imported-audio lanes plus a custom sleep timer.
