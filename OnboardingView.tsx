@@ -418,11 +418,14 @@ export default function OnboardingView({
                           setBirthDay(day => Math.min(day, daysInMonth(month, birthYear)));
                         }}
                         dropdownIconColor="#B8B5C3"
-                        style={styles.datePicker}
+                        style={[
+                          styles.datePicker,
+                          Platform.OS === 'web' && styles.datePickerWeb,
+                        ]}
                       >
                         <Picker.Item label="Month" value={-1} color="#999" />
                         {MONTHS.map((month, index) => (
-                          <Picker.Item key={month} label={month} value={index} />
+                          <Picker.Item key={month} label={month} value={index} color="#F7F5FA" />
                         ))}
                       </Picker>
                     </View>
@@ -432,11 +435,14 @@ export default function OnboardingView({
                         selectedValue={birthDay}
                         onValueChange={(value) => setBirthDay(Number(value))}
                         dropdownIconColor="#B8B5C3"
-                        style={styles.datePicker}
+                        style={[
+                          styles.datePicker,
+                          Platform.OS === 'web' && styles.datePickerWeb,
+                        ]}
                       >
                         <Picker.Item label="Day" value={0} color="#999" />
                         {Array.from({ length: birthDayMax }, (_, index) => index + 1).map(day => (
-                          <Picker.Item key={day} label={String(day)} value={day} />
+                          <Picker.Item key={day} label={String(day)} value={day} color="#F7F5FA" />
                         ))}
                       </Picker>
                     </View>
@@ -451,11 +457,14 @@ export default function OnboardingView({
                           setBirthDay(day => Math.min(day, daysInMonth(birthMonth, year)));
                         }}
                         dropdownIconColor="#B8B5C3"
-                        style={styles.datePicker}
+                        style={[
+                          styles.datePicker,
+                          Platform.OS === 'web' && styles.datePickerWeb,
+                        ]}
                       >
                         <Picker.Item label="Year" value={0} color="#999" />
                         {BIRTH_YEARS.map(year => (
-                          <Picker.Item key={year} label={String(year)} value={year} />
+                          <Picker.Item key={year} label={String(year)} value={year} color="#F7F5FA" />
                         ))}
                       </Picker>
                     </View>
@@ -971,6 +980,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   datePicker: { color: '#F7F5FA' },
+  datePickerWeb: {
+    minHeight: 50,
+    backgroundColor: '#15162C',
+    borderWidth: 0,
+  },
   profileFootnote: {
     color: '#817F8E',
     fontSize: 10,

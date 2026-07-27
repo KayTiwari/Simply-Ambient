@@ -3315,6 +3315,15 @@ export default Sentry.wrap(function App() {
     Cinzel_700Bold,
   });
 
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const previousColorScheme = document.documentElement.style.colorScheme;
+    document.documentElement.style.colorScheme = 'dark';
+    return () => {
+      document.documentElement.style.colorScheme = previousColorScheme;
+    };
+  }, []);
+
   if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: '#0B0B1F' }} />;
   return (
     <SafeAreaProvider>
