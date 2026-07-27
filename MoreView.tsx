@@ -559,15 +559,21 @@ export default function MoreView({
     }
   }
 
-  // More-page navigation. Individual rooms stay in the same mounted layer and
-  // use a tiny vertical settle between destinations.
+  // More-page navigation, as the released app had it. Individual rooms stay
+  // in the same mounted layer; only their opacity and a tiny vertical settle
+  // change between destinations, with the hub crossfading underneath.
   // A pinned More shortcut mounts this view with its destination already in
-  // props. Seed the page position there so the hub never paints for one frame
-  // before the requested room appears.
+  // props. Seed both layers at that destination so the hub's accent never
+  // paints for one frame before the requested room appears.
   const initialNavigation = useRef(resolveInitialMoreNavigationState(requestedPage)).current;
   const [page, setPage] = useState<SubPage>(initialNavigation.page);
   const [pageHistory, setPageHistory] = useState<Array<Exclude<SubPage, null>>>([]);
+  const hubReveal = useRef(new Animated.Value(initialNavigation.hubReveal)).current;
+  const pageReveal = useRef(new Animated.Value(initialNavigation.pageReveal)).current;
+  const transitionToken = useRef(0);
+  const transitionDestination = useRef<'hub' | 'page'>(initialNavigation.destination);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [pageTransitioning, setPageTransitioning] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -581,67 +587,74 @@ export default function MoreView({
     };
   }, []);
 
-  // Hub and room swaps dip through a dark veil: cover, swap under full
-  // cover, lift once the destination has painted. One flat quad stays smooth
-  // regardless of what animates beneath, and avoids the exposed card
-  // boundaries that group-opacity fades produce on Android.
-  const roomScrim = useRef(new Animated.Value(0)).current;
-  const roomScrimToken = useRef(0);
-  const roomSwapPending = useRef(false);
+  // If the preference changes during a transition, finish at the destination
+  // that was already requested instead of reviving the page being dismissed.
+  useEffect(() => {
+    if (!reduceMotion) return;
+    transitionToken.current += 1;
+    hubReveal.stopAnimation();
+    pageReveal.stopAnimation();
+    if (transitionDestination.current === 'hub') {
+      hubReveal.setValue(1);
+      pageReveal.setValue(0);
+      setPage(null);
+      setPageHistory([]);
+    } else {
+      hubReveal.setValue(0);
+      pageReveal.setValue(1);
+    }
+    setPageTransitioning(false);
+  }, [hubReveal, pageReveal, reduceMotion]);
 
-  function throughScrim(apply: () => void) {
+  function animateOpen() {
+    transitionDestination.current = 'page';
+    transitionToken.current += 1;
+    const myToken = transitionToken.current;
+    hubReveal.stopAnimation();
+    pageReveal.stopAnimation();
     if (reduceMotion) {
-      apply();
+      hubReveal.setValue(0);
+      pageReveal.setValue(1);
+      setPageTransitioning(false);
       return;
     }
-    roomScrimToken.current += 1;
-    const myToken = roomScrimToken.current;
-    Animated.timing(roomScrim, {
-      toValue: 1,
-      duration: 110,
-      easing: Easing.in(Easing.quad),
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished || myToken !== roomScrimToken.current) return;
-      roomSwapPending.current = true;
-      apply();
-    });
-  }
 
-  // Lift one frame after the destination commits, so a slow room mount
-  // holds the cover instead of revealing an empty layer.
-  useEffect(() => {
-    if (!roomSwapPending.current) return;
-    roomSwapPending.current = false;
-    const raf = requestAnimationFrame(() => {
-      Animated.timing(roomScrim, {
-        toValue: 0,
-        duration: 260,
+    // Reset only the page layer: switching between two More rooms gets its
+    // own quiet entrance without flashing the hub behind it.
+    setPageTransitioning(true);
+    pageReveal.setValue(0);
+    Animated.parallel([
+      Animated.timing(hubReveal, {
+        toValue: 0, duration: 170,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
-      }).start();
+      }),
+      Animated.timing(pageReveal, {
+        toValue: 1, duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (!finished || myToken !== transitionToken.current) return;
+      setPageTransitioning(false);
     });
-    return () => cancelAnimationFrame(raf);
-  }, [page, roomScrim]);
+  }
 
   function open(p: Exclude<SubPage, null>) {
     if (isUnavailableMorePage(p)) {
       closeToHub();
       return;
     }
+    if (page === p && transitionDestination.current === 'page') return;
+    animateOpen();
     if (page === p) return;
     if (page !== null) {
-      const from = page;
-      throughScrim(() => {
-        setPageHistory(history => [...history, from]);
-        setPage(p);
-      });
+      setPageHistory(history => [...history, page]);
+      setPage(p);
       return;
     }
-    throughScrim(() => {
-      setPageHistory([]);
-      setPage(p);
-    });
+    setPageHistory([]);
+    setPage(p);
   }
 
   // External destinations (navbar and mini player) behave like roots, not
@@ -651,23 +664,21 @@ export default function MoreView({
       closeToHub();
       return;
     }
-    if (page === p) {
+    if (page === p && transitionDestination.current === 'page') {
       setPageHistory([]);
       return;
     }
-    throughScrim(() => {
-      setPageHistory([]);
-      setPage(p);
-    });
+    animateOpen();
+    setPageHistory([]);
+    setPage(p);
   }
 
   function close() {
     if (pageHistory.length > 0) {
+      animateOpen();
       const previous = pageHistory[pageHistory.length - 1];
-      throughScrim(() => {
-        setPageHistory(history => history.slice(0, -1));
-        setPage(previous);
-      });
+      setPageHistory(history => history.slice(0, -1));
+      setPage(previous);
       return;
     }
     closeToHub();
@@ -675,9 +686,36 @@ export default function MoreView({
 
   function closeToHub() {
     if (page === null) return;
-    throughScrim(() => {
-      setPageHistory([]);
+    transitionDestination.current = 'hub';
+    transitionToken.current += 1;
+    const myToken = transitionToken.current;
+    hubReveal.stopAnimation();
+    pageReveal.stopAnimation();
+    setPageHistory([]);
+    if (reduceMotion) {
+      hubReveal.setValue(1);
+      pageReveal.setValue(0);
       setPage(null);
+      setPageTransitioning(false);
+      return;
+    }
+    setPageTransitioning(true);
+    Animated.parallel([
+      Animated.timing(pageReveal, {
+        toValue: 0, duration: 170,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(hubReveal, {
+        toValue: 1, duration: 210,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (!finished || myToken !== transitionToken.current) return;
+      setPage(null);
+      setPageHistory([]);
+      setPageTransitioning(false);
     });
   }
 
@@ -713,32 +751,49 @@ export default function MoreView({
     onTogglePinnedMorePage,
   }), [onTogglePinnedMorePage, pinnedMorePages]);
 
+  const pageSettleY = pageReveal.interpolate({ inputRange: [0, 1], outputRange: [8, 0] });
+
   return (
     <ReducedMotionContext.Provider value={reduceMotion}>
     <PinnedMorePagesContext.Provider value={pinnedPagesContext}>
     <View style={{ flex: 1 }}>
-      {page === null ? (
-        <View style={{ flex: 1 }}>
-          <Hub
-            notifPref={notifPref}
-            affirmationPreview={affirmation}
-            moodToday={moodToday}
-            moodLog={moodLog}
-            gratitude={gratitude}
-            streak={streak}
-            profileName={profileName}
-            intent={intent}
-            ambientAccent={ambientAccent}
-            onOpen={open}
-          />
-        </View>
-      ) : null}
+      <Animated.View
+        pointerEvents={page === null ? 'auto' : 'none'}
+        // React Native Web does not currently emit an aria-hidden attribute
+        // for accessibilityElementsHidden, so make the web accessibility-tree
+        // boundary explicit while the faded hub remains mounted underneath.
+        aria-hidden={page !== null}
+        accessibilityElementsHidden={page !== null}
+        importantForAccessibility={page === null ? 'auto' : 'no-hide-descendants'}
+        style={{ flex: 1, opacity: hubReveal }}
+      >
+        <Hub
+          notifPref={notifPref}
+          affirmationPreview={affirmation}
+          moodToday={moodToday}
+          moodLog={moodLog}
+          gratitude={gratitude}
+          streak={streak}
+          profileName={profileName}
+          intent={intent}
+          ambientAccent={ambientAccent}
+          onOpen={open}
+        />
+      </Animated.View>
 
       {page !== null && (
-        <View
+        <Animated.View
+          pointerEvents={pageTransitioning ? 'none' : 'auto'}
+          // Keep the arriving/departing room out of the web accessibility tree
+          // until its short visual transition has finished.
+          aria-hidden={pageTransitioning}
+          accessibilityElementsHidden={pageTransitioning}
+          importantForAccessibility={pageTransitioning ? 'no-hide-descendants' : 'auto'}
           style={[
             StyleSheet.absoluteFill,
             {
+              opacity: pageReveal,
+              transform: [{ translateY: pageSettleY }],
               backgroundColor: 'transparent',
             },
           ]}
@@ -866,15 +921,8 @@ export default function MoreView({
           {page === 'bug' && (
             <BugReportPage onBack={close} />
           )}
-        </View>
+        </Animated.View>
       )}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          StyleSheet.absoluteFill,
-          { backgroundColor: '#0B0B1F', opacity: roomScrim },
-        ]}
-      />
     </View>
     </PinnedMorePagesContext.Provider>
     </ReducedMotionContext.Provider>

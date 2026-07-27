@@ -12,7 +12,7 @@ This file records user-facing Simply Ambient releases. Version 2.0.0 is compared
 - The touch ripple now blooms exactly where the finger lands, on cards and background alike, including after a small drag.
 - Eyes-closed breath cues keep sounding after switching to a second practice; the cue audio files are written once instead of being rewritten under the previous session's players.
 - Tarot cards now carry distinct emblems: The Fool walks, Wands burn, Cups hold water, and only The Star wears a star. Long-press the miniplayer's soundscape control to jump into the Soundscapes room.
-- Screen changes dip through a dark veil instead of cutting hard: tabs and More rooms cover, swap underneath, and lift once the destination has painted. The veil is a single flat layer, so the transition stays smooth on Android and never shows a blank or half-built screen.
+- Screen transitions fade the way the released app did: tabs crossfade and More rooms settle in over the hub, with the fade starting only once the destination has painted so a slow mount never flashes or animates a half-built screen.
 - Scene elements now animate individually: forest light and breeze motes wander like fireflies, Summer Night glows drift, Airplane Cabin stars glitter while the window lights flicker, stream glints ride the current, breeze ribbons stream and undulate, and rain falls evenly across the card.
 - Paused soundscapes hold perfectly still; a resting stream glint no longer drifts across a frozen card.
 - The Stars header now scrolls away with the page instead of staying pinned, matching Chakras.

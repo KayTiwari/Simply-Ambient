@@ -1763,53 +1763,39 @@ function AppContent() {
   const [moreActivePage, setMoreActivePage] = useState<MorePageId | null>(null);
   // Deep links into any More room; `hub` returns from a room to More's index.
   const [morePageRequest, setMorePageRequest] = useState<MorePageId | 'hub' | null>(null);
-  // Tab changes dip through a dark veil: cover the outgoing screen, swap
-  // under full cover, and lift only after the incoming screen has painted.
-  // One flat quad stays smooth no matter what animates beneath it, and
-  // blank or half-mounted frames are never visible. Group-opacity fades of
-  // the live subtree are avoided deliberately: they expose translucent card
-  // boundaries on Android, and heavy screens paint late into the fade.
-  const tabScrim = useRef(new Animated.Value(0)).current;
-  const pendingTabRef = useRef<Tab | null>(null);
-  const tabScrimToken = useRef(0);
-
-  function switchTab(next: Tab, prepare?: () => void) {
-    if (tab === next) {
-      prepare?.();
-      return;
-    }
-    pendingTabRef.current = next;
-    tabScrimToken.current += 1;
-    const myToken = tabScrimToken.current;
-    Animated.timing(tabScrim, {
-      toValue: 1,
-      duration: 110,
-      easing: Easing.in(Easing.quad),
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished || myToken !== tabScrimToken.current) return;
-      const target = pendingTabRef.current;
-      if (target == null) return;
-      prepare?.();
-      setTab(target);
-    });
+  // Tab crossfade, as the released app had it. The incoming tab is reset to
+  // invisible during the render that swaps tabs, and the fade starts one
+  // frame after it commits, so a slow mount never paints a bright flash or
+  // animates a half-built screen. The ambient backdrop behind the tab layer
+  // stays visible through the gap, so a slow mount reads as a quiet beat of
+  // open sky instead of a black cover.
+  const tabFade = useRef(new Animated.Value(1)).current;
+  const lastTab = useRef<Tab>(tab);
+  const tabFadePending = useRef(false);
+  if (lastTab.current !== tab) {
+    lastTab.current = tab;
+    tabFade.setValue(0);
+    tabFadePending.current = true;
   }
 
-  // Lift the veil one frame after the incoming tab commits, so a slow mount
-  // holds the cover instead of revealing an empty screen.
   useEffect(() => {
-    if (pendingTabRef.current !== tab) return;
-    pendingTabRef.current = null;
+    if (!tabFadePending.current) return;
+    tabFadePending.current = false;
     const raf = requestAnimationFrame(() => {
-      Animated.timing(tabScrim, {
-        toValue: 0,
-        duration: 260,
+      Animated.timing(tabFade, {
+        toValue: 1,
+        duration: 320,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }).start();
     });
     return () => cancelAnimationFrame(raf);
-  }, [tab, tabScrim]);
+  }, [tab, tabFade]);
+
+  function switchTab(next: Tab, prepare?: () => void) {
+    prepare?.();
+    if (tab !== next) setTab(next);
+  }
 
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -3035,7 +3021,7 @@ function AppContent() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
-          <View style={{ flex: 1 }}>
+          <Animated.View style={{ flex: 1, opacity: tabFade }}>
             {tab === 'frequencies' && (
               <FrequenciesView
                 leftHz={leftHz} rightHz={rightHz}
@@ -3137,16 +3123,8 @@ function AppContent() {
                 onWipeAllData={wipeAllAppData}
               />
             )}
-          </View>
+          </Animated.View>
         </KeyboardAvoidingView>
-
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: '#0B0B1F', opacity: tabScrim },
-          ]}
-        />
 
         <View
           pointerEvents="box-none"
