@@ -136,8 +136,10 @@ import MoreView, {
 } from './MoreView';
 import OnboardingView from './OnboardingView';
 import {
+  DEFAULT_PINNED_MORE_PAGES,
   MORE_PAGE_META,
   isPinnableMorePage,
+  resolvePinnedMorePages,
   type MorePageId,
   type PinnableMorePageId,
 } from './moreNavigation';
@@ -1720,7 +1722,9 @@ type ActiveRoutineSession = {
 const STORAGE_KEY_NOTIF = '@simply_ambient_notif_pref_v1';
 const STORAGE_KEY_SINGLE_COLOR = '@simply_ambient_single_color_v1';
 const STORAGE_KEY_PINNED_MORE_PAGES = '@simply_ambient_pinned_more_pages_v1';
-// Read only for the one-time migration into the ordered registry-backed list.
+// Legacy soundscapes-in-navbar flag. Soundscapes is now pinned by default
+// whenever no pinned list has been stored, which covers every state this flag
+// could migrate to, so it is only cleaned up here.
 const STORAGE_KEY_NAV_SOUNDSCAPES = '@simply_ambient_nav_soundscapes_v1';
 // The day's affirmation, stored as JSON {date: 'YYYY-MM-DD' local, text} so
 // one phrase holds for the whole day across launches and hub previews.
@@ -1732,24 +1736,6 @@ function localDateKey(d: Date = new Date()): string {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${m}-${day}`;
-}
-
-function parsePinnedMorePages(raw: string | null): PinnableMorePageId[] {
-  if (!raw) return [];
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const seen = new Set<PinnableMorePageId>();
-    const pages: PinnableMorePageId[] = [];
-    parsed.forEach(value => {
-      if (typeof value !== 'string' || !isPinnableMorePage(value) || seen.has(value)) return;
-      seen.add(value);
-      pages.push(value);
-    });
-    return pages;
-  } catch {
-    return [];
-  }
 }
 
 function AppContent() {
@@ -1792,22 +1778,11 @@ function AppContent() {
     AsyncStorage.getItem(STORAGE_KEY_SINGLE_COLOR).then(v => {
       if (v) setSingleColor(v);
     }).catch(() => {});
-    Promise.all([
-      AsyncStorage.getItem(STORAGE_KEY_PINNED_MORE_PAGES),
-      AsyncStorage.getItem(STORAGE_KEY_NAV_SOUNDSCAPES),
-    ]).then(([storedPins, legacySoundscapes]) => {
+    AsyncStorage.getItem(STORAGE_KEY_PINNED_MORE_PAGES).then(storedPins => {
       if (pinnedMorePagesTouched.current) return;
-
-      const migrated = storedPins == null && legacySoundscapes === '1';
-      const next = storedPins == null
-        ? (migrated ? ['soundscapes' as const] : [])
-        : parsePinnedMorePages(storedPins);
+      const next = resolvePinnedMorePages(storedPins);
       pinnedMorePagesRef.current = next;
       setPinnedMorePages(next);
-
-      if (migrated && !pinnedMorePagesTouched.current) {
-        AsyncStorage.setItem(STORAGE_KEY_PINNED_MORE_PAGES, JSON.stringify(next)).catch(() => {});
-      }
     }).catch(() => {});
     // One of the rate-prompt gate counters (see lib/rateGate.ts).
     recordAppOpen().catch(() => {});
@@ -1839,10 +1814,10 @@ function AppContent() {
     pinnedMorePagesRef.current = [];
     setPinnedMorePages([]);
     setNewlyPinnedMorePage(null);
-    AsyncStorage.multiRemove([
-      STORAGE_KEY_PINNED_MORE_PAGES,
-      STORAGE_KEY_NAV_SOUNDSCAPES,
-    ]).catch(() => {});
+    // Store an explicit empty list. Removing the key would bring the default
+    // pins back on the next launch.
+    AsyncStorage.setItem(STORAGE_KEY_PINNED_MORE_PAGES, JSON.stringify([])).catch(() => {});
+    AsyncStorage.removeItem(STORAGE_KEY_NAV_SOUNDSCAPES).catch(() => {});
   }
 
   function openMoreHub() {
@@ -2931,8 +2906,10 @@ function AppContent() {
     // cannot resurrect data that another cleanup step did remove. Safety still
     // receives a rejection and never reports a complete wipe in that case.
     pinnedMorePagesTouched.current = true;
-    pinnedMorePagesRef.current = [];
-    setPinnedMorePages([]);
+    // Match the post-wipe relaunch, where an empty store resolves to the
+    // default pins.
+    pinnedMorePagesRef.current = [...DEFAULT_PINNED_MORE_PAGES];
+    setPinnedMorePages([...DEFAULT_PINNED_MORE_PAGES]);
     setNewlyPinnedMorePage(null);
     setMorePageRequest(null);
     setSingleColor(null);

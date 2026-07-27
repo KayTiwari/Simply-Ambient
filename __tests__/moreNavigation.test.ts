@@ -1,6 +1,8 @@
 import {
+  DEFAULT_PINNED_MORE_PAGES,
   MORE_PAGE_META,
   resolveInitialMoreNavigationState,
+  resolvePinnedMorePages,
   type MorePageId,
 } from '../moreNavigation';
 
@@ -52,4 +54,32 @@ describe('resolveInitialMoreNavigationState', () => {
       destination: 'hub',
     });
   });
+});
+
+describe('resolvePinnedMorePages', () => {
+  it('pins soundscapes by default when nothing is stored', () => {
+    expect(resolvePinnedMorePages(null)).toEqual(['soundscapes']);
+  });
+
+  it('only lists pinnable pages as defaults', () => {
+    DEFAULT_PINNED_MORE_PAGES.forEach(page => {
+      expect(MORE_PAGE_META[page].pinnable).toBe(true);
+    });
+  });
+
+  it('keeps an explicit empty list after the user unpins everything', () => {
+    expect(resolvePinnedMorePages('[]')).toEqual([]);
+  });
+
+  it('preserves stored order and drops unknown, unpinnable, or duplicate entries', () => {
+    const raw = JSON.stringify(['mood', 'settings', 'retired-room', 'soundscapes', 'mood']);
+    expect(resolvePinnedMorePages(raw)).toEqual(['mood', 'soundscapes']);
+  });
+
+  it.each(['not json', '"soundscapes"', '{}'])(
+    'falls back to the defaults for unreadable storage %s',
+    raw => {
+      expect(resolvePinnedMorePages(raw)).toEqual(['soundscapes']);
+    },
+  );
 });

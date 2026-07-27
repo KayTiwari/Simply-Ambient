@@ -218,3 +218,30 @@ export function isPinnableMorePage(id: string): id is PinnableMorePageId {
   return Object.prototype.hasOwnProperty.call(MORE_PAGE_META, id)
     && MORE_PAGE_META[id as MorePageId].pinnable;
 }
+
+/** Pages that start in the navbar before the user has touched any pin. */
+export const DEFAULT_PINNED_MORE_PAGES: readonly PinnableMorePageId[] = ['soundscapes'];
+
+/**
+ * Resolves the persisted pinned-pages list for the navbar. A missing or
+ * unreadable value falls back to the defaults, so Soundscapes shows up for
+ * fresh installs. An explicit stored list always wins, including the empty
+ * list written when the user unpins everything.
+ */
+export function resolvePinnedMorePages(raw: string | null): PinnableMorePageId[] {
+  if (raw == null) return [...DEFAULT_PINNED_MORE_PAGES];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [...DEFAULT_PINNED_MORE_PAGES];
+    const seen = new Set<PinnableMorePageId>();
+    const pages: PinnableMorePageId[] = [];
+    parsed.forEach(value => {
+      if (typeof value !== 'string' || !isPinnableMorePage(value) || seen.has(value)) return;
+      seen.add(value);
+      pages.push(value);
+    });
+    return pages;
+  } catch {
+    return [...DEFAULT_PINNED_MORE_PAGES];
+  }
+}

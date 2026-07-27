@@ -4,6 +4,7 @@ This file records user-facing Simply Ambient releases. Version 2.0.0 is compared
 
 ## 2.0.1 · July 2026
 
+- Soundscapes now starts pinned in the navbar, so it is one tap away on a fresh install. Tap the pin on its page to remove it; the choice sticks across launches.
 - Scene elements now animate individually: forest light and breeze motes wander like fireflies, Summer Night glows drift, Airplane Cabin stars glitter while the window lights flicker, stream glints ride the current, breeze ribbons stream and undulate, and rain falls evenly across the card.
 - Paused soundscapes hold perfectly still; a resting stream glint no longer drifts across a frozen card.
 - The Stars header now scrolls away with the page instead of staying pinned, matching Chakras.

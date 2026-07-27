@@ -65,7 +65,7 @@ Draft web captures in `docs/screenshots/` are useful for framing but are not sub
 
 ### 2.0.1
 
-> The soundscape scenes are now alive: forest light and breeze motes wander like fireflies, cabin stars glitter while the window lights flicker, and stream glints ride the current. The Stars page header now scrolls with the page, paused scenes hold perfectly still, and the app targets Android 16.
+> The soundscape scenes are now alive: forest light and breeze motes wander like fireflies, cabin stars glitter while the window lights flicker, and stream glints ride the current. Soundscapes starts pinned in the navbar for one-tap access. The Stars page header now scrolls with the page, paused scenes hold perfectly still, and the app targets Android 16.
 
 ### 2.0.0
 
