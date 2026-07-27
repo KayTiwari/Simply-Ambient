@@ -537,7 +537,7 @@ const SOUNDSCAPES: Soundscape[] = [
   { id: 'forest', name: 'Forest Air',     blurb: 'Birdsong canopy for light, living background texture.', color: '#9DC7AC', Icon: TreeEvergreen },
   { id: 'stream', name: 'Trickling Stream', blurb: 'Small moving water with birds tucked into the distance.',  color: '#7FC6C9',   Icon: Drop },
   { id: 'fire',   name: 'Hearth',         blurb: 'A campfire bed with natural ember crackle.',            color: '#E0A470',   Icon: Campfire },
-  { id: 'white',  name: 'White Noise',    blurb: 'Even masking for busy rooms and brittle silence.',          color: '#ffffffcc', Icon: WaveSquare },
+  { id: 'white',  name: 'White Noise',    blurb: 'Even masking for busy rooms and brittle silence.',          color: '#FFFFFF', Icon: WaveSquare },
   { id: 'pink',   name: 'Pink Noise',     blurb: 'Softer masking with less edge than white noise.',           color: '#E0BFCB',   Icon: WaveSine },
   { id: 'brown',  name: 'Brown Noise',    blurb: 'Low, dense, and grounding for a heavy nervous system.',     color: '#8A6B4A',   Icon: WaveTriangle },
   { id: 'breeze', name: 'Night Breeze',   blurb: 'A soft, low-passed current that rises and settles slowly.',  color: '#A7C7C1',   Icon: Wind },

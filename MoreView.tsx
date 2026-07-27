@@ -920,10 +920,17 @@ function Hub({
       <ScrollView
         contentContainerStyle={styles.hubScrollContent}
         showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[0]}
+        stickyHeaderIndices={Platform.OS === 'android' ? undefined : [0]}
       >
-        <View style={styles.headerWrap}>
-          <HeaderGlass accent={ambientAccent} variant="soft" />
+        <View
+          style={[
+            styles.headerWrap,
+            Platform.OS === 'android' && styles.headerWrapAndroid,
+          ]}
+        >
+          {Platform.OS === 'android' ? null : (
+            <HeaderGlass accent={ambientAccent} variant="soft" />
+          )}
           <View style={styles.hubBrandRow}>
             <Text style={styles.ambience}>Simply Ambient</Text>
           </View>
@@ -4826,6 +4833,10 @@ function SoundscapesPage({
 
   const renderCard = (s: SoundscapeOption) => {
     const active = activeSoundscapeId === s.id && isSoundscapePlaying;
+    // Dynamic alpha suffixes require an opaque six-digit base. Normalize
+    // legacy accents such as White Noise's former #ffffffcc before composing
+    // native gradient and border colors.
+    const tileAccent = solidAccent(s.color);
     return (
       <TouchableOpacity
         key={s.id}
@@ -4836,22 +4847,22 @@ function SoundscapesPage({
         accessibilityState={{ selected: active }}
         style={[
           styles.soundscapeCard,
-          { borderColor: s.color + '32' },
+          { borderColor: tileAccent + '32' },
           active && {
-            borderColor: s.color,
-            backgroundColor: s.color + '18',
+            borderColor: tileAccent,
+            backgroundColor: tileAccent + '18',
           },
         ]}
       >
         <LinearGradient
-          colors={[s.color + '22', 'rgba(25,26,48,0.94)', 'rgba(13,14,31,0.98)']}
+          colors={[tileAccent + '22', 'rgba(25,26,48,0.94)', 'rgba(13,14,31,0.98)']}
           style={StyleSheet.absoluteFill}
         />
         <View style={styles.soundscapeTileTop}>
-          <View style={[styles.soundscapeGlyphBox, { backgroundColor: s.color + '22', borderColor: s.color + '77' }]}>
-            <s.Icon size={22} color={s.color} weight="duotone" />
+          <View style={[styles.soundscapeGlyphBox, { backgroundColor: tileAccent + '22', borderColor: tileAccent + '77' }]}>
+            <s.Icon size={22} color={tileAccent} weight="duotone" />
           </View>
-          <Text style={[styles.soundscapeSoon, active && { color: s.color, borderColor: s.color }]}>
+          <Text style={[styles.soundscapeSoon, active && { color: tileAccent, borderColor: tileAccent }]}>
             {active ? 'STOP' : 'PLAY'}
           </Text>
         </View>
@@ -5647,6 +5658,13 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(8,9,25,0.07)',
     borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
     borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  headerWrapAndroid: {
+    overflow: 'visible',
+    zIndex: 0,
+    elevation: 0,
+    backgroundColor: 'transparent',
+    borderBottomWidth: 0,
   },
   hubBrandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   ambience: {

@@ -771,6 +771,7 @@ export default function HoroscopesView({
                 style={[
                   styles.periodSelectionPill,
                   ON_ANDROID && styles.selectionPillAndroid,
+                  ON_ANDROID && styles.periodSelectionPillAndroid,
                   {
                     width: periodSegmentWidth,
                     ...(!ON_ANDROID ? {
@@ -1236,6 +1237,9 @@ const styles = StyleSheet.create({
     bottom: 3,
     height: 2,
     borderRadius: 1,
+  },
+  periodSelectionPillAndroid: {
+    backgroundColor: '#454762',
   },
   modeButton: {
     flex: 1, minHeight: 58, borderRadius: 20, borderWidth: 1,
