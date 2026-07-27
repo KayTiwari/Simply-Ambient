@@ -141,8 +141,12 @@ export function AmbientVeil({
   const baseScale = ambientMotion.interpolate({ inputRange: [0, 1], outputRange: [1.04, 1.085] });
 
   // Touching open background births one ring at the touch point, like a
-  // finger on still water. The root is a Pressable so child controls keep
-  // priority: only taps nothing else claims reach it, on native and web.
+  // finger on still water. On native the root only OBSERVES the gesture with
+  // plain touch events and never claims it: a Pressable root becomes the JS
+  // responder for background touches, and on the new architecture that blocks
+  // the native ScrollView underneath from ever intercepting the drag, which
+  // froze background scrolling across the app. Web keeps a Pressable root
+  // because mouse clicks do not emit touch events.
   const [touchRipples, setTouchRipples] = React.useState<Array<{ id: number; x: number; y: number }>>([]);
   const touchIdRef = useRef(0);
   const veilRef = useRef<View>(null);
@@ -159,9 +163,42 @@ export function AmbientVeil({
     const y = pageY != null ? pageY - veilOriginRef.current.y : locationY ?? null;
     return x == null || y == null ? null : { x, y };
   };
-  // Where the finger first landed. onPress reports the release point, and a
-  // small drag that stays inside the tap slop would bloom the ring away from
-  // the spot that was touched.
+  const spawnRippleAt = (point: { x: number; y: number }) => {
+    if (reduceMotion) return;
+    const id = ++touchIdRef.current;
+    // Cap concurrent ripples; the oldest quietly leaves under a tap storm.
+    setTouchRipples(prev => [...prev.slice(-4), { id, x: point.x, y: point.y }]);
+  };
+
+  // Native tap detection: bloom on a quick, still, single-finger release at
+  // the spot the finger first landed. Drags move too far, holds take too
+  // long, and a scroll that the native side claims arrives as a cancel.
+  const touchStartRef = useRef<{ x: number; y: number; timestamp: number } | null>(null);
+  const onVeilTouchStart = (e: GestureResponderEvent) => {
+    if (e.nativeEvent.touches.length > 1) {
+      touchStartRef.current = null;
+      return;
+    }
+    const point = resolveTouchPoint(e);
+    touchStartRef.current = point ? { ...point, timestamp: e.nativeEvent.timestamp } : null;
+  };
+  const onVeilTouchEnd = (e: GestureResponderEvent) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start || e.nativeEvent.touches.length > 0) return;
+    const end = resolveTouchPoint(e);
+    if (!end) return;
+    const heldMs = e.nativeEvent.timestamp - start.timestamp;
+    const moved = Math.hypot(end.x - start.x, end.y - start.y);
+    if (heldMs > 420 || moved > 12) return;
+    spawnRippleAt(start);
+  };
+  const onVeilTouchCancel = () => {
+    touchStartRef.current = null;
+  };
+
+  // Web tap detection through the Pressable, anchored to the press-in point
+  // because onPress reports the release position.
   const pressInPointRef = useRef<{ x: number; y: number } | null>(null);
   const rememberTouchPoint = (e: GestureResponderEvent) => {
     pressInPointRef.current = resolveTouchPoint(e);
@@ -169,24 +206,14 @@ export function AmbientVeil({
   const spawnTouchRipple = (e: GestureResponderEvent) => {
     const point = pressInPointRef.current ?? resolveTouchPoint(e);
     pressInPointRef.current = null;
-    if (reduceMotion || !point) return;
-    const id = ++touchIdRef.current;
-    // Cap concurrent ripples; the oldest quietly leaves under a tap storm.
-    setTouchRipples(prev => [...prev.slice(-4), { id, x: point.x, y: point.y }]);
+    if (point) spawnRippleAt(point);
   };
   const removeTouchRipple = (id: number) => {
     setTouchRipples(prev => prev.filter(r => r.id !== id));
   };
 
-  return (
-    <Pressable
-      ref={veilRef}
-      style={[shared.veil, style]}
-      onPressIn={rememberTouchPoint}
-      onPress={spawnTouchRipple}
-      onLayout={measureVeil}
-      accessible={false}
-    >
+  const veilLayers = (
+    <>
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
@@ -230,7 +257,36 @@ export function AmbientVeil({
         ))}
       </View>
       {children}
-    </Pressable>
+    </>
+  );
+
+  if (Platform.OS === 'web') {
+    return (
+      <Pressable
+        ref={veilRef}
+        style={[shared.veil, style]}
+        onPressIn={rememberTouchPoint}
+        onPress={spawnTouchRipple}
+        onLayout={measureVeil}
+        accessible={false}
+      >
+        {veilLayers}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View
+      ref={veilRef}
+      style={[shared.veil, style]}
+      onTouchStart={onVeilTouchStart}
+      onTouchEnd={onVeilTouchEnd}
+      onTouchCancel={onVeilTouchCancel}
+      onLayout={measureVeil}
+      accessible={false}
+    >
+      {veilLayers}
+    </View>
   );
 }
 
