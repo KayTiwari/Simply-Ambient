@@ -1726,6 +1726,20 @@ function StickySubpageScroll({
   children,
   ...scrollProps
 }: StickySubpageScrollProps) {
+  // Android's new architecture hit-tests a stuck sticky header at its
+  // pre-translation position, so the back button goes dead once the page
+  // scrolls. An index-0 sticky header pins from the first pixel anyway, so
+  // a fixed sibling above the scroll looks identical and keeps its taps.
+  if (Platform.OS === 'android') {
+    return (
+      <View style={styles.subShell}>
+        <SubHeader title={title} accent={accent} onBack={onBack} />
+        <ScrollView {...scrollProps} contentContainerStyle={styles.subScrollContent}>
+          <View style={[styles.subBody, bodyStyle]}>{children}</View>
+        </ScrollView>
+      </View>
+    );
+  }
   return (
     <ScrollView
       {...scrollProps}
@@ -5987,6 +6001,7 @@ const styles = StyleSheet.create({
     fontSize: 34, lineHeight: 35,
     letterSpacing: 0.1,
   },
+  subShell: { flex: 1 },
   subScrollContent: { flexGrow: 1 },
   subBody: { paddingHorizontal: 20, paddingTop: 6, flexGrow: 1 },
   pageClosing: {
