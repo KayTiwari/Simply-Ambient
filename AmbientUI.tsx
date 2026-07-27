@@ -152,7 +152,12 @@ export function AmbientVeil({
   const veilRef = useRef<View>(null);
   const veilOriginRef = useRef({ x: 0, y: 0 });
   const measureVeil = () => {
-    veilRef.current?.measureInWindow?.((x, y) => { veilOriginRef.current = { x, y }; });
+    // measure() reports the veil's origin in the same page space that touch
+    // events use for pageX/pageY. measureInWindow disagrees with that space
+    // by the status bar height on Android, which nudged every ring upward.
+    veilRef.current?.measure?.((x, y, w, h, pageX, pageY) => {
+      veilOriginRef.current = { x: pageX, y: pageY };
+    });
   };
   const resolveTouchPoint = (e: GestureResponderEvent) => {
     // Window coordinates against the veil's measured origin. locationX/Y are
