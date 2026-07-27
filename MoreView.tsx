@@ -581,6 +581,49 @@ export default function MoreView({
     };
   }, []);
 
+  // Hub and room swaps dip through a dark veil: cover, swap under full
+  // cover, lift once the destination has painted. One flat quad stays smooth
+  // regardless of what animates beneath, and avoids the exposed card
+  // boundaries that group-opacity fades produce on Android.
+  const roomScrim = useRef(new Animated.Value(0)).current;
+  const roomScrimToken = useRef(0);
+  const roomSwapPending = useRef(false);
+
+  function throughScrim(apply: () => void) {
+    if (reduceMotion) {
+      apply();
+      return;
+    }
+    roomScrimToken.current += 1;
+    const myToken = roomScrimToken.current;
+    Animated.timing(roomScrim, {
+      toValue: 1,
+      duration: 110,
+      easing: Easing.in(Easing.quad),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished || myToken !== roomScrimToken.current) return;
+      roomSwapPending.current = true;
+      apply();
+    });
+  }
+
+  // Lift one frame after the destination commits, so a slow room mount
+  // holds the cover instead of revealing an empty layer.
+  useEffect(() => {
+    if (!roomSwapPending.current) return;
+    roomSwapPending.current = false;
+    const raf = requestAnimationFrame(() => {
+      Animated.timing(roomScrim, {
+        toValue: 0,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [page, roomScrim]);
+
   function open(p: Exclude<SubPage, null>) {
     if (isUnavailableMorePage(p)) {
       closeToHub();
@@ -588,12 +631,17 @@ export default function MoreView({
     }
     if (page === p) return;
     if (page !== null) {
-      setPageHistory(history => [...history, page]);
-      setPage(p);
+      const from = page;
+      throughScrim(() => {
+        setPageHistory(history => [...history, from]);
+        setPage(p);
+      });
       return;
     }
-    setPageHistory([]);
-    setPage(p);
+    throughScrim(() => {
+      setPageHistory([]);
+      setPage(p);
+    });
   }
 
   // External destinations (navbar and mini player) behave like roots, not
@@ -607,15 +655,19 @@ export default function MoreView({
       setPageHistory([]);
       return;
     }
-    setPageHistory([]);
-    setPage(p);
+    throughScrim(() => {
+      setPageHistory([]);
+      setPage(p);
+    });
   }
 
   function close() {
     if (pageHistory.length > 0) {
       const previous = pageHistory[pageHistory.length - 1];
-      setPageHistory(history => history.slice(0, -1));
-      setPage(previous);
+      throughScrim(() => {
+        setPageHistory(history => history.slice(0, -1));
+        setPage(previous);
+      });
       return;
     }
     closeToHub();
@@ -623,8 +675,10 @@ export default function MoreView({
 
   function closeToHub() {
     if (page === null) return;
-    setPageHistory([]);
-    setPage(null);
+    throughScrim(() => {
+      setPageHistory([]);
+      setPage(null);
+    });
   }
 
   useEffect(() => {
@@ -814,6 +868,13 @@ export default function MoreView({
           )}
         </View>
       )}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          { backgroundColor: '#0B0B1F', opacity: roomScrim },
+        ]}
+      />
     </View>
     </PinnedMorePagesContext.Provider>
     </ReducedMotionContext.Provider>

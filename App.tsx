@@ -1763,27 +1763,53 @@ function AppContent() {
   const [moreActivePage, setMoreActivePage] = useState<MorePageId | null>(null);
   // Deep links into any More room; `hub` returns from a room to More's index.
   const [morePageRequest, setMorePageRequest] = useState<MorePageId | 'hub' | null>(null);
-  // Tab crossfade. While it runs, the tab layer renders to an offscreen
-  // hardware texture so Android composites the fade as one flat image;
-  // fading the live subtree exposes translucent card boundaries instead.
-  const tabFade = useRef(new Animated.Value(1)).current;
-  const [tabTransitioning, setTabTransitioning] = useState(false);
-  const lastTab = useRef<Tab>(tab);
+  // Tab changes dip through a dark veil: cover the outgoing screen, swap
+  // under full cover, and lift only after the incoming screen has painted.
+  // One flat quad stays smooth no matter what animates beneath it, and
+  // blank or half-mounted frames are never visible. Group-opacity fades of
+  // the live subtree are avoided deliberately: they expose translucent card
+  // boundaries on Android, and heavy screens paint late into the fade.
+  const tabScrim = useRef(new Animated.Value(0)).current;
+  const pendingTabRef = useRef<Tab | null>(null);
+  const tabScrimToken = useRef(0);
 
-  useEffect(() => {
-    if (lastTab.current === tab) return;
-    lastTab.current = tab;
-    setTabTransitioning(true);
-    tabFade.setValue(0);
-    Animated.timing(tabFade, {
+  function switchTab(next: Tab, prepare?: () => void) {
+    if (tab === next) {
+      prepare?.();
+      return;
+    }
+    pendingTabRef.current = next;
+    tabScrimToken.current += 1;
+    const myToken = tabScrimToken.current;
+    Animated.timing(tabScrim, {
       toValue: 1,
-      duration: 320,
-      easing: Easing.out(Easing.cubic),
+      duration: 110,
+      easing: Easing.in(Easing.quad),
       useNativeDriver: true,
     }).start(({ finished }) => {
-      if (finished) setTabTransitioning(false);
+      if (!finished || myToken !== tabScrimToken.current) return;
+      const target = pendingTabRef.current;
+      if (target == null) return;
+      prepare?.();
+      setTab(target);
     });
-  }, [tab, tabFade]);
+  }
+
+  // Lift the veil one frame after the incoming tab commits, so a slow mount
+  // holds the cover instead of revealing an empty screen.
+  useEffect(() => {
+    if (pendingTabRef.current !== tab) return;
+    pendingTabRef.current = null;
+    const raf = requestAnimationFrame(() => {
+      Animated.timing(tabScrim, {
+        toValue: 0,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [tab, tabScrim]);
 
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -1839,15 +1865,19 @@ function AppContent() {
   }
 
   function openMoreHub() {
-    if (tab === 'more' && moreActivePage !== null) setMorePageRequest('hub');
-    else setMoreActivePage(null);
-    setTab('more');
+    if (tab === 'more') {
+      if (moreActivePage !== null) setMorePageRequest('hub');
+      else setMoreActivePage(null);
+      return;
+    }
+    switchTab('more', () => setMoreActivePage(null));
   }
 
   function openMorePageFromNav(page: PinnableMorePageId) {
-    setMoreActivePage(page);
-    setMorePageRequest(page);
-    setTab('more');
+    switchTab('more', () => {
+      setMoreActivePage(page);
+      setMorePageRequest(page);
+    });
   }
   function setSingleColorPref(c: string | null) {
     setSingleColor(c);
@@ -3005,10 +3035,7 @@ function AppContent() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
-          <Animated.View
-            style={{ flex: 1, opacity: tabFade }}
-            renderToHardwareTextureAndroid={tabTransitioning}
-          >
+          <View style={{ flex: 1 }}>
             {tab === 'frequencies' && (
               <FrequenciesView
                 leftHz={leftHz} rightHz={rightHz}
@@ -3110,8 +3137,16 @@ function AppContent() {
                 onWipeAllData={wipeAllAppData}
               />
             )}
-          </Animated.View>
+          </View>
         </KeyboardAvoidingView>
+
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: '#0B0B1F', opacity: tabScrim },
+          ]}
+        />
 
         <View
           pointerEvents="box-none"
@@ -3141,13 +3176,11 @@ function AppContent() {
               if (activeSoundscapeId) {
                 toggleSoundscape(activeSoundscapeId);
               } else {
-                setMorePageRequest('soundscapes');
-                setTab('more');
+                switchTab('more', () => setMorePageRequest('soundscapes'));
               }
             }}
             onSoundscapeLongPress={() => {
-              setMorePageRequest('soundscapes');
-              setTab('more');
+              switchTab('more', () => setMorePageRequest('soundscapes'));
             }}
             hasBg={bgUri != null}
             bgPlaying={isBgPlaying}
@@ -3155,10 +3188,9 @@ function AppContent() {
             onTogglePlay={activeRoutine ? requestStopRoutine : togglePlay}
             onOpen={() => {
               if (activeRoutine) {
-                setMorePageRequest('routines');
-                setTab('more');
+                switchTab('more', () => setMorePageRequest('routines'));
               } else {
-                setTab('frequencies');
+                switchTab('frequencies');
               }
             }}
             onStopAll={stopEverything}
@@ -3177,7 +3209,7 @@ function AppContent() {
             tab={tab}
             onChange={nextTab => {
               if (nextTab === 'more') openMoreHub();
-              else setTab(nextTab);
+              else switchTab(nextTab);
             }}
             accent={beatColor}
             pinnedMorePages={pinnedMorePages}
