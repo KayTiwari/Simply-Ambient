@@ -46,8 +46,9 @@ export function AmbientVeil({
   const [previousAccent, setPreviousAccent] = React.useState<string | null>(null);
   const [reduceMotion, setReduceMotion] = React.useState(false);
   // Android already animates the room's primary visualizer while audio plays.
-  // Redrawing the full-screen veil and eight ripple layers at display refresh
-  // rate on top of it adds substantial GPU load and heat for little benefit.
+  // Hold the full-screen drift still and use the reduced one-ring field below
+  // instead of redrawing the complete ambient stack at display refresh rate.
+  const minimalRipple = Platform.OS === 'android';
   const ambientMotionEnabled = active && !reduceMotion && Platform.OS !== 'android';
 
   useEffect(() => {
@@ -124,8 +125,11 @@ export function AmbientVeil({
   // the outgoing layer holds still while it fades, so the accent crossfade
   // reads exactly as before.
   const rippleHz = Math.max(0, Math.min(40, motionHz));
-  const ripplePeriod = Math.round(6400 - rippleHz * 55);
-  const rippleActive = ambientMotionEnabled;
+  const baseRipplePeriod = Math.round(6400 - rippleHz * 55);
+  const ripplePeriod = minimalRipple
+    ? Math.max(10000, Math.round(baseRipplePeriod * 1.6))
+    : baseRipplePeriod;
+  const rippleActive = active && !reduceMotion;
 
   const base: [string, string, string] = strength === 'light'
     ? ['rgba(8,9,25,0.08)', 'rgba(8,9,25,0.18)', 'rgba(6,7,21,0.30)']
@@ -146,17 +150,28 @@ export function AmbientVeil({
   const measureVeil = () => {
     veilRef.current?.measureInWindow?.((x, y) => { veilOriginRef.current = { x, y }; });
   };
-  const spawnTouchRipple = (e: GestureResponderEvent) => {
-    if (reduceMotion) return;
+  const resolveTouchPoint = (e: GestureResponderEvent) => {
     // locationX is missing from web press events, so fall back to page
     // coordinates against the veil's measured origin.
     const { locationX, locationY, pageX, pageY } = e.nativeEvent;
     const x = locationX ?? (pageX != null ? pageX - veilOriginRef.current.x : null);
     const y = locationY ?? (pageY != null ? pageY - veilOriginRef.current.y : null);
-    if (x == null || y == null) return;
+    return x == null || y == null ? null : { x, y };
+  };
+  // Where the finger first landed. onPress reports the release point, and a
+  // small drag that stays inside the tap slop would bloom the ring away from
+  // the spot that was touched.
+  const pressInPointRef = useRef<{ x: number; y: number } | null>(null);
+  const rememberTouchPoint = (e: GestureResponderEvent) => {
+    pressInPointRef.current = resolveTouchPoint(e);
+  };
+  const spawnTouchRipple = (e: GestureResponderEvent) => {
+    const point = pressInPointRef.current ?? resolveTouchPoint(e);
+    pressInPointRef.current = null;
+    if (reduceMotion || !point) return;
     const id = ++touchIdRef.current;
     // Cap concurrent ripples; the oldest quietly leaves under a tap storm.
-    setTouchRipples(prev => [...prev.slice(-4), { id, x, y }]);
+    setTouchRipples(prev => [...prev.slice(-4), { id, x: point.x, y: point.y }]);
   };
   const removeTouchRipple = (id: number) => {
     setTouchRipples(prev => prev.filter(r => r.id !== id));
@@ -166,6 +181,7 @@ export function AmbientVeil({
     <Pressable
       ref={veilRef}
       style={[shared.veil, style]}
+      onPressIn={rememberTouchPoint}
       onPress={spawnTouchRipple}
       onLayout={measureVeil}
       accessible={false}
@@ -204,6 +220,7 @@ export function AmbientVeil({
           motion={ambientMotion}
           rippleActive={rippleActive}
           ripplePeriod={ripplePeriod}
+          minimalRipple={minimalRipple}
         />
       </Animated.View>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -258,11 +275,13 @@ function VeilAtmosphere({
   motion,
   rippleActive = false,
   ripplePeriod = 6000,
+  minimalRipple = false,
 }: {
   accent: string;
   motion: Animated.Value;
   rippleActive?: boolean;
   ripplePeriod?: number;
+  minimalRipple?: boolean;
 }) {
   const auraX = motion.interpolate({ inputRange: [0, 1], outputRange: [-8, 12] });
   const auraY = motion.interpolate({ inputRange: [0, 1], outputRange: [-5, 11] });
@@ -283,8 +302,16 @@ function VeilAtmosphere({
           style={StyleSheet.absoluteFill}
         />
       </Animated.View>
-      <RippleField accent={accent} active={rippleActive} periodMs={ripplePeriod} motion={motion} />
-      <CornerRipples accent={accent} active={rippleActive} periodMs={ripplePeriod} />
+      <RippleField
+        accent={accent}
+        active={rippleActive}
+        periodMs={ripplePeriod}
+        motion={motion}
+        minimal={minimalRipple}
+      />
+      {minimalRipple
+        ? null
+        : <CornerRipples accent={accent} active={rippleActive} periodMs={ripplePeriod} />}
     </View>
   );
 }
@@ -367,16 +394,19 @@ function RippleField({
   active,
   periodMs,
   motion,
+  minimal = false,
 }: {
   accent: string;
   active: boolean;
   periodMs: number;
   motion: Animated.Value;
+  minimal?: boolean;
 }) {
   const fade = useRef(new Animated.Value(0)).current;
   const rings = useRef(
     Array.from({ length: RINGS_PER_SOURCE * 2 }, () => new Animated.Value(0)),
   ).current;
+  const activeRingCount = minimal ? 1 : rings.length;
 
   useEffect(() => {
     Animated.timing(fade, {
@@ -402,7 +432,7 @@ function RippleField({
         if (finished && alive) run(v);
       });
     };
-    rings.forEach((v, i) => {
+    rings.slice(0, activeRingCount).forEach((v, i) => {
       // Left source rings launch a third of a period apart; the right source
       // sits half a step behind so the two never pulse in unison.
       const source = Math.floor(i / RINGS_PER_SOURCE);
@@ -415,7 +445,7 @@ function RippleField({
       timers.forEach(clearTimeout);
       rings.forEach(v => { v.stopAnimation(); v.setValue(0); });
     };
-  }, [active, periodMs, rings]);
+  }, [active, activeRingCount, periodMs, rings]);
 
   const restingOpacity = fade.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0] });
   const meetOpacity = Animated.multiply(
@@ -444,25 +474,29 @@ function RippleField({
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Animated.View style={[shared.rippleMeet, { opacity: meetOpacity, transform: [{ scale: meetScale }] }]}>
-        <Svg width="100%" height="100%" viewBox="0 0 100 100">
-          <Defs>
-            <RadialGradient id="veilMeet">
-              <Stop offset="0" stopColor={accent} stopOpacity={0.3} />
-              <Stop offset="0.7" stopColor={accent} stopOpacity={0.08} />
-              <Stop offset="1" stopColor={accent} stopOpacity={0} />
-            </RadialGradient>
-          </Defs>
-          <Circle cx={50} cy={50} r={50} fill="url(#veilMeet)" />
-        </Svg>
-      </Animated.View>
-      {rings.map((v, i) => ring(v, i < RINGS_PER_SOURCE ? 0 : 1, i))}
+      {minimal ? null : (
+        <Animated.View style={[shared.rippleMeet, { opacity: meetOpacity, transform: [{ scale: meetScale }] }]}>
+          <Svg width="100%" height="100%" viewBox="0 0 100 100">
+            <Defs>
+              <RadialGradient id="veilMeet">
+                <Stop offset="0" stopColor={accent} stopOpacity={0.3} />
+                <Stop offset="0.7" stopColor={accent} stopOpacity={0.08} />
+                <Stop offset="1" stopColor={accent} stopOpacity={0} />
+              </RadialGradient>
+            </Defs>
+            <Circle cx={50} cy={50} r={50} fill="url(#veilMeet)" />
+          </Svg>
+        </Animated.View>
+      )}
+      {rings.slice(0, activeRingCount).map((v, i) => ring(v, i < RINGS_PER_SOURCE ? 0 : 1, i))}
       <Animated.View
         style={[shared.rippleRing, shared.rippleLeft, shared.rippleRest, { borderColor: accent, opacity: restingOpacity }]}
       />
-      <Animated.View
-        style={[shared.rippleRing, shared.rippleRight, shared.rippleRest, { borderColor: accent, opacity: restingOpacity }]}
-      />
+      {minimal ? null : (
+        <Animated.View
+          style={[shared.rippleRing, shared.rippleRight, shared.rippleRest, { borderColor: accent, opacity: restingOpacity }]}
+        />
+      )}
     </View>
   );
 }
