@@ -965,10 +965,10 @@ function seededNoise(seed: number) {
   };
 }
 
-function buildStereoWav(
+async function buildStereoWav(
   seconds: number,
   sampleFn: (t: number, i: number) => [number, number],
-): string {
+): Promise<string> {
   const sampleRate = 44100;
   const numSamples = Math.floor(sampleRate * seconds);
   const numChannels = 2;
@@ -999,12 +999,20 @@ function buildStereoWav(
   const total = numSamples + fadeSamples;
   const rawL = new Float32Array(total);
   const rawR = new Float32Array(total);
-  for (let i = 0; i < total; i++) {
-    const [left, right] = sampleFn(i / sampleRate, i);
-    rawL[i] = Math.max(-1, Math.min(1, left));
-    rawR[i] = Math.max(-1, Math.min(1, right));
+  // Yield between one-second slices. Rendering the whole buffer in one pass
+  // holds the JS thread for seconds, during which no tap in the app registers
+  // and rapid soundscape browsing piles renders into an out-of-memory crash.
+  for (let start = 0; start < total; start += sampleRate) {
+    const end = Math.min(total, start + sampleRate);
+    for (let i = start; i < end; i++) {
+      const [left, right] = sampleFn(i / sampleRate, i);
+      rawL[i] = Math.max(-1, Math.min(1, left));
+      rawR[i] = Math.max(-1, Math.min(1, right));
+    }
+    if (end < total) await new Promise<void>(resolve => setTimeout(resolve, 0));
   }
 
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
   let off = 44;
   for (let i = 0; i < numSamples; i++) {
     let l = rawL[i];
@@ -1022,7 +1030,7 @@ function buildStereoWav(
   return bytesToBase64(new Uint8Array(buffer));
 }
 
-function buildSoundscapeWav(kind: SoundscapeKey): string {
+function buildSoundscapeWav(kind: SoundscapeKey): Promise<string> {
   const rnd = seededNoise(
     kind.split('').reduce((acc, ch) => acc + ch.charCodeAt(0) * 37, 7919),
   );
@@ -2049,6 +2057,7 @@ function AppContent() {
   const soundscapePlayGenRef = useRef(0);
   const pendingSoundscapeSourcesRef = useRef(new Set<Promise<AudioSource>>());
   const soundscapeCacheRef = useRef<Partial<Record<SoundscapeKey, string>>>({});
+  const soundscapeBuildsRef = useRef<Partial<Record<SoundscapeKey, Promise<string>>>>({});
   // Web-only: gapless oscillator engine, created lazily on first play.
   const webToneRef = useRef<WebToneEngine | null>(null);
   const webSoundscapeRef = useRef<WebSoundscapeEngine | null>(null);
@@ -2706,11 +2715,29 @@ function AppContent() {
     const cached = soundscapeCacheRef.current[id];
     if (cached) return { uri: cached };
 
-    const base64 = buildSoundscapeWav(id);
-    const uri = `${SOUNDSCAPE_FILE_PREFIX}${id}.wav`;
-    await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
-    soundscapeCacheRef.current[id] = uri;
-    return { uri };
+    // One render per soundscape: rapid taps while a render is in flight all
+    // await the same promise instead of stacking further multi-second builds.
+    const inflight = soundscapeBuildsRef.current[id];
+    if (inflight) return { uri: await inflight };
+
+    const build = (async () => {
+      const uri = `${SOUNDSCAPE_FILE_PREFIX}${id}.wav`;
+      // The versioned file survives restarts, so a fresh session replays it
+      // straight from disk instead of paying for the render again.
+      const info = await FileSystem.getInfoAsync(uri).catch(() => null);
+      if (!info?.exists) {
+        const base64 = await buildSoundscapeWav(id);
+        await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      }
+      soundscapeCacheRef.current[id] = uri;
+      return uri;
+    })();
+    soundscapeBuildsRef.current[id] = build;
+    try {
+      return { uri: await build };
+    } finally {
+      delete soundscapeBuildsRef.current[id];
+    }
   }
 
   async function playSoundscape(id: SoundscapeKey) {
@@ -2825,6 +2852,7 @@ function AppContent() {
     // Never retain paths that this wipe attempted to delete, even when one
     // unrelated cache deletion failed and the overall wipe must reject.
     soundscapeCacheRef.current = {};
+    soundscapeBuildsRef.current = {};
     if (results.some(result => result.status === 'rejected')) {
       throw new Error('An app audio cache could not be deleted.');
     }
