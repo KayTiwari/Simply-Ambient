@@ -1,7 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  Animated,
-  Easing,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -133,7 +131,6 @@ export default function OnboardingView({
   const [birthMonth, setBirthMonth] = useState<number>(-1); // 0-based, -1 = unset
   const [birthDay, setBirthDay] = useState<number>(0); // 1-31, 0 = unset
   const [birthYear, setBirthYear] = useState<number>(0); // full year, 0 = unset
-  const fade = useRef(new Animated.Value(1)).current;
 
   const birthDayMax = daysInMonth(birthMonth, birthYear);
 
@@ -153,37 +150,9 @@ export default function OnboardingView({
     onDone();
   }
 
-  // Set once the fade-out lands, consumed by the reveal effect below.
-  const pendingReveal = useRef(false);
-
   function transition(next: Step) {
-    Animated.timing(fade, {
-      toValue: 0,
-      duration: 180,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
-      pendingReveal.current = true;
-      setStep(next);
-    });
+    setStep(next);
   }
-
-  // The reveal must wait for the next page to mount and draw once at opacity
-  // 0. Starting it in the same tick as setStep animates the outgoing page's
-  // last frames, then the swap lands mid-fade and reads as a flicker.
-  useEffect(() => {
-    if (!pendingReveal.current) return;
-    pendingReveal.current = false;
-    const raf = requestAnimationFrame(() => {
-      Animated.timing(fade, {
-        toValue: 1,
-        duration: 300,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [step, fade]);
 
   // Advance along the active sequence, so replay mode skips the right steps.
   function goNext() {
@@ -211,17 +180,7 @@ export default function OnboardingView({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardLayer}
       >
-        <Animated.View
-          style={[
-            styles.animatedLayer,
-            {
-              opacity: fade,
-              transform: [{
-                translateY: fade.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }),
-              }],
-            },
-          ]}
-        >
+        <View style={styles.animatedLayer}>
           {step === 0 && (
             <ScrollView
               contentContainerStyle={[styles.scroll, scrollInsets]}
@@ -646,7 +605,7 @@ export default function OnboardingView({
               </View>
             </ScrollView>
           )}
-        </Animated.View>
+        </View>
       </KeyboardAvoidingView>
 
       <View

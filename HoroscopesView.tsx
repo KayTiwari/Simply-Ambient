@@ -267,10 +267,6 @@ export default function HoroscopesView({
   const [modeRowWidth, setModeRowWidth] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
   const modePosition = useRef(new Animated.Value(0)).current;
-  const contentReveal = useRef(new Animated.Value(1)).current;
-  const contentDirection = useRef(1);
-  const signThemeReveal = useRef(new Animated.Value(1)).current;
-  const [signTransitioning, setSignTransitioning] = useState(false);
   const [period, setPeriod] = useState<Period>('daily');
   const [periodRowWidth, setPeriodRowWidth] = useState(0);
   const periodPosition = useRef(new Animated.Value(0)).current;
@@ -313,50 +309,28 @@ export default function HoroscopesView({
   useEffect(() => {
     if (!reduceMotion) return;
     modePosition.stopAnimation();
-    contentReveal.stopAnimation();
     periodPosition.stopAnimation();
-    signThemeReveal.stopAnimation();
     modePosition.setValue(readingMode === 'tarot' ? 1 : 0);
-    contentReveal.setValue(1);
     periodPosition.setValue(PERIODS.indexOf(period));
-    signThemeReveal.setValue(1);
-    setSignTransitioning(false);
-  }, [contentReveal, modePosition, period, periodPosition, readingMode, reduceMotion, signThemeReveal]);
+  }, [modePosition, period, periodPosition, readingMode, reduceMotion]);
 
   const selectReadingMode = (nextMode: ReadingMode) => {
     if (nextMode === readingMode) return;
-    const currentIndex = readingMode === 'tarot' ? 1 : 0;
     const nextIndex = nextMode === 'tarot' ? 1 : 0;
-    contentDirection.current = nextIndex > currentIndex ? 1 : -1;
     modePosition.stopAnimation();
-    contentReveal.stopAnimation();
+    setReadingMode(nextMode);
 
     if (reduceMotion) {
       modePosition.setValue(nextIndex);
-      contentReveal.setValue(1);
-      setReadingMode(nextMode);
       return;
     }
 
-    // Hide the outgoing room before React swaps it, then let the incoming
-    // room arrive from the direction of the selected segment.
-    contentReveal.setValue(0);
-    setReadingMode(nextMode);
-    Animated.parallel([
-      Animated.timing(modePosition, {
-        toValue: nextIndex,
-        duration: 340,
-        easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(contentReveal, {
-        toValue: 1,
-        duration: 280,
-        delay: 35,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
+    Animated.timing(modePosition, {
+      toValue: nextIndex,
+      duration: 340,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
   };
 
   const selectPeriod = (nextPeriod: Period) => {
@@ -385,36 +359,8 @@ export default function HoroscopesView({
       setPickerOpen(false);
       return;
     }
-    if (signTransitioning) return;
-
-    signThemeReveal.stopAnimation();
-    if (reduceMotion) {
-      onSelectMyZodiac(nextSign);
-      setPickerOpen(false);
-      signThemeReveal.setValue(1);
-      return;
-    }
-
-    setSignTransitioning(true);
-    Animated.timing(signThemeReveal, {
-      toValue: 0,
-      duration: 180,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (!finished) {
-        setSignTransitioning(false);
-        return;
-      }
-      onSelectMyZodiac(nextSign);
-      setPickerOpen(false);
-      Animated.timing(signThemeReveal, {
-        toValue: 1,
-        duration: 680,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start(() => setSignTransitioning(false));
-    });
+    onSelectMyZodiac(nextSign);
+    setPickerOpen(false);
   };
 
   // Guards the tarot fetch callbacks against setState after unmount.
@@ -623,7 +569,6 @@ export default function HoroscopesView({
       motionHz={beatHz}
       accentTransitionMs={920}
     >
-      <Animated.View style={[styles.signThemeLayer, { opacity: signThemeReveal }]}>
       <ScrollView
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 104 }]}
         showsVerticalScrollIndicator={false}
@@ -699,20 +644,7 @@ export default function HoroscopesView({
             </View>
           </AmbientSurface>
 
-          <Animated.View
-            style={[
-              styles.modeContent,
-              {
-                opacity: contentReveal,
-                transform: [{
-                  translateX: contentReveal.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [contentDirection.current * 14, 0],
-                  }),
-                }],
-              },
-            ]}
-          >
+          <View style={styles.modeContent}>
             {readingMode === 'horoscope' ? (
             <>
               <EditorialSection
@@ -785,7 +717,6 @@ export default function HoroscopesView({
                         key={z.id}
                         activeOpacity={0.85}
                         onPress={() => selectZodiacSign(z)}
-                        disabled={signTransitioning}
                         accessibilityRole="button"
                         accessibilityLabel={`Set ${z.name} as your sign, ${z.element}`}
                         accessibilityState={{ selected: active }}
@@ -1100,7 +1031,7 @@ export default function HoroscopesView({
           </AmbientSurface>
             </>
             )}
-          </Animated.View>
+          </View>
 
           <View style={styles.closing}>
             <View style={[styles.closingLine, { backgroundColor: accent + '40' }]} />
@@ -1112,7 +1043,6 @@ export default function HoroscopesView({
           </View>
         </View>
       </ScrollView>
-      </Animated.View>
     </AmbientVeil>
   );
 }
@@ -1264,7 +1194,6 @@ function CardFace({
 }
 
 const styles = StyleSheet.create({
-  signThemeLayer: { flex: 1 },
   scrollContent: { flexGrow: 1 },
   body: { paddingHorizontal: 20 },
   modeSurface: { padding: 5, marginBottom: 2 },

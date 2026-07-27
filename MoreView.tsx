@@ -559,20 +559,15 @@ export default function MoreView({
     }
   }
 
-  // More-page navigation. Individual rooms stay in the same mounted layer;
-  // only their opacity and a tiny vertical settle change between destinations.
+  // More-page navigation. Individual rooms stay in the same mounted layer and
+  // use a tiny vertical settle between destinations.
   // A pinned More shortcut mounts this view with its destination already in
-  // props. Seed both layers at that destination so the hub's accent never
-  // paints for one frame before the requested room appears.
+  // props. Seed the page position there so the hub never paints for one frame
+  // before the requested room appears.
   const initialNavigation = useRef(resolveInitialMoreNavigationState(requestedPage)).current;
   const [page, setPage] = useState<SubPage>(initialNavigation.page);
   const [pageHistory, setPageHistory] = useState<Array<Exclude<SubPage, null>>>([]);
-  const hubReveal = useRef(new Animated.Value(initialNavigation.hubReveal)).current;
-  const pageReveal = useRef(new Animated.Value(initialNavigation.pageReveal)).current;
-  const transitionToken = useRef(0);
-  const transitionDestination = useRef<'hub' | 'page'>(initialNavigation.destination);
   const [reduceMotion, setReduceMotion] = useState(false);
-  const [pageTransitioning, setPageTransitioning] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -586,66 +581,11 @@ export default function MoreView({
     };
   }, []);
 
-  // If the preference changes during a transition, finish at the destination
-  // that was already requested instead of reviving the page being dismissed.
-  useEffect(() => {
-    if (!reduceMotion) return;
-    transitionToken.current += 1;
-    hubReveal.stopAnimation();
-    pageReveal.stopAnimation();
-    if (transitionDestination.current === 'hub') {
-      hubReveal.setValue(1);
-      pageReveal.setValue(0);
-      setPage(null);
-      setPageHistory([]);
-    } else {
-      hubReveal.setValue(0);
-      pageReveal.setValue(1);
-    }
-    setPageTransitioning(false);
-  }, [hubReveal, pageReveal, reduceMotion]);
-
-  function animateOpen() {
-    transitionDestination.current = 'page';
-    transitionToken.current += 1;
-    const myToken = transitionToken.current;
-    hubReveal.stopAnimation();
-    pageReveal.stopAnimation();
-    if (reduceMotion) {
-      hubReveal.setValue(0);
-      pageReveal.setValue(1);
-      setPageTransitioning(false);
-      return;
-    }
-
-    // Reset only the page layer: switching between two More rooms gets its
-    // own quiet entrance without flashing the hub behind it.
-    setPageTransitioning(true);
-    pageReveal.setValue(0);
-    Animated.parallel([
-      Animated.timing(hubReveal, {
-        toValue: 0, duration: 170,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(pageReveal, {
-        toValue: 1, duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (!finished || myToken !== transitionToken.current) return;
-      setPageTransitioning(false);
-    });
-  }
-
   function open(p: Exclude<SubPage, null>) {
     if (isUnavailableMorePage(p)) {
       closeToHub();
       return;
     }
-    if (page === p && transitionDestination.current === 'page') return;
-    animateOpen();
     if (page === p) return;
     if (page !== null) {
       setPageHistory(history => [...history, page]);
@@ -663,18 +603,16 @@ export default function MoreView({
       closeToHub();
       return;
     }
-    if (page === p && transitionDestination.current === 'page') {
+    if (page === p) {
       setPageHistory([]);
       return;
     }
-    animateOpen();
     setPageHistory([]);
     setPage(p);
   }
 
   function close() {
     if (pageHistory.length > 0) {
-      animateOpen();
       const previous = pageHistory[pageHistory.length - 1];
       setPageHistory(history => history.slice(0, -1));
       setPage(previous);
@@ -685,37 +623,8 @@ export default function MoreView({
 
   function closeToHub() {
     if (page === null) return;
-    transitionDestination.current = 'hub';
-    transitionToken.current += 1;
-    const myToken = transitionToken.current;
-    hubReveal.stopAnimation();
-    pageReveal.stopAnimation();
     setPageHistory([]);
-    if (reduceMotion) {
-      hubReveal.setValue(1);
-      pageReveal.setValue(0);
-      setPage(null);
-      setPageTransitioning(false);
-      return;
-    }
-    setPageTransitioning(true);
-    Animated.parallel([
-      Animated.timing(pageReveal, {
-        toValue: 0, duration: 170,
-        easing: Easing.inOut(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(hubReveal, {
-        toValue: 1, duration: 210,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (!finished || myToken !== transitionToken.current) return;
-      setPage(null);
-      setPageHistory([]);
-      setPageTransitioning(false);
-    });
+    setPage(null);
   }
 
   useEffect(() => {
@@ -741,8 +650,6 @@ export default function MoreView({
     }
   }, [requestedPage]);
 
-  const pageSettleY = pageReveal.interpolate({ inputRange: [0, 1], outputRange: [8, 0] });
-
   const today = new Date();
   const moodToday = moodLog.find(
     m => new Date(m.ts).toDateString() === today.toDateString(),
@@ -756,43 +663,28 @@ export default function MoreView({
     <ReducedMotionContext.Provider value={reduceMotion}>
     <PinnedMorePagesContext.Provider value={pinnedPagesContext}>
     <View style={{ flex: 1 }}>
-      <Animated.View
-        pointerEvents={page === null ? 'auto' : 'none'}
-        // React Native Web does not currently emit an aria-hidden attribute
-        // for accessibilityElementsHidden, so make the web accessibility-tree
-        // boundary explicit while the faded hub remains mounted underneath.
-        aria-hidden={page !== null}
-        accessibilityElementsHidden={page !== null}
-        importantForAccessibility={page === null ? 'auto' : 'no-hide-descendants'}
-        style={{ flex: 1, opacity: hubReveal }}
-      >
-        <Hub
-          notifPref={notifPref}
-          affirmationPreview={affirmation}
-          moodToday={moodToday}
-          moodLog={moodLog}
-          gratitude={gratitude}
-          streak={streak}
-          profileName={profileName}
-          intent={intent}
-          ambientAccent={ambientAccent}
-          onOpen={open}
-        />
-      </Animated.View>
+      {page === null ? (
+        <View style={{ flex: 1 }}>
+          <Hub
+            notifPref={notifPref}
+            affirmationPreview={affirmation}
+            moodToday={moodToday}
+            moodLog={moodLog}
+            gratitude={gratitude}
+            streak={streak}
+            profileName={profileName}
+            intent={intent}
+            ambientAccent={ambientAccent}
+            onOpen={open}
+          />
+        </View>
+      ) : null}
 
       {page !== null && (
-        <Animated.View
-          pointerEvents={pageTransitioning ? 'none' : 'auto'}
-          // Keep the arriving/departing room out of the web accessibility tree
-          // until its short visual transition has finished.
-          aria-hidden={pageTransitioning}
-          accessibilityElementsHidden={pageTransitioning}
-          importantForAccessibility={pageTransitioning ? 'no-hide-descendants' : 'auto'}
+        <View
           style={[
             StyleSheet.absoluteFill,
             {
-              opacity: pageReveal,
-              transform: [{ translateY: pageSettleY }],
               backgroundColor: 'transparent',
             },
           ]}
@@ -920,7 +812,7 @@ export default function MoreView({
           {page === 'bug' && (
             <BugReportPage onBack={close} />
           )}
-        </Animated.View>
+        </View>
       )}
     </View>
     </PinnedMorePagesContext.Provider>
@@ -3148,8 +3040,8 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
       duration: 90,
       easing: Easing.in(Easing.cubic),
       useNativeDriver: true,
-    }).start(({ finished: fadedOut }) => {
-      if (!fadedOut || myToken !== transitionToken.current) return;
+    }).start(({ finished: settledOut }) => {
+      if (!settledOut || myToken !== transitionToken.current) return;
       setStep(destination);
       stepReveal.setValue(0);
       Animated.timing(stepReveal, {
@@ -3167,7 +3059,7 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
   }
 
   // If Reduce Motion is enabled mid-transition, finish at the already chosen
-  // step immediately rather than leaving a half-faded card or stale controls.
+  // step immediately rather than leaving a half-moved card or stale controls.
   useEffect(() => {
     if (!reduceMotion) return;
     transitionToken.current += 1;
@@ -3204,7 +3096,7 @@ function GroundingPage({ onBack }: { onBack: () => void }) {
         <Animated.View
           pointerEvents={transitioning ? 'none' : 'auto'}
           accessibilityLiveRegion="polite"
-          style={{ opacity: stepReveal, transform: [{ translateY: stepSettleY }] }}
+          style={{ transform: [{ translateY: stepSettleY }] }}
         >
           {current ? (
             <GlowCard

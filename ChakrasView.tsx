@@ -592,6 +592,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
     letterSpacing: 2.1,
+    flexShrink: 0,
   },
   consoleMainRow: {
     flexDirection: 'row',

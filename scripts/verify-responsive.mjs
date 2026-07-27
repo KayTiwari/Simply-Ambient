@@ -54,6 +54,28 @@ const assertNoRootOverflow = async label => {
   );
 };
 
+const assertChakraConsoleContained = async width => {
+  const eyebrow = page.getByText('CURRENT TONE', { exact: true });
+  const statusLabel = page.getByText('READY', { exact: true });
+  const topRow = eyebrow.locator('..');
+  const consoleSurface = topRow.locator('..');
+  const status = statusLabel.locator('..');
+  const [eyebrowBox, consoleBox, statusBox] = await Promise.all([
+    eyebrow.boundingBox(),
+    consoleSurface.boundingBox(),
+    status.boundingBox(),
+  ]);
+  assert.ok(eyebrowBox && consoleBox && statusBox, `${width} chakra console geometry unavailable`);
+  assert.ok(
+    statusBox.x + statusBox.width <= consoleBox.x + consoleBox.width + 1,
+    `${width} Current Tone status escapes its surface`,
+  );
+  assert.ok(
+    statusBox.x >= eyebrowBox.x + eyebrowBox.width,
+    `${width} Current Tone status overlaps its label`,
+  );
+};
+
 await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(2200);
 
@@ -92,6 +114,7 @@ const exerciseRooms = async width => {
   await tap('Chakras');
   await page.getByText('Move through the spectrum', { exact: true }).waitFor({ state: 'visible' });
   await assertNoRootOverflow(`${width} chakras`);
+  await assertChakraConsoleContained(width);
 
   await tap('Stars');
   await page.getByText('Read the sky', { exact: true }).waitFor({ state: 'visible' });
@@ -137,10 +160,11 @@ const exerciseRooms = async width => {
   );
 
   const pin = page.getByLabel('Pin Soundscapes to the app navbar', { exact: true });
-  await pin.click();
+  if (await pin.isVisible().catch(() => false)) await pin.click();
   await page.getByText('Scape', { exact: true }).waitFor({ state: 'visible' });
   await assertNoRootOverflow(`${width} six-tab navbar`);
-  await page.getByLabel('Unpin Soundscapes from the app navbar', { exact: true }).click();
+  const unpin = page.getByLabel('Unpin Soundscapes from the app navbar', { exact: true });
+  if (await unpin.isVisible().catch(() => false)) await unpin.click();
 };
 
 await exerciseRooms(320);

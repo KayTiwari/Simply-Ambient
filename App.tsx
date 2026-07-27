@@ -1751,21 +1751,6 @@ function AppContent() {
   const [moreActivePage, setMoreActivePage] = useState<MorePageId | null>(null);
   // Deep links into any More room; `hub` returns from a room to More's index.
   const [morePageRequest, setMorePageRequest] = useState<MorePageId | 'hub' | null>(null);
-  const tabFade = useRef(new Animated.Value(1)).current;
-  const lastTab = useRef<Tab>(tab);
-
-  useEffect(() => {
-    if (lastTab.current !== tab) {
-      lastTab.current = tab;
-      tabFade.setValue(0);
-      Animated.timing(tabFade, {
-        toValue: 1,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [tab, tabFade]);
 
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -2967,7 +2952,7 @@ function AppContent() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
-          <Animated.View style={{ flex: 1, opacity: tabFade }}>
+          <View style={{ flex: 1 }}>
             {tab === 'frequencies' && (
               <FrequenciesView
                 leftHz={leftHz} rightHz={rightHz}
@@ -3069,7 +3054,7 @@ function AppContent() {
                 onWipeAllData={wipeAllAppData}
               />
             )}
-          </Animated.View>
+          </View>
         </KeyboardAvoidingView>
 
         <View
@@ -3245,25 +3230,13 @@ export default Sentry.wrap(function App() {
     CormorantGaramond_500Medium_Italic,
     Cinzel_700Bold,
   });
-  const fadeIn = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (fontsLoaded) {
-      Animated.timing(fadeIn, {
-        toValue: 1,
-        duration: 1600,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [fontsLoaded, fadeIn]);
 
   if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: '#0B0B1F' }} />;
   return (
     <SafeAreaProvider>
-      <Animated.View style={{ flex: 1, opacity: fadeIn }}>
+      <View style={{ flex: 1 }}>
         <AppContent />
-      </Animated.View>
+      </View>
     </SafeAreaProvider>
   );
 });

@@ -548,7 +548,7 @@ function FadingCarouselItem({
         const { x, width } = e.nativeEvent.layout;
         setGeom(prev => (prev && prev.x === x && prev.w === width ? prev : { x, w: width }));
       }}
-      style={{ opacity }}
+      style={Platform.OS === 'android' ? undefined : { opacity }}
     >
       {children}
     </Animated.View>
@@ -712,9 +712,9 @@ export function AmbientSurface({
     >
       <LinearGradient
         colors={quiet
-          ? ['rgba(34,35,61,0.58)', accent + '08', 'rgba(10,11,29,0.72)']
-          : [accent + '22', 'rgba(31,32,58,0.76)', 'rgba(9,10,27,0.84)']}
-        locations={[0, 0.52, 1]}
+          ? ['rgba(31,32,57,0.88)', accent + '0B', 'rgba(16,17,36,0.94)']
+          : [accent + '29', 'rgba(35,36,63,0.96)', 'rgba(15,16,35,0.98)']}
+        locations={[0, 0.5, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -905,7 +905,7 @@ const shared = StyleSheet.create({
   surface: {
     borderRadius: 26,
     borderWidth: 1,
-    backgroundColor: 'rgba(15,16,36,0.66)',
+    backgroundColor: '#18192F',
     overflow: 'hidden',
     shadowOpacity: 0.16,
     shadowRadius: 22,
@@ -922,7 +922,7 @@ const shared = StyleSheet.create({
   status: {
     minHeight: 38, borderRadius: 14, borderWidth: 1,
     paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center',
-    overflow: 'hidden',
+    overflow: 'hidden', flexShrink: 1, minWidth: 0, maxWidth: '100%',
   },
   statusDot: { width: 7, height: 7, borderRadius: 4, marginRight: 8 },
   statusLabel: { flexShrink: 0, fontSize: 10.5, fontWeight: '800', letterSpacing: 1 },
