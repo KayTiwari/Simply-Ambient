@@ -635,11 +635,21 @@ export function HeaderGlass({
             { backgroundColor: accent + (soft ? '08' : '0C') },
           ]}
         />
+      ) : Platform.OS === 'android' ? (
+        // Static tint on Android. The snapshot blur (dimezisBlurView) is
+        // experimental and re-captures everything behind the header on every
+        // frame of a scroll, which janks badly and can take the whole app
+        // down inside the underlying BlurView library.
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: soft ? 'rgba(21,22,44,0.90)' : 'rgba(21,22,44,0.93)' },
+          ]}
+        />
       ) : (
         <BlurView
           intensity={soft ? 24 : 34}
           tint="dark"
-          experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
           style={StyleSheet.absoluteFill}
         />
       )}
