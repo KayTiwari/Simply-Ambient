@@ -45,9 +45,10 @@ export function AmbientVeil({
   const [displayAccent, setDisplayAccent] = React.useState(accent);
   const [previousAccent, setPreviousAccent] = React.useState<string | null>(null);
   const [reduceMotion, setReduceMotion] = React.useState(false);
-  // Android already animates the room's primary visualizer while audio plays.
-  // Hold the full-screen drift still and use the reduced one-ring field below
-  // instead of redrawing the complete ambient stack at display refresh rate.
+  // Android motion budget: hold the full-screen drift still and skip the
+  // mid-screen meet glow and corner ripples. The ring field itself is cheap,
+  // native-driven stroked circles with no layer promotion, so it runs in
+  // full during playback on every platform.
   const minimalRipple = Platform.OS === 'android';
   const ambientMotionEnabled = active && !reduceMotion && Platform.OS !== 'android';
 
@@ -125,10 +126,7 @@ export function AmbientVeil({
   // the outgoing layer holds still while it fades, so the accent crossfade
   // reads exactly as before.
   const rippleHz = Math.max(0, Math.min(40, motionHz));
-  const baseRipplePeriod = Math.round(6400 - rippleHz * 55);
-  const ripplePeriod = minimalRipple
-    ? Math.max(10000, Math.round(baseRipplePeriod * 1.6))
-    : baseRipplePeriod;
+  const ripplePeriod = Math.round(6400 - rippleHz * 55);
   const rippleActive = active && !reduceMotion;
 
   const base: [string, string, string] = strength === 'light'
@@ -468,7 +466,6 @@ function RippleField({
   const rings = useRef(
     Array.from({ length: RINGS_PER_SOURCE * 2 }, () => new Animated.Value(0)),
   ).current;
-  const activeRingCount = minimal ? 1 : rings.length;
 
   useEffect(() => {
     Animated.timing(fade, {
@@ -494,7 +491,7 @@ function RippleField({
         if (finished && alive) run(v);
       });
     };
-    rings.slice(0, activeRingCount).forEach((v, i) => {
+    rings.forEach((v, i) => {
       // Left source rings launch a third of a period apart; the right source
       // sits half a step behind so the two never pulse in unison.
       const source = Math.floor(i / RINGS_PER_SOURCE);
@@ -507,7 +504,7 @@ function RippleField({
       timers.forEach(clearTimeout);
       rings.forEach(v => { v.stopAnimation(); v.setValue(0); });
     };
-  }, [active, activeRingCount, periodMs, rings]);
+  }, [active, periodMs, rings]);
 
   const restingOpacity = fade.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0] });
   const meetOpacity = Animated.multiply(
@@ -550,15 +547,13 @@ function RippleField({
           </Svg>
         </Animated.View>
       )}
-      {rings.slice(0, activeRingCount).map((v, i) => ring(v, i < RINGS_PER_SOURCE ? 0 : 1, i))}
+      {rings.map((v, i) => ring(v, i < RINGS_PER_SOURCE ? 0 : 1, i))}
       <Animated.View
         style={[shared.rippleRing, shared.rippleLeft, shared.rippleRest, { borderColor: accent, opacity: restingOpacity }]}
       />
-      {minimal ? null : (
-        <Animated.View
-          style={[shared.rippleRing, shared.rippleRight, shared.rippleRest, { borderColor: accent, opacity: restingOpacity }]}
-        />
-      )}
+      <Animated.View
+        style={[shared.rippleRing, shared.rippleRight, shared.rippleRest, { borderColor: accent, opacity: restingOpacity }]}
+      />
     </View>
   );
 }
