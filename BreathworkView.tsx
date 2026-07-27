@@ -452,9 +452,16 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
         for (const name of Object.keys(CUE_TONES) as Array<keyof typeof CUE_TONES>) {
           const [f0, f1] = CUE_TONES[name];
           const path = `${FileSystem.cacheDirectory}breath-cue-${name.toLowerCase()}.wav`;
-          await FileSystem.writeAsStringAsync(path, buildCueWav(f0, f1), {
-            encoding: FileSystem.EncodingType.Base64,
-          });
+          // The cue content never changes, so only write it once. Rewriting
+          // on every session raced the previous session's players, which can
+          // still hold the file while their release settles, and a player
+          // fed a mid-truncation file loads fine but plays silence.
+          const info = await FileSystem.getInfoAsync(path).catch(() => null);
+          if (!info?.exists) {
+            await FileSystem.writeAsStringAsync(path, buildCueWav(f0, f1), {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+          }
           if (cancelled) break;
           const player = createAudioPlayer({ uri: path });
           player.volume = 0.5;
@@ -469,7 +476,8 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
         }
         cuePlayersRef.current = prepared;
         setCuesReady(true);
-      } catch {
+      } catch (e) {
+        console.warn('[breath-cues] prepare failed', String(e));
         Object.values(prepared).forEach(player => {
           try { player?.release(); } catch {}
           try { (player as any)?.remove?.(); } catch {}
@@ -508,12 +516,17 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
       return;
     }
     const player = cuePlayersRef.current[name];
-    if (!player) return;
+    if (!player) {
+      console.warn('[breath-cues] no player for', name);
+      return;
+    }
     try {
       await player.seekTo(0);
       if (!cuesOnRef.current) return;
       player.play();
-    } catch {}
+    } catch (e) {
+      console.warn('[breath-cues] play failed', name, String(e));
+    }
   }
 
   // Read by the phase loop through a ref so changing the length mid-session
