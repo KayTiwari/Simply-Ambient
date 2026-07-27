@@ -45,6 +45,10 @@ export function AmbientVeil({
   const [displayAccent, setDisplayAccent] = React.useState(accent);
   const [previousAccent, setPreviousAccent] = React.useState<string | null>(null);
   const [reduceMotion, setReduceMotion] = React.useState(false);
+  // Android already animates the room's primary visualizer while audio plays.
+  // Redrawing the full-screen veil and eight ripple layers at display refresh
+  // rate on top of it adds substantial GPU load and heat for little benefit.
+  const ambientMotionEnabled = active && !reduceMotion && Platform.OS !== 'android';
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
@@ -86,7 +90,7 @@ export function AmbientVeil({
 
   useEffect(() => {
     ambientMotion.stopAnimation();
-    if (!active || reduceMotion) {
+    if (!ambientMotionEnabled) {
       Animated.timing(ambientMotion, {
         toValue: 0,
         duration: 650,
@@ -113,7 +117,7 @@ export function AmbientVeil({
     ]));
     loop.start();
     return () => loop.stop();
-  }, [active, ambientMotion, motionHz, reduceMotion]);
+  }, [ambientMotion, ambientMotionEnabled, motionHz]);
 
   // Interference ripples run at the same band-aware tempo as the drift:
   // slower for delta, quicker for gamma. Only the live accent layer ripples;
@@ -121,7 +125,7 @@ export function AmbientVeil({
   // reads exactly as before.
   const rippleHz = Math.max(0, Math.min(40, motionHz));
   const ripplePeriod = Math.round(6400 - rippleHz * 55);
-  const rippleActive = active && !reduceMotion;
+  const rippleActive = ambientMotionEnabled;
 
   const base: [string, string, string] = strength === 'light'
     ? ['rgba(8,9,25,0.08)', 'rgba(8,9,25,0.18)', 'rgba(6,7,21,0.30)']

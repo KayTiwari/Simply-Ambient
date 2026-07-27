@@ -1519,9 +1519,13 @@ function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
   const xfade = useRef(new Animated.Value(0)).current;
   const drift = useRef(new Animated.Value(0)).current;
   const wash = useRef(new Animated.Value(0)).current;
+  // Keep Android's full-screen palette static. The active room still supplies
+  // its focused playback animation, while avoiding three additional
+  // translucent, display-rate redraws behind the entire app.
+  const backgroundMotionEnabled = playing && Platform.OS !== 'android';
 
   useEffect(() => {
-    if (!playing) {
+    if (!backgroundMotionEnabled) {
       xfade.stopAnimation();
       drift.stopAnimation();
       wash.stopAnimation();
@@ -1545,7 +1549,7 @@ function PaletteLayer({ band, playing }: { band: BandKey; playing: boolean }) {
     drift.setValue(0);
     a.start(); b.start(); c.start();
     return () => { a.stop(); b.stop(); c.stop(); };
-  }, [playing, xfade, drift, wash]);
+  }, [backgroundMotionEnabled, xfade, drift, wash]);
 
   const op1 = xfade.interpolate({ inputRange: [0, 1], outputRange: [0.95, 0.20] });
   const op2 = xfade.interpolate({ inputRange: [0, 1], outputRange: [0.20, 0.95] });
