@@ -7,6 +7,12 @@ This file records user-facing Simply Ambient releases. Version 2.0.0 is compared
 - Soundscapes now starts pinned in the navbar, so it is one tap away on a fresh install. Tap the pin on its page to remove it; the choice sticks across launches.
 - Onboarding steps now settle in smoothly with no flash between pages, and the continue button always clears the Android gesture bar on tall pages.
 - Cooler, longer sessions on Android: the full-screen backdrop and veil hold still during playback while each room keeps its own playback animation, glass headers use a static tint, and the room medallion ring rests instead of breathing forever. This removes the sustained GPU load that warmed the phone during listening and while browsing.
+- Fixed background scrolling under the new React Native architecture: drags that started on open background were claimed by the ambient layer and never reached the page, so scrolling only worked from cards. Every page now scrolls from anywhere.
+- Soundscape tiles stay responsive: synthesized soundscapes render in slices instead of freezing the app for seconds on first play, repeat taps share one preparation, and rendered audio is reused from disk across sessions. This also removes the out-of-memory crash from browsing several soundscapes quickly.
+- The touch ripple now blooms exactly where the finger lands, on cards and background alike, including after a small drag.
+- Eyes-closed breath cues keep sounding after switching to a second practice; the cue audio files are written once instead of being rewritten under the previous session's players.
+- Tarot cards now carry distinct emblems: The Fool walks, Wands burn, Cups hold water, and only The Star wears a star. Long-press the miniplayer's soundscape control to jump into the Soundscapes room.
+- Tab changes crossfade again. The fade renders through an offscreen texture on Android, keeping the smooth transition without the card-seam artifact that forced hard cuts earlier.
 - Scene elements now animate individually: forest light and breeze motes wander like fireflies, Summer Night glows drift, Airplane Cabin stars glitter while the window lights flicker, stream glints ride the current, breeze ribbons stream and undulate, and rain falls evenly across the card.
 - Paused soundscapes hold perfectly still; a resting stream glint no longer drifts across a frozen card.
 - The Stars header now scrolls away with the page instead of staying pinned, matching Chakras.

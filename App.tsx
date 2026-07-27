@@ -1763,6 +1763,27 @@ function AppContent() {
   const [moreActivePage, setMoreActivePage] = useState<MorePageId | null>(null);
   // Deep links into any More room; `hub` returns from a room to More's index.
   const [morePageRequest, setMorePageRequest] = useState<MorePageId | 'hub' | null>(null);
+  // Tab crossfade. While it runs, the tab layer renders to an offscreen
+  // hardware texture so Android composites the fade as one flat image;
+  // fading the live subtree exposes translucent card boundaries instead.
+  const tabFade = useRef(new Animated.Value(1)).current;
+  const [tabTransitioning, setTabTransitioning] = useState(false);
+  const lastTab = useRef<Tab>(tab);
+
+  useEffect(() => {
+    if (lastTab.current === tab) return;
+    lastTab.current = tab;
+    setTabTransitioning(true);
+    tabFade.setValue(0);
+    Animated.timing(tabFade, {
+      toValue: 1,
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setTabTransitioning(false);
+    });
+  }, [tab, tabFade]);
 
   const [onboardingChecked, setOnboardingChecked] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -2984,7 +3005,10 @@ function AppContent() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
-          <View style={{ flex: 1 }}>
+          <Animated.View
+            style={{ flex: 1, opacity: tabFade }}
+            renderToHardwareTextureAndroid={tabTransitioning}
+          >
             {tab === 'frequencies' && (
               <FrequenciesView
                 leftHz={leftHz} rightHz={rightHz}
@@ -3086,7 +3110,7 @@ function AppContent() {
                 onWipeAllData={wipeAllAppData}
               />
             )}
-          </View>
+          </Animated.View>
         </KeyboardAvoidingView>
 
         <View
@@ -3120,6 +3144,10 @@ function AppContent() {
                 setMorePageRequest('soundscapes');
                 setTab('more');
               }
+            }}
+            onSoundscapeLongPress={() => {
+              setMorePageRequest('soundscapes');
+              setTab('more');
             }}
             hasBg={bgUri != null}
             bgPlaying={isBgPlaying}
@@ -3306,6 +3334,7 @@ function MiniPlayer({
   routineStepEndsAt,
   hasSoundscape,
   onSoundscapePress,
+  onSoundscapeLongPress,
   hasBg,
   bgPlaying,
   onBgPress,
@@ -3329,6 +3358,7 @@ function MiniPlayer({
   routineStepEndsAt: number | null;
   hasSoundscape: boolean;
   onSoundscapePress: () => void;
+  onSoundscapeLongPress: () => void;
   hasBg: boolean;
   bgPlaying: boolean;
   onBgPress: () => void;
@@ -3545,11 +3575,14 @@ function MiniPlayer({
           activeOpacity={0.85}
           disabled={!visible}
           onPress={onSoundscapePress}
+          onLongPress={onSoundscapeLongPress}
+          delayLongPress={450}
           style={[
             styles.miniSoundscapeBtn,
             soundscapePlaying && { backgroundColor: accent + '33', borderColor: accent },
           ]}
           accessibilityLabel={hasSoundscape ? (soundscapePlaying ? 'Stop soundscape' : 'Play soundscape') : 'Choose a soundscape'}
+          accessibilityHint="Long press to open Soundscapes"
           accessibilityRole="button"
         >
           {soundscapePlaying && (
