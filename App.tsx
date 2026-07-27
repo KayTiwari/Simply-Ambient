@@ -1499,6 +1499,13 @@ function ManifestQuote() {
   useEffect(() => {
     let cancelled = false;
     const tick = () => {
+      // Android swaps without the fade. A 2.4s opacity ramp every 9 seconds
+      // kept the render pipeline waking on the idle Tones page, and a
+      // one-frame text swap costs nothing.
+      if (Platform.OS === 'android') {
+        setIdx(i => (i + 1) % QUOTES.length);
+        return;
+      }
       Animated.timing(fade, { toValue: 0, duration: 1200, useNativeDriver: true }).start(() => {
         if (cancelled) return;
         setIdx(i => (i + 1) % QUOTES.length);
