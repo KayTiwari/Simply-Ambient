@@ -3021,7 +3021,14 @@ function AppContent() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={{ flex: 1 }}
         >
-          <Animated.View style={{ flex: 1, opacity: tabFade }}>
+          <Animated.View
+            // Composite the fading tab as one offscreen group. Blending each
+            // translucent card layer separately makes them shimmer during the
+            // fade; this engages only while opacity is below 1, so it costs
+            // nothing at rest.
+            needsOffscreenAlphaCompositing
+            style={{ flex: 1, opacity: tabFade }}
+          >
             {tab === 'frequencies' && (
               <FrequenciesView
                 leftHz={leftHz} rightHz={rightHz}

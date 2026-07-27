@@ -765,6 +765,9 @@ export default function MoreView({
         aria-hidden={page !== null}
         accessibilityElementsHidden={page !== null}
         importantForAccessibility={page === null ? 'auto' : 'no-hide-descendants'}
+        // Fade as one offscreen group so translucent cards do not shimmer;
+        // engages only while opacity is below 1.
+        needsOffscreenAlphaCompositing
         style={{ flex: 1, opacity: hubReveal }}
       >
         <Hub
@@ -789,6 +792,9 @@ export default function MoreView({
           aria-hidden={pageTransitioning}
           accessibilityElementsHidden={pageTransitioning}
           importantForAccessibility={pageTransitioning ? 'no-hide-descendants' : 'auto'}
+          // Fade as one offscreen group so translucent cards do not shimmer;
+          // engages only while opacity is below 1.
+          needsOffscreenAlphaCompositing
           style={[
             StyleSheet.absoluteFill,
             {
