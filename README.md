@@ -4,7 +4,7 @@
 
 Simply Ambient is a mobile-first ambient wellness studio built with React Native and Expo. It combines a real-time binaural frequency generator, 13 offline soundscapes, guided breathing, auto-advancing listening routines, chakra references, live horoscope readings, tarot, and local-first reflection tools in one fluid interface.
 
-**Current release:** 2.0.0 in Google Play closed testing
+**Current release:** 2.0.1, live on [Google Play](https://play.google.com/store/apps/details?id=com.likechess.simplyambient)
 **Also available:** [playable web build](https://binaural.vercel.app)
 **Platforms:** Android and web today, with the React Native codebase prepared for iOS
 
@@ -15,7 +15,7 @@ Simply Ambient is a mobile-first ambient wellness studio built with React Native
   <img src="docs/screenshots/09-more-fluid.png" width="23%" alt="More reflection hub" />
 </p>
 
-[Try the web app](https://binaural.vercel.app) · [Privacy policy](https://kaytiwari.github.io/Simply-Ambient/privacy-policy.html)
+[Get it on Google Play](https://play.google.com/store/apps/details?id=com.likechess.simplyambient) · [Try the web app](https://binaural.vercel.app) · [Privacy policy](https://kaytiwari.github.io/Simply-Ambient/privacy-policy.html)
 
 ## What changed in 2.0.0
 
