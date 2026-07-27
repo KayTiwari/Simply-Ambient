@@ -78,10 +78,11 @@ const TAROT_TTL_MS = 24 * 60 * 60 * 1000;
 // directly. Both return the identical response shape.
 const ON_WEB = Platform.OS === 'web';
 const ON_ANDROID = Platform.OS === 'android';
-function tarotUrl(n: number): string {
+function tarotUrl(n: number, includeMinor: boolean): string {
+  const query = `n=${n}${includeMinor ? '&minor=true' : ''}`;
   return ON_WEB
-    ? `/api/tarot?n=${n}`
-    : `https://freehoroscopeapi.com/api/v1/tarot/cards/random?n=${n}`;
+    ? `/api/tarot?${query}`
+    : `https://freehoroscopeapi.com/api/v1/tarot/cards/random?${query}`;
 }
 function horoscopeUrl(period: Period, signName: string): string {
   const encodedSign = encodeURIComponent(signName);
@@ -177,6 +178,11 @@ const SPREAD_POSITIONS: Record<SpreadSize, string[]> = {
 // A drawn card carries its orientation. Reversals land at the classic
 // roughly one-in-three odds, decided at draw time and kept with the card.
 type DrawnCard = { card: TarotCard; reversed: boolean };
+type SpreadReading = {
+  cards: DrawnCard[];
+  revealed: boolean[];
+  includeMinor: boolean;
+};
 const drawReversed = () => Math.random() < 1 / 3;
 
 type TarotVisual = {
@@ -240,21 +246,20 @@ function isMinorArcana(card: TarotCard): boolean {
   return /\bof (Wands|Cups|Swords|Pentacles)\b/i.test(card.name ?? '');
 }
 
-// The API deals at most 10 cards per request and cannot filter by arcana,
-// so draw in batches, dedupe by name, and keep only majors when asked.
-// Majors are ~28% of the deck, so a few batches cover a 7-card spread.
-async function fetchCards(count: number, majorOnly: boolean): Promise<TarotCard[]> {
+// The random endpoint defaults to majors. Passing minor=true expands the pool
+// to all 78 cards. Draw in small batches and dedupe defensively.
+async function fetchCards(count: number, includeMinor: boolean): Promise<TarotCard[]> {
   const out: TarotCard[] = [];
   const seen = new Set<string>();
-  const attempts = majorOnly ? 6 : 2;
+  const attempts = 3;
   for (let i = 0; i < attempts && out.length < count; i++) {
-    const r = await fetch(tarotUrl(10));
+    const r = await fetch(tarotUrl(10, includeMinor));
     if (!r.ok) continue;
     const json = await r.json();
     const cards: TarotCard[] = Array.isArray(json?.cards) ? json.cards : [];
     for (const c of cards) {
       if (!c?.name || seen.has(c.name)) continue;
-      if (majorOnly && isMinorArcana(c)) continue;
+      if (!includeMinor && isMinorArcana(c)) continue;
       seen.add(c.name);
       out.push(c);
       if (out.length >= count) break;
@@ -291,12 +296,13 @@ export default function HoroscopesView({
   const [tarotRevealed, setTarotRevealed] = useState(false);
   const [tarotLoading, setTarotLoading] = useState(false);
   const [tarotError, setTarotError] = useState(false);
+  const tarotDrawGenerationRef = useRef(0);
 
   const [spreadSize, setSpreadSize] = useState<SpreadSize | null>(null);
-  const [spread, setSpread] = useState<DrawnCard[] | null>(null);
-  const [spreadRevealed, setSpreadRevealed] = useState<boolean[]>([]);
-  const [spreadLoading, setSpreadLoading] = useState(false);
-  const [spreadError, setSpreadError] = useState(false);
+  const [spreadReadings, setSpreadReadings] = useState<Partial<Record<SpreadSize, SpreadReading>>>({});
+  const [spreadLoading, setSpreadLoading] = useState<Partial<Record<SpreadSize, boolean>>>({});
+  const [spreadErrors, setSpreadErrors] = useState<Partial<Record<SpreadSize, boolean>>>({});
+  const spreadDrawGenerationRef = useRef<Record<SpreadSize, number>>({ 3: 0, 5: 0, 7: 0 });
 
   useEffect(() => {
     let active = true;
@@ -394,50 +400,71 @@ export default function HoroscopesView({
   }, []);
 
   async function drawSpread(n: SpreadSize) {
+    const drawIncludesMinor = includeMinorRef.current;
+    const drawGeneration = ++spreadDrawGenerationRef.current[n];
     setSpreadSize(n);
-    setSpread(null);
-    setSpreadRevealed([]);
-    setSpreadError(false);
-    setSpreadLoading(true);
+    setSpreadErrors(current => ({ ...current, [n]: false }));
+    setSpreadLoading(current => ({ ...current, [n]: true }));
     try {
-      const cards = await fetchCards(n, !includeMinorRef.current);
-      if (!mountedRef.current) return;
+      const cards = await fetchCards(n, drawIncludesMinor);
+      if (!mountedRef.current || spreadDrawGenerationRef.current[n] !== drawGeneration) return;
       if (cards.length === n) {
-        setSpread(cards.map(card => ({ card, reversed: drawReversed() })));
-        setSpreadRevealed(Array(n).fill(false));
+        setSpreadReadings(current => ({
+          ...current,
+          [n]: {
+            cards: cards.map(card => ({ card, reversed: drawReversed() })),
+            revealed: Array(n).fill(false),
+            includeMinor: drawIncludesMinor,
+          },
+        }));
       } else {
-        setSpreadError(true);
+        setSpreadErrors(current => ({ ...current, [n]: true }));
       }
     } catch {
-      if (mountedRef.current) setSpreadError(true);
+      if (mountedRef.current && spreadDrawGenerationRef.current[n] === drawGeneration) {
+        setSpreadErrors(current => ({ ...current, [n]: true }));
+      }
     } finally {
-      if (mountedRef.current) setSpreadLoading(false);
+      if (mountedRef.current && spreadDrawGenerationRef.current[n] === drawGeneration) {
+        setSpreadLoading(current => ({ ...current, [n]: false }));
+      }
     }
   }
 
-  async function drawTarot(force = false) {
+  function selectSpread(n: SpreadSize) {
+    setSpreadSize(n);
+    if (!spreadReadings[n] && !spreadLoading[n]) {
+      drawSpread(n);
+    }
+  }
+
+  async function drawTarot() {
+    const drawGeneration = ++tarotDrawGenerationRef.current;
     setTarotError(false);
     setTarotLoading(true);
     setTarotRevealed(false);
     try {
-      const [c] = await fetchCards(1, !includeMinorRef.current);
+      const [c] = await fetchCards(1, includeMinorRef.current);
+      if (!mountedRef.current || tarotDrawGenerationRef.current !== drawGeneration) return;
       if (c) {
         const reversed = drawReversed();
         AsyncStorage.setItem(
           TAROT_CACHE_KEY,
           JSON.stringify({ ts: Date.now(), card: c, reversed }),
         ).catch(() => {});
-        if (mountedRef.current) {
-          setTarot(c);
-          setTarotReversed(reversed);
-        }
-      } else if (mountedRef.current) {
+        setTarot(c);
+        setTarotReversed(reversed);
+      } else {
         setTarotError(true);
       }
     } catch {
-      if (mountedRef.current) setTarotError(true);
+      if (mountedRef.current && tarotDrawGenerationRef.current === drawGeneration) {
+        setTarotError(true);
+      }
     } finally {
-      if (mountedRef.current) setTarotLoading(false);
+      if (mountedRef.current && tarotDrawGenerationRef.current === drawGeneration) {
+        setTarotLoading(false);
+      }
     }
   }
 
@@ -446,8 +473,17 @@ export default function HoroscopesView({
     setIncludeMinor(next);
     includeMinorRef.current = next;
     AsyncStorage.setItem(INCLUDE_MINOR_KEY, next ? '1' : '0').catch(() => {});
-    // Turning minors off while a minor card sits face-down deals a fresh one.
-    if (!next && tarot && isMinorArcana(tarot)) drawTarot();
+    // A saved spread belongs to the deck it was drawn from. Invalidate every
+    // in-flight or saved spread, then re-deal only the visible size so a deck
+    // change stays immediate without starting three network requests.
+    SPREAD_SIZES.forEach(n => { spreadDrawGenerationRef.current[n] += 1; });
+    setSpreadReadings({});
+    setSpreadLoading({});
+    setSpreadErrors({});
+    if (spreadSize != null) drawSpread(spreadSize);
+    // Re-deal the single card as well so every visible tarot reading reflects
+    // the newly selected deck immediately.
+    drawTarot();
   }
 
   useEffect(() => {
@@ -564,6 +600,11 @@ export default function HoroscopesView({
   const modeSegmentWidth = Math.max(0, (modeRowWidth - MODE_SEGMENT_GAP) / 2);
   const modeSegmentTravel = modeSegmentWidth + MODE_SEGMENT_GAP;
   const periodSegmentWidth = Math.max(0, (periodRowWidth - PERIOD_ROW_INSET * 2) / PERIODS.length);
+  const activeSpreadReading = spreadSize != null ? spreadReadings[spreadSize] ?? null : null;
+  const spread = activeSpreadReading?.cards ?? null;
+  const spreadRevealed = activeSpreadReading?.revealed ?? [];
+  const activeSpreadLoading = spreadSize != null && spreadLoading[spreadSize] === true;
+  const spreadError = spreadSize != null && spreadErrors[spreadSize] === true;
 
   return (
     <AmbientVeil
@@ -959,34 +1000,58 @@ export default function HoroscopesView({
             accent="#B39BE0"
           />
           <AmbientSurface accent="#B39BE0" quiet showOrb={false} style={styles.spreadRoom}>
-            <Text style={styles.spreadChoiceLabel}>CHOOSE THE SHAPE</Text>
+            <View style={styles.spreadChoiceHeader}>
+              <Text style={styles.spreadChoiceLabel}>CHOOSE THE SHAPE</Text>
+              {spreadSize != null ? (
+                <TouchableOpacity
+                  onPress={() => drawSpread(spreadSize)}
+                  disabled={activeSpreadLoading}
+                  style={styles.tarotRefreshBtn}
+                  accessibilityLabel={`Draw a new ${spreadSize}-card spread`}
+                  accessibilityRole="button"
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  {activeSpreadLoading ? (
+                    <ActivityIndicator size="small" color="#C6B6EC" />
+                  ) : (
+                    <ArrowsClockwise size={17} color="#C6B6EC" weight="regular" />
+                  )}
+                </TouchableOpacity>
+              ) : null}
+            </View>
             <View style={styles.spreadBtnRow}>
               {SPREAD_SIZES.map(n => {
                 const active = spreadSize === n;
+                const saved = spreadReadings[n] != null;
+                const drawing = spreadLoading[n] === true;
                 return (
                   <TouchableOpacity
                     key={n}
-                    onPress={() => drawSpread(n)}
+                    onPress={() => selectSpread(n)}
                     style={[styles.spreadBtn, active && { borderColor: '#B39BE0', backgroundColor: '#B39BE022' }]}
-                    accessibilityLabel={`Draw ${n}-card spread`}
+                    accessibilityLabel={saved ? `Open saved ${n}-card spread` : `Draw ${n}-card spread`}
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
                   >
                     <Text style={[styles.spreadBtnText, active && { color: '#C6B6EC' }]}>{n}</Text>
-                    <Text style={[styles.spreadBtnSub, active && { color: '#C6B6EC99' }]}>cards</Text>
+                    <Text style={[styles.spreadBtnSub, active && { color: '#C6B6EC99' }]}>
+                      {drawing ? 'drawing' : saved ? 'saved' : 'cards'}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            {spreadLoading ? (
+            {activeSpreadLoading ? (
               <View style={styles.readingState}>
                 <ActivityIndicator color="#B39BE0" />
                 <Text style={styles.stateTitle}>Laying out the cards…</Text>
               </View>
             ) : spread && spreadSize ? (
               <>
-                <Text style={styles.spreadGuide}>The cards are face down. Turn each in its own time.</Text>
+                <Text style={styles.spreadGuide}>
+                  {activeSpreadReading?.includeMinor ? 'Major + minor arcana' : 'Major arcana'} · Turn each card in its own time.
+                </Text>
                 {/* Wrapping rows sized so nothing scrolls or clips: 3 across,
                     5 as 3+2, 7 as 4+3. Meanings collect in a list below as
                     cards are revealed. */}
@@ -1004,7 +1069,19 @@ export default function HoroscopesView({
                           height={ch}
                           revealed={revealed}
                           onReveal={() =>
-                            setSpreadRevealed(prev => prev.map((v, j) => (j === i ? true : v)))
+                            setSpreadReadings(current => {
+                              const reading = current[spreadSize];
+                              if (!reading) return current;
+                              return {
+                                ...current,
+                                [spreadSize]: {
+                                  ...reading,
+                                  revealed: reading.revealed.map((value, index) =>
+                                    index === i ? true : value,
+                                  ),
+                                },
+                              };
+                            })
                           }
                           label={revealed ? `${item.card.name}, ${item.reversed ? 'reversed' : 'upright'}` : `Turn the ${pos} card`}
                           back={<CardBack width={cw} height={ch} compact />}
@@ -1057,7 +1134,7 @@ export default function HoroscopesView({
             <Text style={[styles.closingGlyph, { color: accent }]}>{readingMode === 'horoscope' ? '☾' : '✦'}</Text>
             <View style={[styles.closingLine, { backgroundColor: accent + '40' }]} />
             <Text style={styles.footnote}>
-              Horoscopes and tarot come from a free public API. Take what resonates, leave the rest.
+              Horoscopes and tarot come from a free public API. Take what resonates.
             </Text>
           </View>
         </View>
@@ -1325,6 +1402,11 @@ const styles = StyleSheet.create({
   tarotInterpretationLabel: { color: '#B39BE0', fontSize: 8, fontWeight: '800', letterSpacing: 1.7, textAlign: 'center' },
 
   spreadRoom: { padding: 16 },
+  spreadChoiceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   spreadChoiceLabel: { color: '#9F94BA', fontSize: 8, fontWeight: '800', letterSpacing: 1.7 },
   spreadGuide: { color: '#8E8FA2', fontSize: 11, fontStyle: 'italic', textAlign: 'center', marginTop: 15 },
   spreadReadHeading: { color: '#9F94BA', fontSize: 8, fontWeight: '800', letterSpacing: 1.7, marginBottom: 2 },
