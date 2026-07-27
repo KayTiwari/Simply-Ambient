@@ -151,11 +151,12 @@ export function AmbientVeil({
     veilRef.current?.measureInWindow?.((x, y) => { veilOriginRef.current = { x, y }; });
   };
   const resolveTouchPoint = (e: GestureResponderEvent) => {
-    // locationX is missing from web press events, so fall back to page
-    // coordinates against the veil's measured origin.
+    // Window coordinates against the veil's measured origin. locationX/Y are
+    // relative to whichever descendant the touch lands on, so a tap on a card
+    // would measure from the card's own corner and bloom the ring too high.
     const { locationX, locationY, pageX, pageY } = e.nativeEvent;
-    const x = locationX ?? (pageX != null ? pageX - veilOriginRef.current.x : null);
-    const y = locationY ?? (pageY != null ? pageY - veilOriginRef.current.y : null);
+    const x = pageX != null ? pageX - veilOriginRef.current.x : locationX ?? null;
+    const y = pageY != null ? pageY - veilOriginRef.current.y : locationY ?? null;
     return x == null || y == null ? null : { x, y };
   };
   // Where the finger first landed. onPress reports the release point, and a
