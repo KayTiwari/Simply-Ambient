@@ -1389,6 +1389,10 @@ const SUBPAGE_PRESENTATION: Record<string, {
 // ring breathes; the outer orbit and its editorial copy stay anchored.
 function BreathingGlyphMedallion({ accent, glyph }: { accent: string; glyph: string }) {
   const reduceMotion = React.useContext(ReducedMotionContext);
+  // A perpetual loop keeps the display pipeline compositing at refresh rate
+  // for as long as the room is open, audio or not, which warms the phone.
+  // Android holds the ring still per the motion budget.
+  const breathingEnabled = !reduceMotion && Platform.OS !== 'android';
   const scale = useRef(new Animated.Value(1)).current;
   const ringOpacity = scale.interpolate({
     inputRange: [1, 1.075],
@@ -1399,7 +1403,7 @@ function BreathingGlyphMedallion({ accent, glyph }: { accent: string; glyph: str
   useEffect(() => {
     scale.stopAnimation();
     scale.setValue(1);
-    if (reduceMotion) return;
+    if (!breathingEnabled) return;
 
     // Non-zero endpoint velocity makes the ring reverse like a soft bounce
     // instead of overshooting, settling, and visibly pausing at full size.
@@ -1426,7 +1430,7 @@ function BreathingGlyphMedallion({ accent, glyph }: { accent: string; glyph: str
       scale.stopAnimation();
       scale.setValue(1);
     };
-  }, [reduceMotion, scale]);
+  }, [breathingEnabled, scale]);
 
   return (
     <View style={styles.subGlyphInner}>
@@ -1436,7 +1440,7 @@ function BreathingGlyphMedallion({ accent, glyph }: { accent: string; glyph: str
           styles.subGlyphBreathingRing,
           {
             borderColor: accent + '66',
-            opacity: reduceMotion ? 0.72 : ringOpacity,
+            opacity: breathingEnabled ? ringOpacity : 0.72,
             transform: [{ scale }],
           },
         ]}
