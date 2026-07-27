@@ -8,8 +8,9 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const n = Math.max(1, Math.min(10, parseInt(req.query.n, 10) || 1));
+    const includeMinor = req.query.minor === 'true';
     const upstream = await fetch(
-      `https://freehoroscopeapi.com/api/v1/tarot/cards/random?n=${n}`,
+      `https://freehoroscopeapi.com/api/v1/tarot/cards/random?n=${n}${includeMinor ? '&minor=true' : ''}`,
     );
     const json = await upstream.json();
     res.status(upstream.status).json(json);
