@@ -20,9 +20,12 @@ import {
   Butterfly,
   Coins,
   Crown,
+  Drop,
   Eye,
+  Fire,
   Flashlight,
   FlowerLotus,
+  Footprints,
   GlobeHemisphereWest,
   Heart,
   Horse,
@@ -30,7 +33,7 @@ import {
   Lightning,
   Link,
   MagicWand,
-  MoonStars,
+  Moon,
   PersonSimpleTaiChi,
   Scales,
   Sparkle,
@@ -74,6 +77,7 @@ const TAROT_TTL_MS = 24 * 60 * 60 * 1000;
 // through our same-origin Vercel proxy (/api/*). Native fetches the API
 // directly. Both return the identical response shape.
 const ON_WEB = Platform.OS === 'web';
+const ON_ANDROID = Platform.OS === 'android';
 function tarotUrl(n: number): string {
   return ON_WEB
     ? `/api/tarot?n=${n}`
@@ -185,7 +189,7 @@ type TarotVisual = {
 // shipping a heavy image deck. Major arcana get their own emblem; minor
 // arcana inherit a clear suit symbol. The keyword changes with orientation.
 const MAJOR_TAROT_VISUALS: Record<string, TarotVisual> = {
-  fool: { Icon: Sparkle, upright: 'BEGINNING', reversed: 'HESITATION' },
+  fool: { Icon: Footprints, upright: 'BEGINNING', reversed: 'HESITATION' },
   magician: { Icon: MagicWand, upright: 'WILL', reversed: 'MISDIRECTION' },
   highpriestess: { Icon: Eye, upright: 'INTUITION', reversed: 'DISCONNECT' },
   empress: { Icon: FlowerLotus, upright: 'NURTURE', reversed: 'DEPLETION' },
@@ -203,7 +207,7 @@ const MAJOR_TAROT_VISUALS: Record<string, TarotVisual> = {
   devil: { Icon: Link, upright: 'ATTACHMENT', reversed: 'RELEASE' },
   tower: { Icon: Lightning, upright: 'UPHEAVAL', reversed: 'AVOIDANCE' },
   star: { Icon: Star, upright: 'HOPE', reversed: 'DISCOURAGEMENT' },
-  moon: { Icon: MoonStars, upright: 'MYSTERY', reversed: 'CONFUSION' },
+  moon: { Icon: Moon, upright: 'MYSTERY', reversed: 'CONFUSION' },
   sun: { Icon: Sun, upright: 'VITALITY', reversed: 'DIMMED JOY' },
   judgement: { Icon: BellRinging, upright: 'AWAKENING', reversed: 'SELF-DOUBT' },
   judgment: { Icon: BellRinging, upright: 'AWAKENING', reversed: 'SELF-DOUBT' },
@@ -211,8 +215,8 @@ const MAJOR_TAROT_VISUALS: Record<string, TarotVisual> = {
 };
 
 const SUIT_TAROT_VISUALS: Array<{ match: RegExp; visual: TarotVisual }> = [
-  { match: /\bwands?\b/i, visual: { Icon: MagicWand, upright: 'FIRE · DRIVE', reversed: 'BLOCKED FIRE' } },
-  { match: /\bcups?\b/i, visual: { Icon: Wine, upright: 'WATER · FEELING', reversed: 'EMOTIONAL BLOCK' } },
+  { match: /\bwands?\b/i, visual: { Icon: Fire, upright: 'FIRE · DRIVE', reversed: 'BLOCKED FIRE' } },
+  { match: /\bcups?\b/i, visual: { Icon: Drop, upright: 'WATER · FEELING', reversed: 'EMOTIONAL BLOCK' } },
   { match: /\bswords?\b/i, visual: { Icon: Sword, upright: 'AIR · CLARITY', reversed: 'INNER CONFLICT' } },
   { match: /\b(pentacles?|coins?)\b/i, visual: { Icon: Coins, upright: 'EARTH · GROUNDING', reversed: 'MATERIAL BLOCK' } },
 ];
@@ -327,7 +331,7 @@ export default function HoroscopesView({
 
     Animated.timing(modePosition, {
       toValue: nextIndex,
-      duration: 340,
+      duration: 280,
       easing: Easing.inOut(Easing.cubic),
       useNativeDriver: true,
     }).start();
@@ -593,11 +597,14 @@ export default function HoroscopesView({
                   pointerEvents="none"
                   style={[
                     styles.modeSelectionPill,
+                    ON_ANDROID && styles.selectionPillAndroid,
                     {
                       width: modeSegmentWidth,
-                      borderColor: accent + '66',
-                      backgroundColor: accent + '18',
-                      shadowColor: accent,
+                      ...(!ON_ANDROID ? {
+                        borderColor: accent + '66',
+                        backgroundColor: accent + '18',
+                        shadowColor: accent,
+                      } : null),
                       transform: [{
                         translateX: modePosition.interpolate({
                           inputRange: [0, 1],
@@ -606,7 +613,11 @@ export default function HoroscopesView({
                       }],
                     },
                   ]}
-                />
+                >
+                  {ON_ANDROID ? (
+                    <View style={[styles.selectionPillAccentAndroid, { backgroundColor: accent }]} />
+                  ) : null}
+                </Animated.View>
               ) : null}
               {([
                 { id: 'horoscope', label: 'HOROSCOPE', hint: 'Sign & moon', glyph: '☉', color: mySign.color },
@@ -759,11 +770,14 @@ export default function HoroscopesView({
                 pointerEvents="none"
                 style={[
                   styles.periodSelectionPill,
+                  ON_ANDROID && styles.selectionPillAndroid,
                   {
                     width: periodSegmentWidth,
-                    borderColor: mySign.color + '70',
-                    backgroundColor: mySign.color + '1C',
-                    shadowColor: mySign.color,
+                    ...(!ON_ANDROID ? {
+                      borderColor: mySign.color + '70',
+                      backgroundColor: mySign.color + '1C',
+                      shadowColor: mySign.color,
+                    } : null),
                     transform: [{
                       translateX: periodPosition.interpolate({
                         inputRange: [0, 1, 2],
@@ -772,7 +786,11 @@ export default function HoroscopesView({
                     }],
                   },
                 ]}
-              />
+              >
+                {ON_ANDROID ? (
+                  <View style={[styles.selectionPillAccentAndroid, { backgroundColor: mySign.color }]} />
+                ) : null}
+              </Animated.View>
             ) : null}
             {PERIODS.map(p => {
               const active = p === period;
@@ -1203,6 +1221,21 @@ const styles = StyleSheet.create({
     borderRadius: 20, borderWidth: 1,
     shadowOpacity: 0.22, shadowRadius: 12,
     shadowOffset: { width: 0, height: 5 }, elevation: 2,
+  },
+  selectionPillAndroid: {
+    borderWidth: 0,
+    backgroundColor: '#2B2B42',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+  selectionPillAccentAndroid: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 3,
+    height: 2,
+    borderRadius: 1,
   },
   modeButton: {
     flex: 1, minHeight: 58, borderRadius: 20, borderWidth: 1,
