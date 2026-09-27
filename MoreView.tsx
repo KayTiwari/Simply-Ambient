@@ -5026,6 +5026,9 @@ function SoundscapesPage({
   const machineScapes = soundscapes.filter(s => MACHINE_IDS.includes(s.id));
   const steadyScapes = soundscapes.filter(s => !NATURE_IDS.includes(s.id) && !MACHINE_IDS.includes(s.id));
   const activeIsFan = activeSoundscapeId != null && isFanSoundscape(activeSoundscapeId);
+  // The thumb and label follow the finger; App state behind them is throttled.
+  const [liveVolume, setLiveVolume] = useState<number | null>(null);
+  const shownVolume = liveVolume ?? soundscapeVolume;
 
   const renderCard = (s: SoundscapeOption) => {
     const active = activeSoundscapeId === s.id && isSoundscapePlaying;
@@ -5122,22 +5125,23 @@ function SoundscapesPage({
           </View>
           {activeSoundscapeId ? (
             <View style={{ marginTop: 14 }}>
-              <Text style={[styles.soundscapeVolLabel, { color: heroAccent }]}>VOLUME · {Math.round(soundscapeVolume * 100)}%</Text>
+              <Text style={[styles.soundscapeVolLabel, { color: heroAccent }]}>VOLUME · {Math.round(shownVolume * 100)}%</Text>
               <Slider
                 style={{ width: '100%', height: 34 }}
                 minimumValue={0}
                 maximumValue={1}
-                value={soundscapeVolume}
+                value={shownVolume}
                 minimumTrackTintColor={heroAccent}
                 maximumTrackTintColor="rgba(255,255,255,0.12)"
                 thumbTintColor={heroAccent}
-                onValueChange={onChangeSoundscapeVolume}
+                onValueChange={v => { setLiveVolume(v); onChangeSoundscapeVolume(v); }}
+                onSlidingComplete={() => setLiveVolume(null)}
                 accessibilityLabel="Soundscape volume"
                 accessibilityValue={{
                   min: 0,
                   max: 100,
-                  now: Math.round(soundscapeVolume * 100),
-                  text: `${Math.round(soundscapeVolume * 100)}%`,
+                  now: Math.round(shownVolume * 100),
+                  text: `${Math.round(shownVolume * 100)}%`,
                 }}
               />
             </View>

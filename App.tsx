@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AccessibilityInfo,
@@ -338,6 +338,80 @@ import {
   type PracticeLog,
 } from './lib/practiceLog';
 const STORAGE_KEY = '@binaural_user_presets_v1';
+
+// ---------------------------------------------------------------------------
+//   Render budget helpers
+// ---------------------------------------------------------------------------
+// App holds every piece of state in one component, so without help a single
+// volume tick re-creates the element tree for all five tabs. The tab views
+// and the miniplayer are memoized, and the handlers App passes them keep one
+// identity for the life of the app while always calling the latest closure.
+
+function useStableHandlers<T extends Record<string, (...args: any[]) => any>>(handlers: T): T {
+  const latest = useRef(handlers);
+  latest.current = handlers;
+  const stable = useRef<T | null>(null);
+  if (!stable.current) {
+    const out: Record<string, (...args: any[]) => any> = {};
+    for (const key of Object.keys(handlers)) {
+      out[key] = (...args: any[]) => (latest.current as Record<string, (...a: any[]) => any>)[key](...args);
+    }
+    stable.current = out as T;
+  }
+  return stable.current;
+}
+
+// Slider ticks arrive at up to 60 Hz. Audio follows every tick; React state
+// follows at most every intervalMs, with the last value always landing.
+function useThrottledSetter<T>(setter: (value: T) => void, intervalMs: number) {
+  const lastRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<{ value: T } | null>(null);
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  const cancel = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    pendingRef.current = null;
+  }, []);
+  const set = useCallback((value: T) => {
+    const now = Date.now();
+    const elapsed = now - lastRef.current;
+    if (elapsed >= intervalMs && !timerRef.current) {
+      lastRef.current = now;
+      setter(value);
+      return;
+    }
+    pendingRef.current = { value };
+    if (!timerRef.current) {
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        lastRef.current = Date.now();
+        const pending = pendingRef.current;
+        pendingRef.current = null;
+        if (pending) setter(pending.value);
+      }, Math.max(0, intervalMs - elapsed));
+    }
+  }, [setter, intervalMs]);
+  return useMemo(() => ({ set, cancel }), [set, cancel]);
+}
+
+const SLIDER_STATE_INTERVAL_MS = 80;
+
+// Tabs stay mounted once visited and hide with display none, so returning
+// to a tab costs nothing. Hidden tabs receive resting playback flags so
+// their ambient loops stop while unseen.
+function TabPane({ active, children }: { active: boolean; children: React.ReactNode }) {
+  return (
+    <View style={[styles.tabPane, !active && styles.tabPaneHidden]} pointerEvents={active ? 'auto' : 'none'}>
+      {children}
+    </View>
+  );
+}
+
+const MemoBreathworkView = React.memo(BreathworkView);
+const MemoChakrasView = React.memo(ChakrasView);
+const MemoHoroscopesView = React.memo(HoroscopesView);
+const MemoMoreView = React.memo(MoreView);
 const STORAGE_KEY_ZODIAC = '@simply_ambient_zodiac_v1';
 const STORAGE_KEY_STREAK = '@simply_ambient_streak_v1';
 export const STORAGE_KEY_PROFILE = '@simply_ambient_profile_v1';
@@ -1762,13 +1836,26 @@ function AppContent() {
     AsyncStorage.removeItem(STORAGE_KEY_NAV_SOUNDSCAPES).catch(() => {});
   }
 
+  // Tabs mount on first visit and stay mounted after.
+  const [visitedTabs, setVisitedTabs] = useState<Record<Tab, boolean>>({
+    frequencies: true, breath: false, chakras: false, horoscopes: false, more: false,
+  });
+  // Marked during render, not in an effect, so a first visit mounts in the
+  // same commit the tab fade is waiting on.
+  if (!visitedTabs[tab]) setVisitedTabs({ ...visitedTabs, [tab]: true });
+
   function openMoreHub() {
     if (tab === 'more') {
       if (moreActivePage !== null) setMorePageRequest('hub');
       else setMoreActivePage(null);
       return;
     }
-    switchTab('more', () => setMoreActivePage(null));
+    // More stays mounted between visits, so ask it back to the hub the way a
+    // fresh mount used to land there.
+    switchTab('more', () => {
+      setMoreActivePage(null);
+      if (visitedTabs.more) setMorePageRequest('hub');
+    });
   }
 
   function openMorePageFromNav(page: PinnableMorePageId) {
@@ -2076,7 +2163,10 @@ function AppContent() {
   const activeSoundscape = activeSoundscapeId
     ? SOUNDSCAPES.find(s => s.id === activeSoundscapeId) ?? null
     : null;
-  const activeRoutineSteps = activeRoutine ? orderedRoutineSteps(activeRoutine.path) : [];
+  const activeRoutineSteps = useMemo(
+    () => (activeRoutine ? orderedRoutineSteps(activeRoutine.path) : []),
+    [activeRoutine],
+  );
   const activeRoutineStep = activeRoutine
     ? activeRoutineSteps[activeRoutine.stepIndex] ?? null
     : null;
@@ -2616,14 +2706,16 @@ function AppContent() {
     const [l, r] = splitBeatCarrier(beatV, carrierV);
     // Idempotency guard: if this produces the pair we already hold, do not
     // re-enter setState. Breaks any slider value-prop feedback cycle.
-    if (l === stateRef.current.leftHz && r === stateRef.current.rightHz) return;
-    setLeftHz(l);
-    setRightHz(r);
+    if (l === liveHzRef.current.l && r === liveHzRef.current.r) return;
+    liveHzRef.current = { l, r };
+    hzPairState.set({ l, r });
     applyDetection(l, r);
     liveUpdate(l, r);
   }
   function commitBeatCarrier(beatV: number, carrierV: number) {
     const [l, r] = splitBeatCarrier(beatV, carrierV);
+    hzPairState.cancel();
+    liveHzRef.current = { l, r };
     setLeftHz(l);
     setRightHz(r);
     applyDetection(l, r);
@@ -2875,7 +2967,7 @@ function AppContent() {
   }
 
   function changeBgVolume(v: number) {
-    setBgVolume(v);
+    bgVolumeState.set(v);
     if (bgPlayerRef.current) bgPlayerRef.current.volume = v;
   }
 
@@ -3012,8 +3104,19 @@ function AppContent() {
     playSoundscape(id);
   }
 
+  const soundscapeVolumeState = useThrottledSetter(setSoundscapeVolume, SLIDER_STATE_INTERVAL_MS);
+  const toneVolumeState = useThrottledSetter(setToneVolume, SLIDER_STATE_INTERVAL_MS);
+  const bgVolumeState = useThrottledSetter(setBgVolume, SLIDER_STATE_INTERVAL_MS);
+  const hzPairState = useThrottledSetter(
+    useCallback((pair: { l: number; r: number }) => { setLeftHz(pair.l); setRightHz(pair.r); }, []),
+    SLIDER_STATE_INTERVAL_MS,
+  );
+  // The pair the sliders last produced, ahead of the throttled state.
+  const liveHzRef = useRef({ l: leftHz, r: rightHz });
+  useEffect(() => { liveHzRef.current = { l: leftHz, r: rightHz }; }, [leftHz, rightHz]);
+
   function changeSoundscapeVolume(v: number) {
-    setSoundscapeVolume(v);
+    soundscapeVolumeState.set(v);
     if (Platform.OS === 'web') webSoundscapeRef.current?.setVolume(v);
     if (soundscapePlayerRef.current && activeSoundscapeId) {
       soundscapePlayerRef.current.volume = effectiveSoundscapeVolume(activeSoundscapeId, v);
@@ -3034,7 +3137,7 @@ function AppContent() {
   function changeToneVolume(v: number) {
     const next = clamp01(v);
     toneVolumeRef.current = next;
-    setToneVolume(next);
+    toneVolumeState.set(next);
     if (Platform.OS === 'web') webToneRef.current?.setVolume(next);
     if (tonePlayerRef.current) tonePlayerRef.current.volume = next;
   }
@@ -3200,6 +3303,37 @@ function AppContent() {
   const { width: windowW } = useWindowDimensions();
   const columnClamp = Platform.OS === 'web' || windowW >= 700 ? styles.contentColumn : null;
 
+  const h = useStableHandlers({
+    setSleepTimer, commitLeft, commitRight, onLeftSlide, onRightSlide,
+    slideBeatCarrier, commitBeatCarrier, applyBuiltIn, applyUser, applyTuning, deleteUser,
+    openSaveModal, togglePlay, changeToneVolume, pickBgFile, toggleBg, changeBgVolume, clearBg,
+    applyChakra, applyDosha, selectMyZodiac,
+    changeNotifPref, refreshAffirmation,
+    toggleSoundscape: (id: string) => toggleSoundscape(id as SoundscapeKey),
+    changeSoundscapeVolume, changeFanSpeed, requestStartRoutine, requestStopRoutine,
+    togglePinnedMorePage, clearPinnedMorePages,
+    clearMorePageRequest: () => setMorePageRequest(null),
+    setSingleColorPref, replayOnboarding, wipeAllAppData,
+    setBreathRequestHandled: () => setBreathRequest(null),
+    miniSoundscapePress: () => {
+      if (activeSoundscapeId) {
+        toggleSoundscape(activeSoundscapeId);
+      } else {
+        switchTab('more', () => setMorePageRequest('soundscapes'));
+      }
+    },
+    miniSoundscapeLongPress: () => { switchTab('more', () => setMorePageRequest('soundscapes')); },
+    miniTogglePlay: () => { if (activeRoutine) requestStopRoutine(); else togglePlay(); },
+    miniOpen: () => {
+      if (activeRoutine) {
+        switchTab('more', () => setMorePageRequest('routines'));
+      } else {
+        switchTab('frequencies');
+      }
+    },
+    stopEverything,
+  });
+
   return (
     <View style={styles.root}>
       <WaveBackground
@@ -3221,8 +3355,8 @@ function AppContent() {
             needsOffscreenAlphaCompositing
             style={{ flex: 1, opacity: tabFade }}
           >
-            {tab === 'frequencies' && (
-              <FrequenciesView
+            <TabPane active={tab === 'frequencies'}>
+              <MemoFrequenciesView
                 leftHz={leftHz} rightHz={rightHz}
                 beat={beat}
                 band={band}
@@ -3231,8 +3365,8 @@ function AppContent() {
                 activeChakra={activeChakra}
                 activePresetId={activePresetId}
                 sleepMinutes={sleepMinutes}
-                onSetSleepTimer={setSleepTimer}
-                isTonePlaying={isTonePlaying}
+                onSetSleepTimer={h.setSleepTimer}
+                isTonePlaying={isTonePlaying && tab === 'frequencies'}
                 isToneLoading={isToneLoading}
                 toneVolume={toneVolume}
                 userPresets={userPresets}
@@ -3240,92 +3374,100 @@ function AppContent() {
                 isBgPlaying={isBgPlaying}
                 bgVolume={bgVolume}
                 beatColor={beatColor}
-                onCommitLeft={commitLeft}
-                onCommitRight={commitRight}
-                onSlideLeft={onLeftSlide}
-                onSlideRight={onRightSlide}
-                onSlideBeatCarrier={slideBeatCarrier}
-                onCommitBeatCarrier={commitBeatCarrier}
-                onApplyBuiltIn={applyBuiltIn}
-                onApplyUser={applyUser}
-                onApplyTuning={applyTuning}
-                onDeleteUser={deleteUser}
-                onSave={openSaveModal}
-                onTogglePlay={togglePlay}
-                onChangeToneVolume={changeToneVolume}
-                onPickBg={pickBgFile}
-                onToggleBg={toggleBg}
-                onChangeBgVolume={changeBgVolume}
-                onClearBg={clearBg}
+                onCommitLeft={h.commitLeft}
+                onCommitRight={h.commitRight}
+                onSlideLeft={h.onLeftSlide}
+                onSlideRight={h.onRightSlide}
+                onSlideBeatCarrier={h.slideBeatCarrier}
+                onCommitBeatCarrier={h.commitBeatCarrier}
+                onApplyBuiltIn={h.applyBuiltIn}
+                onApplyUser={h.applyUser}
+                onApplyTuning={h.applyTuning}
+                onDeleteUser={h.deleteUser}
+                onSave={h.openSaveModal}
+                onTogglePlay={h.togglePlay}
+                onChangeToneVolume={h.changeToneVolume}
+                onPickBg={h.pickBgFile}
+                onToggleBg={h.toggleBg}
+                onChangeBgVolume={h.changeBgVolume}
+                onClearBg={h.clearBg}
               />
-            )}
-            {tab === 'breath' && (
-              <BreathworkView
-                toneIsPlaying={isTonePlaying}
-                beatHz={beat}
-                bandName={displayBandName}
-                bandColor={beatColor}
-                requestedTechniqueId={breathRequest}
-                onRequestedTechniqueHandled={() => setBreathRequest(null)}
-              />
-            )}
-            {tab === 'chakras' && (
-              <ChakrasView
-                chakras={CHAKRAS}
-                doshas={DOSHAS}
-                activePresetId={activePresetId}
-                onApplyChakra={applyChakra}
-                onApplyDosha={applyDosha}
-                toneIsPlaying={isTonePlaying}
-                toneIsLoading={isToneLoading}
-                onTogglePlay={togglePlay}
-                beatHz={beat}
-                bandName={displayBandName}
-                bandColor={beatColor}
-              />
-            )}
-            {tab === 'horoscopes' && (
-              <HoroscopesView
-                zodiac={ZODIAC}
-                mySign={mySign}
-                lunar={lunar}
-                onSelectMyZodiac={selectMyZodiac}
-                toneIsPlaying={isTonePlaying}
-                beatHz={beat}
-              />
-            )}
-            {tab === 'more' && (
-              <MoreView
-                notifPref={notifPref}
-                onChangeNotifPref={changeNotifPref}
-                affirmation={affirmation}
-                affirmationLoading={affLoading}
-                onRefreshAffirmation={refreshAffirmation}
-                isExpoGo={IS_EXPO_GO}
-                soundscapes={SOUNDSCAPES}
-                activeSoundscapeId={activeSoundscapeId}
-                isSoundscapePlaying={isSoundscapePlaying}
-                soundscapeVolume={soundscapeVolume}
-                onToggleSoundscape={(id) => toggleSoundscape(id as SoundscapeKey)}
-                onChangeSoundscapeVolume={changeSoundscapeVolume}
-                fanSpeed={fanSpeed}
-                onChangeFanSpeed={changeFanSpeed}
-                activeRoutineId={activeRoutine?.path.id ?? null}
-                onStartRoutine={requestStartRoutine}
-                onStopRoutine={requestStopRoutine}
-                pinnedMorePages={pinnedMorePages}
-                onTogglePinnedMorePage={togglePinnedMorePage}
-                onClearPinnedMorePages={clearPinnedMorePages}
-                requestedPage={morePageRequest}
-                onRequestedPageHandled={() => setMorePageRequest(null)}
-                onPageChange={setMoreActivePage}
-                singleColor={singleColor}
-                ambientAccent={beatColor}
-                onChangeSingleColor={setSingleColorPref}
-                onReplayOnboarding={replayOnboarding}
-                onWipeAllData={wipeAllAppData}
-              />
-            )}
+            </TabPane>
+            {visitedTabs.breath ? (
+              <TabPane active={tab === 'breath'}>
+                <MemoBreathworkView
+                  toneIsPlaying={isTonePlaying && tab === 'breath'}
+                  beatHz={beat}
+                  bandName={displayBandName}
+                  bandColor={beatColor}
+                  requestedTechniqueId={breathRequest}
+                  onRequestedTechniqueHandled={h.setBreathRequestHandled}
+                />
+              </TabPane>
+            ) : null}
+            {visitedTabs.chakras ? (
+              <TabPane active={tab === 'chakras'}>
+                <MemoChakrasView
+                  chakras={CHAKRAS}
+                  doshas={DOSHAS}
+                  activePresetId={activePresetId}
+                  onApplyChakra={h.applyChakra}
+                  onApplyDosha={h.applyDosha}
+                  toneIsPlaying={isTonePlaying && tab === 'chakras'}
+                  toneIsLoading={isToneLoading}
+                  onTogglePlay={h.togglePlay}
+                  beatHz={beat}
+                  bandName={displayBandName}
+                  bandColor={beatColor}
+                />
+              </TabPane>
+            ) : null}
+            {visitedTabs.horoscopes ? (
+              <TabPane active={tab === 'horoscopes'}>
+                <MemoHoroscopesView
+                  zodiac={ZODIAC}
+                  mySign={mySign}
+                  lunar={lunar}
+                  onSelectMyZodiac={h.selectMyZodiac}
+                  toneIsPlaying={isTonePlaying && tab === 'horoscopes'}
+                  beatHz={beat}
+                />
+              </TabPane>
+            ) : null}
+            {visitedTabs.more ? (
+              <TabPane active={tab === 'more'}>
+                <MemoMoreView
+                  notifPref={notifPref}
+                  onChangeNotifPref={h.changeNotifPref}
+                  affirmation={affirmation}
+                  affirmationLoading={affLoading}
+                  onRefreshAffirmation={h.refreshAffirmation}
+                  isExpoGo={IS_EXPO_GO}
+                  soundscapes={SOUNDSCAPES}
+                  activeSoundscapeId={activeSoundscapeId}
+                  isSoundscapePlaying={isSoundscapePlaying && tab === 'more'}
+                  soundscapeVolume={soundscapeVolume}
+                  onToggleSoundscape={h.toggleSoundscape}
+                  onChangeSoundscapeVolume={h.changeSoundscapeVolume}
+                  fanSpeed={fanSpeed}
+                  onChangeFanSpeed={h.changeFanSpeed}
+                  activeRoutineId={activeRoutine?.path.id ?? null}
+                  onStartRoutine={h.requestStartRoutine}
+                  onStopRoutine={h.requestStopRoutine}
+                  pinnedMorePages={pinnedMorePages}
+                  onTogglePinnedMorePage={h.togglePinnedMorePage}
+                  onClearPinnedMorePages={h.clearPinnedMorePages}
+                  requestedPage={morePageRequest}
+                  onRequestedPageHandled={h.clearMorePageRequest}
+                  onPageChange={setMoreActivePage}
+                  singleColor={singleColor}
+                  ambientAccent={beatColor}
+                  onChangeSingleColor={h.setSingleColorPref}
+                  onReplayOnboarding={h.replayOnboarding}
+                  onWipeAllData={h.wipeAllAppData}
+                />
+              </TabPane>
+            ) : null}
           </Animated.View>
         </KeyboardAvoidingView>
 
@@ -3337,7 +3479,7 @@ function AppContent() {
             { bottom: tabBarHeight },
           ]}
         >
-          <MiniPlayer
+          <MemoMiniPlayer
             visible={activeRoutine != null || isTonePlaying || isToneLoading || isSoundscapePlaying || isBgPlaying || sleepEndsAt != null}
             title={displayBandName}
             beat={beat}
@@ -3353,28 +3495,14 @@ function AppContent() {
             routineStepIndex={activeRoutine?.stepIndex ?? null}
             routineStepEndsAt={activeRoutine?.stepEndsAt ?? null}
             hasSoundscape={activeSoundscapeId != null}
-            onSoundscapePress={() => {
-              if (activeSoundscapeId) {
-                toggleSoundscape(activeSoundscapeId);
-              } else {
-                switchTab('more', () => setMorePageRequest('soundscapes'));
-              }
-            }}
-            onSoundscapeLongPress={() => {
-              switchTab('more', () => setMorePageRequest('soundscapes'));
-            }}
+            onSoundscapePress={h.miniSoundscapePress}
+            onSoundscapeLongPress={h.miniSoundscapeLongPress}
             hasBg={bgUri != null}
             bgPlaying={isBgPlaying}
-            onBgPress={toggleBg}
-            onTogglePlay={activeRoutine ? requestStopRoutine : togglePlay}
-            onOpen={() => {
-              if (activeRoutine) {
-                switchTab('more', () => setMorePageRequest('routines'));
-              } else {
-                switchTab('frequencies');
-              }
-            }}
-            onStopAll={stopEverything}
+            onBgPress={h.toggleBg}
+            onTogglePlay={h.miniTogglePlay}
+            onOpen={h.miniOpen}
+            onStopAll={h.stopEverything}
           />
         </View>
         <View
@@ -3555,6 +3683,8 @@ function routineStepFrequencyLabel(step: RoutinePathStep) {
   const bandName = step.bandTarget.charAt(0).toUpperCase() + step.bandTarget.slice(1);
   return `${bandName} · ${step.targetHz} Hz`;
 }
+
+const MemoMiniPlayer = React.memo(MiniPlayer);
 
 function MiniPlayer({
   visible,
@@ -4163,6 +4293,8 @@ type FreqViewProps = {
   onClearBg: () => void;
 };
 
+const MemoFrequenciesView = React.memo(FrequenciesView);
+
 function FrequenciesView(props: FreqViewProps) {
   const {
     leftHz, rightHz, beat, band, activeBand, activeTuning, activeChakra, activePresetId,
@@ -4174,15 +4306,23 @@ function FrequenciesView(props: FreqViewProps) {
 
   const [customSleepOpen, setCustomSleepOpen] = useState(false);
   const [customSleepInput, setCustomSleepInput] = useState('');
+  // While a slider is under the finger its value lives here, so the thumb
+  // and its label follow every tick even though App state lags behind.
+  const [liveBeat, setLiveBeat] = useState<number | null>(null);
+  const [liveCarrier, setLiveCarrier] = useState<number | null>(null);
+  const [liveToneVolume, setLiveToneVolume] = useState<number | null>(null);
+  const [liveBgVolume, setLiveBgVolume] = useState<number | null>(null);
+  const shownToneVolume = liveToneVolume ?? toneVolume;
+  const shownBgVolume = liveBgVolume ?? bgVolume;
   const isCustomSleep = sleepMinutes > 0 && !(SLEEP_TIMER_OPTIONS as readonly number[]).includes(sleepMinutes);
 
   // Beat-first controls. The carrier is the midpoint of the two ears; the
   // per-ear sliders live behind an advanced reveal for users who want them.
   const [showEarTuning, setShowEarTuning] = useState(false);
-  const carrier = Math.round((leftHz + rightHz) / 2);
-  const beatForControl = Math.min(beat, MAX_BEAT);
   const carrierMin = MIN_HZ + MAX_BEAT / 2;
   const carrierMax = MAX_HZ - MAX_BEAT / 2;
+  const carrier = liveCarrier ?? Math.round((leftHz + rightHz) / 2);
+  const beatForControl = liveBeat ?? Math.min(beat, MAX_BEAT);
   const carrierForControl = Math.max(carrierMin, Math.min(carrierMax, carrier));
 
   function commitCustomSleep() {
@@ -4287,8 +4427,8 @@ function FrequenciesView(props: FreqViewProps) {
             minimumTrackTintColor={beatColor}
             maximumTrackTintColor="rgba(255,255,255,0.12)"
             thumbTintColor={beatColor}
-            onValueChange={v => props.onSlideBeatCarrier(Math.round(v), carrierForControl)}
-            onSlidingComplete={v => props.onCommitBeatCarrier(Math.round(v), carrierForControl)}
+            onValueChange={v => { setLiveBeat(Math.round(v)); props.onSlideBeatCarrier(Math.round(v), carrierForControl); }}
+            onSlidingComplete={v => { setLiveBeat(null); props.onCommitBeatCarrier(Math.round(v), carrierForControl); }}
             accessibilityLabel="Beat frequency"
             accessibilityValue={{ min: 0, max: MAX_BEAT, now: beatForControl, text: `${beatForControl} hertz` }}
           />
@@ -4305,30 +4445,31 @@ function FrequenciesView(props: FreqViewProps) {
             minimumTrackTintColor="rgba(255,255,255,0.45)"
             maximumTrackTintColor="rgba(255,255,255,0.12)"
             thumbTintColor="#ffffffcc"
-            onValueChange={v => props.onSlideBeatCarrier(beatForControl, Math.round(v))}
-            onSlidingComplete={v => props.onCommitBeatCarrier(beatForControl, Math.round(v))}
+            onValueChange={v => { setLiveCarrier(Math.round(v)); props.onSlideBeatCarrier(beatForControl, Math.round(v)); }}
+            onSlidingComplete={v => { setLiveCarrier(null); props.onCommitBeatCarrier(beatForControl, Math.round(v)); }}
             accessibilityLabel="Carrier pitch"
             accessibilityValue={{ min: carrierMin, max: carrierMax, now: carrierForControl, text: `${carrierForControl} hertz` }}
           />
           <View style={styles.beatSliderLabelRow}>
-            <Text style={[styles.beatSliderLabel, { color: beatColor }]}>VOLUME · {Math.round(toneVolume * 100)}%</Text>
+            <Text style={[styles.beatSliderLabel, { color: beatColor }]}>VOLUME · {Math.round(shownToneVolume * 100)}%</Text>
           </View>
           <Slider
             style={styles.beatSlider}
             minimumValue={0}
             maximumValue={1}
             step={0.01}
-            value={toneVolume}
+            value={shownToneVolume}
             minimumTrackTintColor={beatColor}
             maximumTrackTintColor="rgba(255,255,255,0.12)"
             thumbTintColor={beatColor}
-            onValueChange={props.onChangeToneVolume}
+            onValueChange={v => { setLiveToneVolume(v); props.onChangeToneVolume(v); }}
+            onSlidingComplete={() => setLiveToneVolume(null)}
             accessibilityLabel="Binaural tone volume"
             accessibilityValue={{
               min: 0,
               max: 100,
-              now: Math.round(toneVolume * 100),
-              text: `${Math.round(toneVolume * 100)}%`,
+              now: Math.round(shownToneVolume * 100),
+              text: `${Math.round(shownToneVolume * 100)}%`,
             }}
           />
         </View>
@@ -4569,18 +4710,19 @@ function FrequenciesView(props: FreqViewProps) {
                 <Text style={styles.bgPlayText}>{isBgPlaying ? '❚❚' : '▶'}</Text>
               </TouchableOpacity>
               <View style={{ flex: 1, marginLeft: 14 }}>
-                <Text style={styles.bgVolLabel}>VOLUME · {Math.round(bgVolume * 100)}%</Text>
+                <Text style={styles.bgVolLabel}>VOLUME · {Math.round(shownBgVolume * 100)}%</Text>
                 <Slider
                   style={{ width: '100%', height: 32 }}
                   minimumValue={0}
                   maximumValue={1}
-                  value={bgVolume}
+                  value={shownBgVolume}
                   minimumTrackTintColor="#9DC7AC"
                   maximumTrackTintColor="rgba(255,255,255,0.12)"
                   thumbTintColor="#9DC7AC"
-                  onValueChange={props.onChangeBgVolume}
+                  onValueChange={v => { setLiveBgVolume(v); props.onChangeBgVolume(v); }}
+                  onSlidingComplete={() => setLiveBgVolume(null)}
                   accessibilityLabel="Imported audio volume"
-                  accessibilityValue={{ min: 0, max: 100, now: Math.round(bgVolume * 100), text: `${Math.round(bgVolume * 100)} percent` }}
+                  accessibilityValue={{ min: 0, max: 100, now: Math.round(shownBgVolume * 100), text: `${Math.round(shownBgVolume * 100)} percent` }}
                 />
               </View>
             </View>
@@ -4978,6 +5120,8 @@ const styles = StyleSheet.create({
   // Centered phone-width column used on web and on wide (tablet) windows;
   // the gradient background stays full-bleed behind it.
   contentColumn: { width: '100%' as const, maxWidth: 480, alignSelf: 'center' as const },
+  tabPane: { flex: 1 },
+  tabPaneHidden: { display: 'none' as const },
   // Onboarding is presented above the already-mounted app. Keep this layer
   // opaque enough to prevent the controls underneath from bleeding through;
   // OnboardingView adds its own fluid accent atmosphere on top.
