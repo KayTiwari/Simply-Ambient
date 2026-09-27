@@ -32,7 +32,7 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import { Waveform, type IconProps } from 'phosphor-react-native';
-import type { FanSpeed } from './lib/soundscapeSynth';
+import { fanProfile, type FanSpeed } from './lib/soundscapeSynth';
 
 type SceneSoundscape = {
   id: string;
@@ -943,8 +943,12 @@ function TrainScene({ color, playing, w, h }: SceneProps) {
 
 type FanSceneProps = SceneProps & { speed: FanSpeed };
 
+// Box and desk fans turn 14 to 30 times a second, which no rotor can show,
+// so their visual speed is a slowed impression. The ceiling fan is slow
+// enough to draw at its true rate, straight from the audio profile, so the
+// swell you hear lines up with the blade you see.
 const ROTOR_MS: Record<FanSpeed, number> = { low: 1500, medium: 1000, high: 650 };
-const CEILING_MS: Record<FanSpeed, number> = { low: 4200, medium: 3000, high: 1900 };
+const ceilingRevolutionMs = (speed: FanSpeed) => 1000 / fanProfile('ceilingfan', speed).rotationHz;
 
 function useSpin(active: boolean, duration: number) {
   const loop = useLoop(active, duration);
@@ -1019,7 +1023,7 @@ function BoxFanScene({ color, playing, w, h, speed }: FanSceneProps) {
 }
 
 function CeilingFanScene({ color, playing, w, h, speed }: FanSceneProps) {
-  const rotate = useSpin(playing, CEILING_MS[speed]);
+  const rotate = useSpin(playing, ceilingRevolutionMs(speed));
   const size = 150;
   return (
     <>

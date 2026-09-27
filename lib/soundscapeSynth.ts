@@ -56,8 +56,8 @@ export function soundscapeLoopSeconds(kind: SoundscapeKey): number {
     case 'fire':
     case 'breeze':
     case 'train':
-    case 'ceilingfan':
       return 6;
+    case 'ceilingfan': return 8;
     case 'cabin':
     case 'boxfan':
       return 4;
@@ -166,10 +166,13 @@ const BOX_FAN: Record<FanSpeed, FanProfile> = {
 };
 
 const CEILING_FAN: Record<FanSpeed, FanProfile> = {
-  // 6-second loop: rotation rates are multiples of 1/6 Hz.
-  low:    { rotationHz: 1,   blades: 5, chop: 0.34, wobble: 0.10, air: 0.40, breath: 0.010, hum: 0.006, lowPass: 0.9985, hiss: 0.18 },
-  medium: { rotationHz: 1.5, blades: 5, chop: 0.38, wobble: 0.12, air: 0.42, breath: 0.016, hum: 0.008, lowPass: 0.9980, hiss: 0.18 },
-  high:   { rotationHz: 2.5, blades: 5, chop: 0.42, wobble: 0.14, air: 0.44, breath: 0.024, hum: 0.010, lowPass: 0.9975, hiss: 0.18 },
+  // 8-second loop: rotation rates are multiples of 1/8 Hz. The scene's rotor
+  // turns at exactly rotationHz, so the whoosh you hear is the blade you see
+  // passing: one broad swell per revolution (wobble) with only a light
+  // per-blade chop on top.
+  low:    { rotationHz: 0.5,  blades: 5, chop: 0.10, wobble: 0.34, air: 0.40, breath: 0.010, hum: 0.006, lowPass: 0.9985, hiss: 0.18 },
+  medium: { rotationHz: 0.75, blades: 5, chop: 0.12, wobble: 0.36, air: 0.42, breath: 0.016, hum: 0.008, lowPass: 0.9980, hiss: 0.18 },
+  high:   { rotationHz: 1,    blades: 5, chop: 0.14, wobble: 0.38, air: 0.44, breath: 0.024, hum: 0.010, lowPass: 0.9975, hiss: 0.18 },
 };
 
 const DESK_FAN: Record<FanSpeed, FanProfile> = {
