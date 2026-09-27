@@ -1855,6 +1855,11 @@ function AppContent() {
   }, []);
 
   const tonePlayerRef = useRef<AudioPlayer | null>(null);
+  // Lock screen and media-notification controls follow one native player at
+  // a time: the tone while it plays, otherwise the soundscape.
+  const lockScreenPlayerRef = useRef<AudioPlayer | null>(null);
+  const lockScreenSubRef = useRef<{ remove(): void } | null>(null);
+  const externalPauseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tonePlayGenRef = useRef(0);
   const pendingToneWritesRef = useRef(new Set<Promise<void>>());
   const bgPlayerRef = useRef<AudioPlayer | null>(null);
@@ -1930,6 +1935,8 @@ function AppContent() {
       .catch(() => {})
       .finally(() => { presetsHydratedRef.current = true; });
     return () => {
+      try { lockScreenSubRef.current?.remove(); } catch {}
+      try { lockScreenPlayerRef.current?.clearLockScreenControls(); } catch {}
       try { webToneRef.current?.stop(); } catch {}
       try { tonePlayerRef.current?.release(); } catch {}
       try { tonePlayerRef.current?.remove?.(); } catch {}
@@ -2066,6 +2073,7 @@ function AppContent() {
     const player = tonePlayerRef.current;
     tonePlayerRef.current = null;
     if (player) {
+      releaseLockScreen(player);
       try { (player as any).loop = false; } catch {}
       try { player.volume = 0; } catch {}
       try { player.pause(); } catch {}
@@ -2452,6 +2460,83 @@ function AppContent() {
     return band.name;
   }, [activeBand, activePresetId, activeTuning, band.name]);
 
+  // Drops lock screen ownership from a player that is about to be released,
+  // so the system's now-playing card does not outlive the audio.
+  function releaseLockScreen(player: AudioPlayer | null) {
+    if (!player || lockScreenPlayerRef.current !== player) return;
+    try { lockScreenSubRef.current?.remove(); } catch {}
+    lockScreenSubRef.current = null;
+    if (externalPauseTimerRef.current) {
+      clearTimeout(externalPauseTimerRef.current);
+      externalPauseTimerRef.current = null;
+    }
+    try { player.clearLockScreenControls(); } catch {}
+    lockScreenPlayerRef.current = null;
+  }
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const lane: 'tone' | 'soundscape' | null = isTonePlaying
+      ? 'tone'
+      : isSoundscapePlaying ? 'soundscape' : null;
+    const primary = lane === 'tone'
+      ? tonePlayerRef.current
+      : lane === 'soundscape' ? soundscapePlayerRef.current : null;
+    const previous = lockScreenPlayerRef.current;
+
+    if (!primary) {
+      releaseLockScreen(previous);
+      return;
+    }
+
+    const title = activeRoutine
+      ? activeRoutine.path.name
+      : lane === 'tone'
+        ? `${displayBandName} · ${beat} Hz`
+        : activeSoundscape?.name ?? 'Soundscape';
+    const artist = lane === 'tone' && isSoundscapePlaying && activeSoundscape
+      ? `Simply Ambient · ${activeSoundscape.name}`
+      : 'Simply Ambient';
+    const metadata = { title, artist, albumTitle: 'Simply Ambient' };
+
+    if (previous === primary) {
+      try { primary.updateLockScreenMetadata(metadata); } catch {}
+      return;
+    }
+    releaseLockScreen(previous);
+    try {
+      primary.setActiveForLockScreen(true, metadata, { showSeekForward: false, showSeekBackward: false });
+    } catch {
+      return;
+    }
+    lockScreenPlayerRef.current = primary;
+    try {
+      lockScreenSubRef.current = primary.addListener('playbackStatusUpdate', status => {
+        if (lockScreenPlayerRef.current !== primary) return;
+        if (status.playing) {
+          if (externalPauseTimerRef.current) {
+            clearTimeout(externalPauseTimerRef.current);
+            externalPauseTimerRef.current = null;
+          }
+          return;
+        }
+        // A pause the app did not ask for: lock screen, headphone button, or
+        // another app taking audio focus. Source swaps also pause briefly, so
+        // wait and confirm the player is still stopped before mirroring it.
+        if (externalPauseTimerRef.current) return;
+        externalPauseTimerRef.current = setTimeout(() => {
+          externalPauseTimerRef.current = null;
+          if (lockScreenPlayerRef.current !== primary) return;
+          let stillPaused = true;
+          try { stillPaused = !primary.playing; } catch {}
+          if (!stillPaused) return;
+          if (lane === 'tone') stopTones();
+          else stopSoundscape();
+        }, 1200);
+      });
+    } catch {}
+  }, [isTonePlaying, isSoundscapePlaying, activeRoutine, displayBandName, beat, activeSoundscape]);
+
   function deleteUser(p: UserPreset) {
     confirmAction('Delete preset?', `"${p.name}" will be removed.`, 'Delete', () => {
       setUserPresets(curr => curr.filter(x => x.id !== p.id));
@@ -2596,6 +2681,7 @@ function AppContent() {
       }
       if (myGeneration !== soundscapePlayGenRef.current) return;
       if (!soundscapePlayerRef.current || soundscapeSourceKeyRef.current !== sourceKey) {
+        releaseLockScreen(soundscapePlayerRef.current);
         try { soundscapePlayerRef.current?.release(); } catch {}
         try { soundscapePlayerRef.current?.remove?.(); } catch {}
         const p = createAudioPlayer(source);
