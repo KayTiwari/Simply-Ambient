@@ -32,6 +32,7 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import { Waveform, type IconProps } from 'phosphor-react-native';
+import type { FanSpeed } from './lib/soundscapeSynth';
 
 type SceneSoundscape = {
   id: string;
@@ -934,6 +935,195 @@ function TrainScene({ color, playing, w, h }: SceneProps) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Fans and vents. A rotor is a sprite spinning on its own native-driver
+// transform; the visual speed follows the fan speed setting rather than the
+// literal blade rate, which would read as a blur.
+// ---------------------------------------------------------------------------
+
+type FanSceneProps = SceneProps & { speed: FanSpeed };
+
+const ROTOR_MS: Record<FanSpeed, number> = { low: 1500, medium: 1000, high: 650 };
+const CEILING_MS: Record<FanSpeed, number> = { low: 4200, medium: 3000, high: 1900 };
+
+function useSpin(active: boolean, duration: number) {
+  const loop = useLoop(active, duration);
+  return loop.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+}
+
+// Blade path helpers in a local 0..size box, hub at the center.
+function bladePath(cx: number, cy: number, inner: number, outer: number, sweep: number, angle: number): string {
+  const a0 = angle;
+  const a1 = angle + sweep;
+  const x = (r: number, a: number) => cx + r * Math.cos(a);
+  const y = (r: number, a: number) => cy + r * Math.sin(a);
+  return [
+    `M ${x(inner, a0)} ${y(inner, a0)}`,
+    `Q ${x(outer * 0.72, a0 - 0.18)} ${y(outer * 0.72, a0 - 0.18)} ${x(outer, a0 + sweep * 0.15)} ${y(outer, a0 + sweep * 0.15)}`,
+    `A ${outer} ${outer} 0 0 1 ${x(outer, a1)} ${y(outer, a1)}`,
+    `Q ${x(outer * 0.6, a1 + 0.1)} ${y(outer * 0.6, a1 + 0.1)} ${x(inner, a1 - sweep * 0.4)} ${y(inner, a1 - sweep * 0.4)}`,
+    'Z',
+  ].join(' ');
+}
+
+function Rotor({
+  color, blades, size, inner, outer, sweep, opacity, hub,
+}: {
+  color: string; blades: number; size: number; inner: number; outer: number;
+  sweep: number; opacity: number; hub: number;
+}) {
+  const c = size / 2;
+  return (
+    <>
+      {Array.from({ length: blades }, (_, i) => (
+        <Path
+          key={i}
+          d={bladePath(c, c, inner, outer, sweep, (i / blades) * Math.PI * 2)}
+          fill={color}
+          opacity={opacity - (i % 2) * 0.08}
+        />
+      ))}
+      <Circle cx={c} cy={c} r={hub} fill={color} opacity={opacity + 0.2} />
+      <Circle cx={c} cy={c} r={hub * 0.45} fill="#0B0B1F" opacity={0.6} />
+    </>
+  );
+}
+
+const BOX_GRILLE = Array.from({ length: 9 }, (_, i) => 18 + i * 9.6);
+
+function BoxFanScene({ color, playing, w, h, speed }: FanSceneProps) {
+  const rotate = useSpin(playing, ROTOR_MS[speed]);
+  const size = 104;
+  return (
+    <>
+      <SceneSvg>
+        <Defs>
+          <RGrad id="bfGlow" color={color} stops={[[0, 0.16], [1, 0]]} />
+          <VGrad id="bfFrame" color={color} stops={[[0, 0.22], [1, 0.08]]} />
+        </Defs>
+        <Ellipse cx={236} cy={62} rx={120} ry={70} fill="url(#bfGlow)" />
+        <Rect x={182} y={8} width={108} height={108} rx={8} fill="url(#bfFrame)" />
+        <Rect x={182} y={8} width={108} height={108} rx={8} stroke={color} strokeWidth={1.2} strokeOpacity={0.35} fill="none" />
+      </SceneSvg>
+      <Sprite cx={236} cy={62} size={size} w={w} h={h} style={{ transform: [{ rotate }] }}>
+        <Rotor color={color} blades={5} size={size} inner={9} outer={46} sweep={0.72} opacity={0.42} hub={9} />
+      </Sprite>
+      <SceneSvg>
+        {BOX_GRILLE.map((y, i) => (
+          <Rect key={i} x={186} y={y} width={100} height={1.1} fill={color} opacity={0.26} />
+        ))}
+        <Rect x={182} y={8} width={108} height={108} rx={8} stroke={color} strokeWidth={1.2} strokeOpacity={0.35} fill="none" />
+      </SceneSvg>
+    </>
+  );
+}
+
+function CeilingFanScene({ color, playing, w, h, speed }: FanSceneProps) {
+  const rotate = useSpin(playing, CEILING_MS[speed]);
+  const size = 150;
+  return (
+    <>
+      <PulseLayer playing={playing} duration={7000} range={[0.85, 1]}>
+        <Defs>
+          <RGrad id="cfLamp" color="#F1E3C0" stops={[[0, 0.34], [0.4, 0.1], [1, 0]]} />
+          <VGrad id="cfCeiling" color={color} stops={[[0, 0.14], [1, 0]]} />
+        </Defs>
+        <Rect x={0} y={0} width={320} height={60} fill="url(#cfCeiling)" />
+        <Ellipse cx={226} cy={52} rx={96} ry={62} fill="url(#cfLamp)" />
+      </PulseLayer>
+      <Sprite cx={226} cy={52} size={size} w={w} h={h} style={{ transform: [{ rotate }] }}>
+        <Rotor color={color} blades={5} size={size} inner={12} outer={72} sweep={0.42} opacity={0.36} hub={11} />
+      </Sprite>
+      <SceneSvg>
+        <Circle cx={226} cy={52} r={6} fill="#F1E3C0" opacity={0.6} />
+      </SceneSvg>
+    </>
+  );
+}
+
+const CAGE_RINGS = [12, 20, 28, 36];
+
+function DeskFanScene({ color, playing, w, h, speed }: FanSceneProps) {
+  const rotate = useSpin(playing, ROTOR_MS[speed] * 0.7);
+  // The head swings across the card and back over one oscillation sweep.
+  const sway = useYoyo(playing, 10000);
+  const s = coverScale(w, h);
+  const translateX = sway.interpolate({ inputRange: [0, 1], outputRange: [-34 * s, 34 * s] });
+  const size = 84;
+  return (
+    <>
+      <SceneSvg>
+        <Defs><RGrad id="dfGlow" color={color} stops={[[0, 0.14], [1, 0]]} /></Defs>
+        <Ellipse cx={230} cy={70} rx={130} ry={64} fill="url(#dfGlow)" />
+        <Rect x={224} y={96} width={12} height={22} rx={3} fill={color} opacity={0.3} />
+        <Rect x={206} y={114} width={48} height={4} rx={2} fill={color} opacity={0.34} />
+      </SceneSvg>
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { transform: [{ translateX }] }]}>
+        <Sprite cx={230} cy={58} size={size} w={w} h={h} style={{ transform: [{ rotate }] }}>
+          <Rotor color={color} blades={3} size={size} inner={7} outer={36} sweep={1.1} opacity={0.4} hub={7} />
+        </Sprite>
+        <Sprite cx={230} cy={58} size={size} w={w} h={h}>
+          {CAGE_RINGS.map((r, i) => (
+            <Circle key={i} cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={0.9} strokeOpacity={0.32 - i * 0.04} fill="none" />
+          ))}
+          {[0, 1, 2, 3, 4, 5].map(i => {
+            const a = (i / 6) * Math.PI;
+            const r = 38;
+            return (
+              <Path
+                key={i}
+                d={`M ${size / 2 - r * Math.cos(a)} ${size / 2 - r * Math.sin(a)} L ${size / 2 + r * Math.cos(a)} ${size / 2 + r * Math.sin(a)}`}
+                stroke={color}
+                strokeWidth={0.8}
+                strokeOpacity={0.22}
+              />
+            );
+          })}
+        </Sprite>
+      </Animated.View>
+    </>
+  );
+}
+
+const VENT_SLATS = Array.from({ length: 6 }, (_, i) => 22 + i * 13);
+const VENT_RIBBONS = [
+  { x: 214, w: 16, o: 0.16, dur: 5200 },
+  { x: 240, w: 12, o: 0.12, dur: 6400 },
+  { x: 264, w: 18, o: 0.14, dur: 5800 },
+];
+
+function VentScene({ color, playing, w, h }: SceneProps) {
+  return (
+    <>
+      <SceneSvg>
+        <Defs>
+          <RGrad id="vtGlow" color={color} stops={[[0, 0.14], [1, 0]]} />
+          <VGrad id="vtPlate" color={color} stops={[[0, 0.16], [1, 0.06]]} />
+        </Defs>
+        <Ellipse cx={246} cy={60} rx={120} ry={66} fill="url(#vtGlow)" />
+        <Rect x={196} y={12} width={100} height={92} rx={6} fill="url(#vtPlate)" />
+        <Rect x={196} y={12} width={100} height={92} rx={6} stroke={color} strokeWidth={1.1} strokeOpacity={0.32} fill="none" />
+      </SceneSvg>
+      {VENT_RIBBONS.map((rb, i) => (
+        <WrapYLayer
+          key={i} playing={playing} duration={rb.dur} w={w} h={h} direction={-1} opacity={rb.o}
+          render={yOff => (
+            <>
+              <Defs><VGrad id={`vtRib${i}`} color={color} stops={[[0, 0], [0.4, 0.5], [1, 0]]} /></Defs>
+              <Rect x={rb.x} y={yOff + 18} width={rb.w} height={70} rx={rb.w / 2} fill={`url(#vtRib${i})`} />
+            </>
+          )}
+        />
+      ))}
+      <PulseLayer playing={playing} duration={2600} range={[0.75, 1]}>
+        {VENT_SLATS.map((y, i) => (
+          <Rect key={i} x={204} y={y} width={84} height={4.2} rx={2} fill={color} opacity={0.34 - i * 0.02} />
+        ))}
+      </PulseLayer>
+    </>
+  );
+}
+
 function IdleScene({ color }: { color: string }) {
   return (
     <SceneSvg>
@@ -952,9 +1142,11 @@ function IdleScene({ color }: { color: string }) {
 export function SoundscapeScene({
   soundscape,
   playing,
+  fanSpeed = 'medium',
 }: {
   soundscape: SceneSoundscape | null;
   playing: boolean;
+  fanSpeed?: FanSpeed;
 }) {
   const id = soundscape?.id ?? 'idle';
   const color = solidAccent(soundscape?.color ?? '#8FB8DE');
@@ -977,6 +1169,10 @@ export function SoundscapeScene({
       case 'thunder': return <ThunderScene {...props} />;
       case 'cabin': return <CabinScene {...props} />;
       case 'train': return <TrainScene {...props} />;
+      case 'boxfan': return <BoxFanScene {...props} speed={fanSpeed} />;
+      case 'ceilingfan': return <CeilingFanScene {...props} speed={fanSpeed} />;
+      case 'deskfan': return <DeskFanScene {...props} speed={fanSpeed} />;
+      case 'vent': return <VentScene {...props} />;
       default: return <IdleScene color={color} />;
     }
   })();

@@ -52,6 +52,10 @@ import {
   CloudLightning,
   AirplaneTilt,
   Train,
+  Fan,
+  Aperture,
+  Target,
+  Rows,
   Play,
   Pause,
   type IconProps,
@@ -307,6 +311,18 @@ import {
 import { removeGeminiApiKey } from './lib/geminiKeyStorage';
 import { recordAppOpen, recordSessionCompleted } from './lib/rateApp';
 import { CHAKRAS, DOSHAS, ZODIAC, type BandKey, type Chakra, type Dosha, type Zodiac } from './lib/content';
+import {
+  createSoundscapeVoice,
+  soundscapeLoopSeconds,
+  seededNoise,
+  isFanSoundscape,
+  isFanSpeed,
+  DEFAULT_FAN_SPEED,
+  FAN_SPEEDS,
+  type FanSpeed,
+  type SoundscapeKey,
+  type SoundscapeVoice,
+} from './lib/soundscapeSynth';
 const STORAGE_KEY = '@binaural_user_presets_v1';
 const STORAGE_KEY_ZODIAC = '@simply_ambient_zodiac_v1';
 const STORAGE_KEY_STREAK = '@simply_ambient_streak_v1';
@@ -508,20 +524,6 @@ type TuningPreset = {
   origin: 'solfeggio' | 'natural' | 'cosmic' | 'archaeo' | 'scientific';
 };
 
-type SoundscapeKey =
-  | 'rain'
-  | 'ocean'
-  | 'forest'
-  | 'stream'
-  | 'fire'
-  | 'white'
-  | 'pink'
-  | 'brown'
-  | 'breeze'
-  | 'night'
-  | 'thunder'
-  | 'cabin'
-  | 'train';
 
 type Soundscape = {
   id: SoundscapeKey;
@@ -545,7 +547,17 @@ const SOUNDSCAPES: Soundscape[] = [
   { id: 'thunder', name: 'Distant Thunder', blurb: 'A misty rain bed with low rumbles far beyond the room.',   color: '#8897B8',   Icon: CloudLightning },
   { id: 'cabin',  name: 'Airplane Cabin', blurb: 'Steady low cabin air for private focus while everything moves.', color: '#9FB4C7', Icon: AirplaneTilt },
   { id: 'train',  name: 'Night Train',    blurb: 'Muted rail sway and low motion for a slow journey inward.',  color: '#B3A2C2',   Icon: Train },
+  { id: 'boxfan', name: 'Box Fan',        blurb: 'A window fan on a warm night, blades chopping steady air.',  color: '#A9B8C4',   Icon: Fan },
+  { id: 'ceilingfan', name: 'Ceiling Fan', blurb: 'Slow blades overhead, a soft whoosh passing side to side.', color: '#C4B39A',  Icon: Aperture },
+  { id: 'deskfan', name: 'Desk Fan',      blurb: 'A small oscillating fan sweeping the room and back.',        color: '#9FC2B8',   Icon: Target },
+  { id: 'vent',   name: 'Vent Hum',       blurb: 'Duct air and mains hum, the sound of an empty building.',    color: '#B0A8B9',   Icon: Rows },
 ];
+
+// Fan scenes take the speed setting; every other scene ignores it, so only
+// fan renders are cached per speed.
+function soundscapeSourceKey(id: SoundscapeKey, speed: FanSpeed): string {
+  return isFanSoundscape(id) ? `${id}-${speed}` : id;
+}
 
 const BUNDLED_SOUNDSCAPES: Partial<Record<SoundscapeKey, number>> = {
   rain: require('./assets/soundscapes/soft-rain.mp3'),
@@ -573,65 +585,16 @@ const SOUNDSCAPE_GAIN: Record<SoundscapeKey, number> = {
   thunder: 0.42,
   cabin: 0.90,
   train: 1,
+  // Fans and the vent land near -20 dBFS effective at medium speed, between
+  // Airplane Cabin and Night Train; see __tests__/soundscapeSynth.test.ts.
+  boxfan: 0.65,
+  ceilingfan: 0.60,
+  deskfan: 1,
+  vent: 0.72,
 };
 
 function effectiveSoundscapeVolume(kind: SoundscapeKey, volume: number) {
   return Math.max(0, Math.min(1, volume)) * SOUNDSCAPE_GAIN[kind];
-}
-
-type CricketEvent = readonly [start: number, duration: number, pulseHz: number, amplitude: number];
-
-const NIGHT_CRICKET_LOOP_SECONDS = 16;
-const NIGHT_CRICKETS_LEFT: readonly CricketEvent[] = [
-  [0.62, 0.24, 29, 0.76], [2.05, 0.18, 31, 0.58], [3.48, 0.30, 27, 0.92],
-  [5.82, 0.21, 32, 0.65], [7.24, 0.27, 29, 0.83], [9.63, 0.19, 33, 0.55],
-  [11.18, 0.25, 28, 1], [13.66, 0.22, 30, 0.71], [15.02, 0.20, 32, 0.60],
-];
-const NIGHT_CRICKETS_RIGHT: readonly CricketEvent[] = [
-  [1.16, 0.20, 31, 0.62], [2.72, 0.28, 28, 0.88], [4.46, 0.18, 34, 0.54],
-  [6.31, 0.25, 29, 0.78], [8.11, 0.21, 32, 0.68], [10.34, 0.29, 27, 0.96],
-  [12.24, 0.19, 33, 0.57], [14.19, 0.26, 29, 0.81],
-];
-
-function cricketEnvelope(t: number, events: readonly CricketEvent[]) {
-  const cycle = ((t % NIGHT_CRICKET_LOOP_SECONDS) + NIGHT_CRICKET_LOOP_SECONDS)
-    % NIGHT_CRICKET_LOOP_SECONDS;
-  for (const [start, duration, pulseHz, amplitude] of events) {
-    if (cycle < start) break;
-    const x = cycle - start;
-    if (x >= duration) continue;
-    const group = Math.sin(Math.PI * x / duration) ** 2;
-    const pulse = (x * pulseHz) % 1;
-    const duty = 0.46;
-    const syllable = pulse < duty ? Math.sin(Math.PI * pulse / duty) ** 2 : 0;
-    return amplitude * group * syllable;
-  }
-  return 0;
-}
-
-function summerNightSample(t: number, white: number, pink: number, brown: number): [number, number] {
-  const twoPi = Math.PI * 2;
-  const envLeft = cricketEnvelope(t, NIGHT_CRICKETS_LEFT);
-  const envRight = cricketEnvelope(t, NIGHT_CRICKETS_RIGHT);
-  const carrierLeft = envLeft > 0 ? (
-    Math.sin(twoPi * 3260 * t + 0.14 * Math.sin(twoPi * 11.3 * t)) * 0.52
-    + Math.sin(twoPi * 3291 * t + 1.1) * 0.29
-    + Math.sin(twoPi * 3227 * t + 0.45) * 0.19
-    + white * 0.12
-  ) : 0;
-  const carrierRight = envRight > 0 ? (
-    Math.sin(twoPi * 3820 * t + 0.13 * Math.sin(twoPi * 9.7 * t)) * 0.50
-    + Math.sin(twoPi * 3857 * t + 0.7) * 0.31
-    + Math.sin(twoPi * 3786 * t + 1.65) * 0.19
-    + white * 0.12
-  ) : 0;
-  const bed = pink * 0.032 + brown * 0.007;
-  const colonyLeft = envLeft * carrierLeft * 0.28;
-  const colonyRight = envRight * carrierRight * 0.26;
-  return [
-    bed + colonyLeft + colonyRight * 0.24,
-    bed * 0.90 + colonyRight + colonyLeft * 0.22,
-  ];
 }
 
 export function todaysSign(date: Date = new Date()): Zodiac {
@@ -957,14 +920,6 @@ function buildWav(leftHz: number, rightHz: number): string {
   return bytesToBase64(new Uint8Array(buffer));
 }
 
-function seededNoise(seed: number) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return (s / 0xffffffff) * 2 - 1;
-  };
-}
-
 async function buildStereoWav(
   seconds: number,
   sampleFn: (t: number, i: number) => [number, number],
@@ -1030,135 +985,11 @@ async function buildStereoWav(
   return bytesToBase64(new Uint8Array(buffer));
 }
 
-function buildSoundscapeWav(kind: SoundscapeKey): Promise<string> {
-  const rnd = seededNoise(
-    kind.split('').reduce((acc, ch) => acc + ch.charCodeAt(0) * 37, 7919),
-  );
-  const twoPi = Math.PI * 2;
-  let pink = 0;
-  let brown = 0;
-  let rain = 0;
-  let leftDrift = 0;
-  let rightDrift = 0;
-  let rainDropLeft = 0;
-  let rainDropRight = 0;
-  let fireCrackle = 0;
-  let firePop = 0;
-  let breezeLow = 0;
-  let thunderLow = 0;
-  let cabinLow = 0;
-  let trainLow = 0;
-
-  const loopSeconds = kind === 'thunder'
-    ? 12
-    : kind === 'night'
-      ? NIGHT_CRICKET_LOOP_SECONDS
-      : kind === 'fire' || kind === 'breeze' || kind === 'train'
-        ? 6
-        : kind === 'cabin'
-          ? 4
-          : 2;
-
-  return buildStereoWav(loopSeconds, (t, i) => {
-    const white = rnd();
-    pink = pink * 0.92 + white * 0.08;
-    brown = Math.max(-1, Math.min(1, brown + white * 0.025));
-    rain = rain * 0.72 + white * 0.28;
-    leftDrift = leftDrift * 0.995 + rnd() * 0.005;
-    rightDrift = rightDrift * 0.995 + rnd() * 0.005;
-
-    const panLeft = 0.96 + leftDrift * 0.04;
-    const panRight = 0.96 + rightDrift * 0.04;
-    const chirp = Math.sin(twoPi * (1600 + 900 * Math.sin(t * twoPi * 0.17)) * t);
-    if (rnd() > 0.99945) rainDropLeft += 0.45 + Math.abs(rnd()) * 0.35;
-    if (rnd() > 0.99950) rainDropRight += 0.42 + Math.abs(rnd()) * 0.32;
-    rainDropLeft *= 0.90;
-    rainDropRight *= 0.90;
-    const tide = Math.sin(twoPi * 0.34 * t) * 0.18 + Math.sin(twoPi * 0.71 * t) * 0.08;
-    const flame = brown * 0.09 + pink * 0.08 + Math.sin(twoPi * 1.7 * t) * 0.015;
-    if (rnd() > 0.935) fireCrackle += (0.35 + Math.abs(rnd()) * 0.65) * (rnd() > 0 ? 1 : -1);
-    if (rnd() > 0.9975) firePop += (0.8 + Math.abs(rnd()) * 0.5) * (rnd() > 0 ? 1 : -1);
-    fireCrackle *= 0.72;
-    firePop *= 0.90;
-
-    switch (kind) {
-      case 'rain': {
-        const mist = pink * 0.09 + rain * 0.08 + brown * 0.025;
-        return [(mist + rainDropLeft * 0.08) * panLeft, (mist * 0.92 + rainDropRight * 0.075) * panRight];
-      }
-      case 'ocean': {
-        const foam = pink * 0.13 + tide;
-        return [foam * panLeft, (pink * 0.12 + tide * 0.9) * panRight];
-      }
-      case 'forest': {
-        const leaves = pink * 0.10 + Math.sin(twoPi * 0.09 * t) * 0.04;
-        const birds = i % 17111 < 140 ? chirp * 0.035 : 0;
-        return [(leaves + birds) * panLeft, (leaves * 0.9 + birds * 0.6) * panRight];
-      }
-      case 'stream': {
-        const ripple = pink * 0.11 + Math.sin(twoPi * 1.4 * t) * 0.035 + Math.sin(twoPi * 2.8 * t) * 0.018;
-        const birds = i % 19789 < 120 ? chirp * 0.025 : 0;
-        return [(ripple + birds) * panLeft, (ripple * 0.86 + birds * 0.55) * panRight];
-      }
-      case 'fire': {
-        const sparkLeft = fireCrackle * 0.22 + firePop * 0.18;
-        const sparkRight = fireCrackle * 0.15 + firePop * 0.24;
-        return [(flame + sparkLeft) * panLeft, (flame * 0.88 + sparkRight) * panRight];
-      }
-      case 'breeze': {
-        // Pink and brown noise pass through a very slow one-pole filter, then
-        // an integral six-second swell keeps both the texture and loop seam soft.
-        breezeLow = breezeLow * 0.9985 + (pink * 0.62 + brown * 0.38) * 0.0015;
-        const swell = 0.78
-          - Math.cos(twoPi * t / 6) * 0.14
-          + Math.sin(twoPi * t / 3) * 0.06;
-        const air = (pink * 0.052 + brown * 0.026 + breezeLow * 0.34) * swell;
-        return [air * panLeft * 2.1, (air * 0.94 + breezeLow * 0.015) * panRight * 2.1];
-      }
-      case 'night':
-        return summerNightSample(t, white, pink, brown);
-      case 'thunder': {
-        // One distant rumble per twelve-second loop, shaped with a raised
-        // cosine so it arrives and leaves without a transient.
-        thunderLow = thunderLow * 0.997 + (brown * 0.75 + pink * 0.25) * 0.003;
-        const distance = Math.abs(t - 5.4);
-        const rumbleEnvelope = distance < 2.35
-          ? 0.5 + 0.5 * Math.cos(Math.PI * distance / 2.35)
-          : 0;
-        const rumble = rumbleEnvelope * (
-          thunderLow * 0.16
-          + Math.sin(twoPi * 31 * t) * 0.055
-          + Math.sin(twoPi * 43 * t + 0.8) * 0.026
-        );
-        const mist = pink * 0.058 + rain * 0.042 + brown * 0.018;
-        return [mist + rumble, mist * 0.91 + rumble * 0.86];
-      }
-      case 'cabin': {
-        cabinLow = cabinLow * 0.9975 + (pink * 0.7 + brown * 0.3) * 0.0025;
-        const drift = 0.88 + Math.sin(twoPi * 0.25 * t) * 0.07;
-        const body = (
-          Math.sin(twoPi * 56 * t) * 0.032
-          + Math.sin(twoPi * 112 * t + 0.35) * 0.011
-        ) * drift;
-        const hum = pink * 0.045 + cabinLow * 0.18;
-        return [hum + body, hum * 0.94 + body * 0.90];
-      }
-      case 'train': {
-        trainLow = trainLow * 0.9965 + (brown * 0.78 + pink * 0.22) * 0.0035;
-        const railSway = Math.sin(twoPi * 2 * t) * 0.025
-          + Math.sin(twoPi * 4 * t + 0.45) * 0.007;
-        const rumble = trainLow * 0.25 + brown * 0.038 + pink * 0.022;
-        return [(rumble + railSway) * 1.5, (rumble * 0.93 - railSway * 0.72) * 1.5];
-      }
-      case 'pink':
-        return [pink * 0.24 * panLeft, pink * 0.22 * panRight];
-      case 'brown':
-        return [brown * 0.25 * panLeft, brown * 0.23 * panRight];
-      case 'white':
-      default:
-        return [white * 0.18 * panLeft, rnd() * 0.18 * panRight];
-    }
-  });
+function buildSoundscapeWav(kind: SoundscapeKey, speed: FanSpeed): Promise<string> {
+  // The voice lives in lib/soundscapeSynth so the web engine plays the same
+  // generator live; here it is rendered into a loop of the scene's length.
+  const voice = createSoundscapeVoice(kind, { speed });
+  return buildStereoWav(soundscapeLoopSeconds(kind), (t, i) => voice.next(t, i));
 }
 
 // ---------------------------------------------------------------------------
@@ -1277,25 +1108,25 @@ class WebSoundscapeEngine {
   private ctx: AudioContext | null = null;
   private gain: GainNode | null = null;
   private processor: ScriptProcessorNode | null = null;
-  private random = seededNoise(421337);
-  private pink = 0;
-  private brown = 0;
-  private rain = 0;
+  private voice: SoundscapeVoice | null = null;
+  private voiceKey: string | null = null;
   private phase = 0;
+  private index = 0;
   private kind: SoundscapeKey = 'rain';
-  private rainDropLeft = 0;
-  private rainDropRight = 0;
-  private fireCrackle = 0;
-  private firePop = 0;
-  private breezeLow = 0;
-  private thunderLow = 0;
-  private cabinLow = 0;
-  private trainLow = 0;
   private media: any = null;
   private mediaSource: string | null = null;
 
-  async play(kind: SoundscapeKey, volume: number) {
+  async play(kind: SoundscapeKey, volume: number, speed: FanSpeed = DEFAULT_FAN_SPEED) {
     this.kind = kind;
+    // A fresh voice per scene (and per fan speed) so filter state from the
+    // previous scene never bleeds into the new one.
+    const voiceKey = soundscapeSourceKey(kind, speed);
+    if (this.voiceKey !== voiceKey) {
+      this.voice = createSoundscapeVoice(kind, { seed: 421337, speed });
+      this.voiceKey = voiceKey;
+      this.phase = 0;
+      this.index = 0;
+    }
     const bundled = BUNDLED_SOUNDSCAPES[kind];
     const AudioCtor = (globalThis as any).Audio;
     if (bundled && typeof AudioCtor === 'function') {
@@ -1393,97 +1224,13 @@ class WebSoundscapeEngine {
   }
 
   private nextSample(sampleRate: number): [number, number] {
-    const white = this.random();
-    this.pink = this.pink * 0.92 + white * 0.08;
-    this.brown = Math.max(-1, Math.min(1, this.brown + white * 0.025));
-    this.rain = this.rain * 0.72 + white * 0.28;
-    this.phase += 1 / sampleRate;
-    const t = this.phase;
-    const twoPi = Math.PI * 2;
-    const tide = Math.sin(twoPi * 0.34 * t) * 0.18 + Math.sin(twoPi * 0.71 * t) * 0.08;
-    if (this.random() > 0.99945) this.rainDropLeft += 0.45 + Math.abs(this.random()) * 0.35;
-    if (this.random() > 0.99950) this.rainDropRight += 0.42 + Math.abs(this.random()) * 0.32;
-    this.rainDropLeft *= 0.90;
-    this.rainDropRight *= 0.90;
-    const flame = this.brown * 0.09 + this.pink * 0.08 + Math.sin(twoPi * 1.7 * t) * 0.015;
-    if (this.random() > 0.935) this.fireCrackle += (0.35 + Math.abs(this.random()) * 0.65) * (this.random() > 0 ? 1 : -1);
-    if (this.random() > 0.9975) this.firePop += (0.8 + Math.abs(this.random()) * 0.5) * (this.random() > 0 ? 1 : -1);
-    this.fireCrackle *= 0.72;
-    this.firePop *= 0.90;
-    const chirp = Math.sin(twoPi * (1600 + 900 * Math.sin(t * twoPi * 0.17)) * t);
-    const birds = Math.floor(t * sampleRate) % 17111 < 140 ? chirp * 0.035 : 0;
-
-    switch (this.kind) {
-      case 'rain': {
-        const mist = this.pink * 0.09 + this.rain * 0.08 + this.brown * 0.025;
-        return [mist + this.rainDropLeft * 0.08, mist * 0.92 + this.rainDropRight * 0.075];
-      }
-      case 'ocean':
-        return [this.pink * 0.13 + tide, this.pink * 0.12 + tide * 0.9];
-      case 'forest': {
-        const leaves = this.pink * 0.10 + Math.sin(twoPi * 0.09 * t) * 0.04;
-        return [leaves + birds, leaves * 0.9 + birds * 0.6];
-      }
-      case 'stream': {
-        const ripple = this.pink * 0.11 + Math.sin(twoPi * 1.4 * t) * 0.035 + Math.sin(twoPi * 2.8 * t) * 0.018;
-        return [ripple + birds * 0.7, ripple * 0.86 + birds * 0.45];
-      }
-      case 'fire':
-        return [flame + this.fireCrackle * 0.22 + this.firePop * 0.18, flame * 0.88 + this.fireCrackle * 0.15 + this.firePop * 0.24];
-      case 'breeze': {
-        this.breezeLow = this.breezeLow * 0.9985
-          + (this.pink * 0.62 + this.brown * 0.38) * 0.0015;
-        const swell = 0.78
-          - Math.cos(twoPi * t / 6) * 0.14
-          + Math.sin(twoPi * t / 3) * 0.06;
-        const air = (this.pink * 0.052 + this.brown * 0.026 + this.breezeLow * 0.34) * swell;
-        return [air * 2.1, (air * 0.94 + this.breezeLow * 0.015) * 2.1];
-      }
-      case 'night':
-        return summerNightSample(t, white, this.pink, this.brown);
-      case 'thunder': {
-        this.thunderLow = this.thunderLow * 0.997
-          + (this.brown * 0.75 + this.pink * 0.25) * 0.003;
-        const cyclePosition = t % 13;
-        const distance = Math.abs(cyclePosition - 5.7);
-        const rumbleEnvelope = distance < 2.45
-          ? 0.5 + 0.5 * Math.cos(Math.PI * distance / 2.45)
-          : 0;
-        const rumble = rumbleEnvelope * (
-          this.thunderLow * 0.16
-          + Math.sin(twoPi * 31 * t) * 0.055
-          + Math.sin(twoPi * 43 * t + 0.8) * 0.026
-        );
-        const mist = this.pink * 0.058 + this.rain * 0.042 + this.brown * 0.018;
-        return [mist + rumble, mist * 0.91 + rumble * 0.86];
-      }
-      case 'cabin': {
-        this.cabinLow = this.cabinLow * 0.9975
-          + (this.pink * 0.7 + this.brown * 0.3) * 0.0025;
-        const drift = 0.88 + Math.sin(twoPi * 0.25 * t) * 0.07;
-        const body = (
-          Math.sin(twoPi * 56 * t) * 0.032
-          + Math.sin(twoPi * 112 * t + 0.35) * 0.011
-        ) * drift;
-        const hum = this.pink * 0.045 + this.cabinLow * 0.18;
-        return [hum + body, hum * 0.94 + body * 0.90];
-      }
-      case 'train': {
-        this.trainLow = this.trainLow * 0.9965
-          + (this.brown * 0.78 + this.pink * 0.22) * 0.0035;
-        const railSway = Math.sin(twoPi * 2 * t) * 0.025
-          + Math.sin(twoPi * 4 * t + 0.45) * 0.007;
-        const rumble = this.trainLow * 0.25 + this.brown * 0.038 + this.pink * 0.022;
-        return [(rumble + railSway) * 1.5, (rumble * 0.93 - railSway * 0.72) * 1.5];
-      }
-      case 'pink':
-        return [this.pink * 0.24, this.pink * 0.22];
-      case 'brown':
-        return [this.brown * 0.25, this.brown * 0.23];
-      case 'white':
-      default:
-        return [white * 0.18, this.random() * 0.18];
+    if (!this.voice) {
+      this.voice = createSoundscapeVoice(this.kind, { seed: 421337 });
+      this.voiceKey = soundscapeSourceKey(this.kind, DEFAULT_FAN_SPEED);
     }
+    const t = this.phase;
+    this.phase += 1 / sampleRate;
+    return this.voice.next(t, this.index++);
   }
 }
 
@@ -1745,6 +1492,7 @@ const STORAGE_KEY_PINNED_MORE_PAGES = '@simply_ambient_pinned_more_pages_v1';
 // whenever no pinned list has been stored, which covers every state this flag
 // could migrate to, so it is only cleaned up here.
 const STORAGE_KEY_NAV_SOUNDSCAPES = '@simply_ambient_nav_soundscapes_v1';
+const STORAGE_KEY_FAN_SPEED = '@simply_ambient_fan_speed_v1';
 // The day's affirmation, stored as JSON {date: 'YYYY-MM-DD' local, text} so
 // one phrase holds for the whole day across launches and hub previews.
 const STORAGE_KEY_AFFIRMATION = '@simply_ambient_affirmation_v1';
@@ -1909,6 +1657,8 @@ function AppContent() {
   const [isBgPlaying, setIsBgPlaying] = useState(false);
   const [bgVolume, setBgVolume] = useState(0.5);
   const [activeSoundscapeId, setActiveSoundscapeId] = useState<SoundscapeKey | null>(null);
+  const [fanSpeed, setFanSpeed] = useState<FanSpeed>(DEFAULT_FAN_SPEED);
+  const fanSpeedRef = useRef<FanSpeed>(DEFAULT_FAN_SPEED);
   const [isSoundscapePlaying, setIsSoundscapePlaying] = useState(false);
   const [soundscapeVolume, setSoundscapeVolume] = useState(0.42);
 
@@ -2100,8 +1850,10 @@ function AppContent() {
   const soundscapePlayerRef = useRef<AudioPlayer | null>(null);
   const soundscapePlayGenRef = useRef(0);
   const pendingSoundscapeSourcesRef = useRef(new Set<Promise<AudioSource>>());
-  const soundscapeCacheRef = useRef<Partial<Record<SoundscapeKey, string>>>({});
-  const soundscapeBuildsRef = useRef<Partial<Record<SoundscapeKey, Promise<string>>>>({});
+  // Keyed by soundscapeSourceKey, so a fan at each speed is its own render.
+  const soundscapeCacheRef = useRef<Record<string, string>>({});
+  const soundscapeBuildsRef = useRef<Record<string, Promise<string>>>({});
+  const soundscapeSourceKeyRef = useRef<string | null>(null);
   // Web-only: gapless oscillator engine, created lazily on first play.
   const webToneRef = useRef<WebToneEngine | null>(null);
   const webSoundscapeRef = useRef<WebSoundscapeEngine | null>(null);
@@ -2148,6 +1900,12 @@ function AppContent() {
   // Mount: audio mode + load saved presets.
   useEffect(() => {
     setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true }).catch(() => {});
+    AsyncStorage.getItem(STORAGE_KEY_FAN_SPEED).then(v => {
+      if (isFanSpeed(v)) {
+        fanSpeedRef.current = v;
+        setFanSpeed(v);
+      }
+    }).catch(() => {});
     AsyncStorage.getItem(STORAGE_KEY)
       .then(raw => {
         if (!raw) return;
@@ -2752,50 +2510,52 @@ function AppContent() {
     setBgUri(null);
   }
 
-  async function ensureSoundscapeSource(id: SoundscapeKey): Promise<AudioSource> {
+  async function ensureSoundscapeSource(id: SoundscapeKey, speed: FanSpeed): Promise<AudioSource> {
     const bundled = BUNDLED_SOUNDSCAPES[id];
     if (bundled) return bundled;
 
-    const cached = soundscapeCacheRef.current[id];
+    const key = soundscapeSourceKey(id, speed);
+    const cached = soundscapeCacheRef.current[key];
     if (cached) return { uri: cached };
 
     // One render per soundscape: rapid taps while a render is in flight all
     // await the same promise instead of stacking further multi-second builds.
-    const inflight = soundscapeBuildsRef.current[id];
+    const inflight = soundscapeBuildsRef.current[key];
     if (inflight) return { uri: await inflight };
 
     const build = (async () => {
-      const uri = `${SOUNDSCAPE_FILE_PREFIX}${id}.wav`;
+      const uri = `${SOUNDSCAPE_FILE_PREFIX}${key}.wav`;
       // The versioned file survives restarts, so a fresh session replays it
       // straight from disk instead of paying for the render again.
       const info = await FileSystem.getInfoAsync(uri).catch(() => null);
       if (!info?.exists) {
-        const base64 = await buildSoundscapeWav(id);
+        const base64 = await buildSoundscapeWav(id, speed);
         await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
       }
-      soundscapeCacheRef.current[id] = uri;
+      soundscapeCacheRef.current[key] = uri;
       return uri;
     })();
-    soundscapeBuildsRef.current[id] = build;
+    soundscapeBuildsRef.current[key] = build;
     try {
       return { uri: await build };
     } finally {
-      delete soundscapeBuildsRef.current[id];
+      delete soundscapeBuildsRef.current[key];
     }
   }
 
-  async function playSoundscape(id: SoundscapeKey) {
+  async function playSoundscape(id: SoundscapeKey, speed: FanSpeed = fanSpeedRef.current) {
     const myGeneration = ++soundscapePlayGenRef.current;
     try {
       if (Platform.OS === 'web') {
         if (!webSoundscapeRef.current) webSoundscapeRef.current = new WebSoundscapeEngine();
-        await webSoundscapeRef.current.play(id, soundscapeVolume);
+        await webSoundscapeRef.current.play(id, soundscapeVolume, speed);
         if (myGeneration !== soundscapePlayGenRef.current) return;
         setActiveSoundscapeId(id);
         setIsSoundscapePlaying(true);
         return;
       }
-      const sourcePromise = ensureSoundscapeSource(id);
+      const sourceKey = soundscapeSourceKey(id, speed);
+      const sourcePromise = ensureSoundscapeSource(id, speed);
       pendingSoundscapeSourcesRef.current.add(sourcePromise);
       let source: AudioSource;
       try {
@@ -2804,13 +2564,14 @@ function AppContent() {
         pendingSoundscapeSourcesRef.current.delete(sourcePromise);
       }
       if (myGeneration !== soundscapePlayGenRef.current) return;
-      if (!soundscapePlayerRef.current || activeSoundscapeId !== id) {
+      if (!soundscapePlayerRef.current || soundscapeSourceKeyRef.current !== sourceKey) {
         try { soundscapePlayerRef.current?.release(); } catch {}
         try { soundscapePlayerRef.current?.remove?.(); } catch {}
         const p = createAudioPlayer(source);
         p.loop = true;
         p.volume = effectiveSoundscapeVolume(id, soundscapeVolume);
         soundscapePlayerRef.current = p;
+        soundscapeSourceKeyRef.current = sourceKey;
       } else {
         soundscapePlayerRef.current.volume = effectiveSoundscapeVolume(id, soundscapeVolume);
       }
@@ -2846,6 +2607,17 @@ function AppContent() {
     if (Platform.OS === 'web') webSoundscapeRef.current?.setVolume(v);
     if (soundscapePlayerRef.current && activeSoundscapeId) {
       soundscapePlayerRef.current.volume = effectiveSoundscapeVolume(activeSoundscapeId, v);
+    }
+  }
+
+  function changeFanSpeed(speed: FanSpeed) {
+    if (!isFanSpeed(speed) || speed === fanSpeedRef.current) return;
+    fanSpeedRef.current = speed;
+    setFanSpeed(speed);
+    AsyncStorage.setItem(STORAGE_KEY_FAN_SPEED, speed).catch(() => {});
+    // A fan that is already turning picks up the new speed in place.
+    if (activeSoundscapeId && isFanSoundscape(activeSoundscapeId) && isSoundscapePlaying) {
+      playSoundscape(activeSoundscapeId, speed);
     }
   }
 
@@ -2886,7 +2658,9 @@ function AppContent() {
     const documentPickerCache = appOwnedDocumentPickerCacheUri(FileSystem.cacheDirectory);
     const generatedSoundscapes = SOUNDSCAPES
       .filter(item => !BUNDLED_SOUNDSCAPES[item.id])
-      .map(item => `${SOUNDSCAPE_FILE_PREFIX}${item.id}.wav`);
+      .flatMap(item => isFanSoundscape(item.id)
+        ? FAN_SPEEDS.map(speed => `${SOUNDSCAPE_FILE_PREFIX}${soundscapeSourceKey(item.id, speed)}.wav`)
+        : [`${SOUNDSCAPE_FILE_PREFIX}${item.id}.wav`]);
     const paths = [documentPickerCache, TONE_FILE_PATH, ...generatedSoundscapes]
       .filter((path): path is string => Boolean(path));
 
@@ -2897,6 +2671,7 @@ function AppContent() {
     // unrelated cache deletion failed and the overall wipe must reject.
     soundscapeCacheRef.current = {};
     soundscapeBuildsRef.current = {};
+    soundscapeSourceKeyRef.current = null;
     if (results.some(result => result.status === 'rejected')) {
       throw new Error('An app audio cache could not be deleted.');
     }
@@ -3121,6 +2896,8 @@ function AppContent() {
                 soundscapeVolume={soundscapeVolume}
                 onToggleSoundscape={(id) => toggleSoundscape(id as SoundscapeKey)}
                 onChangeSoundscapeVolume={changeSoundscapeVolume}
+                fanSpeed={fanSpeed}
+                onChangeFanSpeed={changeFanSpeed}
                 activeRoutineId={activeRoutine?.path.id ?? null}
                 onStartRoutine={requestStartRoutine}
                 onStopRoutine={requestStopRoutine}

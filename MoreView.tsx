@@ -49,6 +49,7 @@ import {
   MoreSectionGroup,
 } from './MoreUI';
 import { SoundscapeScene, TileScene } from './SoundscapeScenes';
+import { FAN_SPEEDS, isFanSoundscape, type FanSpeed } from './lib/soundscapeSynth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CornerRipples, HeaderGlass } from './AmbientUI';
 
@@ -170,6 +171,8 @@ type Props = {
   soundscapeVolume: number;
   onToggleSoundscape: (id: string) => void;
   onChangeSoundscapeVolume: (v: number) => void;
+  fanSpeed: FanSpeed;
+  onChangeFanSpeed: (speed: FanSpeed) => void;
   activeRoutineId?: RoutinePathId | null;
   onStartRoutine?: (routine: RoutinePathPayload) => void;
   onStopRoutine?: (routine: RoutinePathPayload) => void;
@@ -397,6 +400,8 @@ export default function MoreView({
   soundscapeVolume,
   onToggleSoundscape,
   onChangeSoundscapeVolume,
+  fanSpeed,
+  onChangeFanSpeed,
   activeRoutineId = null,
   onStartRoutine,
   onStopRoutine,
@@ -856,6 +861,8 @@ export default function MoreView({
               soundscapeVolume={soundscapeVolume}
               onToggleSoundscape={onToggleSoundscape}
               onChangeSoundscapeVolume={onChangeSoundscapeVolume}
+              fanSpeed={fanSpeed}
+              onChangeFanSpeed={onChangeFanSpeed}
             />
           )}
           {page === 'affirmations' && (
@@ -4939,6 +4946,8 @@ function SoundscapesPage({
   soundscapeVolume,
   onToggleSoundscape,
   onChangeSoundscapeVolume,
+  fanSpeed,
+  onChangeFanSpeed,
 }: {
   onBack: () => void;
   soundscapes: SoundscapeOption[];
@@ -4947,6 +4956,8 @@ function SoundscapesPage({
   soundscapeVolume: number;
   onToggleSoundscape: (id: string) => void;
   onChangeSoundscapeVolume: (v: number) => void;
+  fanSpeed: FanSpeed;
+  onChangeFanSpeed: (speed: FanSpeed) => void;
 }) {
   const subBodyPad = useSubBodyPad();
   const activeSoundscape = activeSoundscapeId
@@ -4955,10 +4966,13 @@ function SoundscapesPage({
   const activeName = activeSoundscape?.name ?? 'No layer selected';
   const heroAccent = solidAccent(activeSoundscape?.color ?? '#8FB8DE');
 
-  // Two families, rendered under their own section labels.
+  // Three families, rendered under their own section labels.
   const NATURE_IDS = ['rain', 'ocean', 'forest', 'stream', 'fire', 'breeze', 'night', 'thunder'];
+  const MACHINE_IDS = ['boxfan', 'ceilingfan', 'deskfan', 'vent'];
   const natureScapes = soundscapes.filter(s => NATURE_IDS.includes(s.id));
-  const steadyScapes = soundscapes.filter(s => !NATURE_IDS.includes(s.id));
+  const machineScapes = soundscapes.filter(s => MACHINE_IDS.includes(s.id));
+  const steadyScapes = soundscapes.filter(s => !NATURE_IDS.includes(s.id) && !MACHINE_IDS.includes(s.id));
+  const activeIsFan = activeSoundscapeId != null && isFanSoundscape(activeSoundscapeId);
 
   const renderCard = (s: SoundscapeOption) => {
     const active = activeSoundscapeId === s.id && isSoundscapePlaying;
@@ -5018,7 +5032,7 @@ function SoundscapesPage({
         </Text>
 
         <GlowCard accent={heroAccent} style={styles.soundscapeHero}>
-          <SoundscapeScene soundscape={activeSoundscape} playing={isSoundscapePlaying} />
+          <SoundscapeScene soundscape={activeSoundscape} playing={isSoundscapePlaying} fanSpeed={fanSpeed} />
           <View style={styles.soundscapeTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.soundscapeActiveLabel, { color: heroAccent }]}>CURRENT</Text>
@@ -5075,6 +5089,34 @@ function SoundscapesPage({
               />
             </View>
           ) : null}
+          {activeIsFan ? (
+            <View style={{ marginTop: 12 }}>
+              <Text style={[styles.soundscapeVolLabel, { color: heroAccent }]}>FAN SPEED</Text>
+              <View style={styles.fanSpeedRow}>
+                {FAN_SPEEDS.map(speed => {
+                  const active = fanSpeed === speed;
+                  const label = speed.charAt(0).toUpperCase() + speed.slice(1);
+                  return (
+                    <TouchableOpacity
+                      key={speed}
+                      activeOpacity={0.85}
+                      onPress={() => onChangeFanSpeed(speed)}
+                      accessibilityRole="radio"
+                      accessibilityLabel={`Fan speed ${label}`}
+                      accessibilityState={{ selected: active, checked: active }}
+                      style={[
+                        styles.notifPill,
+                        styles.fanSpeedPill,
+                        active && { borderColor: heroAccent, backgroundColor: heroAccent + '22' },
+                      ]}
+                    >
+                      <Text style={[styles.notifPillText, active && { color: heroAccent }]}>{label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
         </GlowCard>
 
         <Text style={styles.sectionLabel}>NATURE</Text>
@@ -5082,6 +5124,12 @@ function SoundscapesPage({
 
         <Text style={styles.sectionLabel}>STEADY & RHYTHMIC</Text>
         <View style={styles.soundscapeGrid}>{steadyScapes.map(renderCard)}</View>
+
+        <Text style={styles.sectionLabel}>FANS & VENTS</Text>
+        <Text style={styles.sectionSub}>
+          Mechanical air for sleep and focus. Fans take a speed setting from the player above.
+        </Text>
+        <View style={styles.soundscapeGrid}>{machineScapes.map(renderCard)}</View>
       </StickySubpageScroll>
     </AmbientPageShell>
   );
@@ -6669,6 +6717,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   soundscapeGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  fanSpeedRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  fanSpeedPill: { flex: 1, alignItems: 'center', paddingHorizontal: 8 },
   soundscapeTileTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   soundscapeTileCopy: { marginTop: 14 },
   soundscapeGlyphBox: {
