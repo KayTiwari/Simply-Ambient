@@ -1088,6 +1088,20 @@ class WebToneEngine {
     master.gain.linearRampToValueAtTime(WEB_TONE_GAIN * this.volume, t + 0.04);
   }
 
+  // Sleep-timer ending: glide the master gain to silence over durationMs
+  // and resolve once it lands, so the caller can stop without a click.
+  fadeOut(durationMs: number): Promise<void> {
+    const ctx = this.ctx;
+    const master = this.master;
+    if (!ctx || !master) return Promise.resolve();
+    const now = ctx.currentTime;
+    const seconds = Math.max(0.05, durationMs / 1000);
+    try { master.gain.cancelScheduledValues(now); } catch {}
+    try { master.gain.setValueAtTime(master.gain.value, now); } catch {}
+    try { master.gain.linearRampToValueAtTime(0, now + seconds); } catch {}
+    return new Promise(resolve => setTimeout(resolve, durationMs));
+  }
+
   stop() {
     const ctx = this.ctx;
     const master = this.master;
@@ -1202,6 +1216,32 @@ class WebSoundscapeEngine {
     try { gain.gain.cancelScheduledValues(t); } catch {}
     try { gain.gain.setValueAtTime(gain.gain.value, t); } catch {}
     try { gain.gain.linearRampToValueAtTime(effectiveSoundscapeVolume(this.kind, volume), t + 0.05); } catch {}
+  }
+
+  fadeOut(durationMs: number): Promise<void> {
+    const seconds = Math.max(0.05, durationMs / 1000);
+    if (this.media) {
+      // HTMLAudio has no ramp; step the volume down on a short interval.
+      const media = this.media;
+      const start = typeof media.volume === 'number' ? media.volume : 1;
+      const steps = Math.max(1, Math.round(durationMs / 50));
+      let i = 0;
+      return new Promise(resolve => {
+        const interval = setInterval(() => {
+          i += 1;
+          try { media.volume = Math.max(0, start * (1 - i / steps)); } catch {}
+          if (i >= steps) { clearInterval(interval); resolve(); }
+        }, durationMs / steps);
+      });
+    }
+    const ctx = this.ctx;
+    const gain = this.gain;
+    if (!ctx || !gain) return Promise.resolve();
+    const now = ctx.currentTime;
+    try { gain.gain.cancelScheduledValues(now); } catch {}
+    try { gain.gain.setValueAtTime(gain.gain.value, now); } catch {}
+    try { gain.gain.linearRampToValueAtTime(0, now + seconds); } catch {}
+    return new Promise(resolve => setTimeout(resolve, durationMs));
   }
 
   stop() {
@@ -2188,7 +2228,10 @@ function AppContent() {
     return () => subscription.remove();
   }, []);
 
-  function fadeNativePlayer(player: AudioPlayer | null, target: number, durationMs = 2500) {
+  // Sleep-timer fade length shared by the native players and the web engines.
+  const SLEEP_FADE_MS = 2500;
+
+  function fadeNativePlayer(player: AudioPlayer | null, target: number, durationMs = SLEEP_FADE_MS) {
     if (!player) return Promise.resolve();
     const start = typeof player.volume === 'number' ? player.volume : 1;
     const steps = 18;
@@ -2215,8 +2258,16 @@ function AppContent() {
     // review here (they may be asleep); it only feeds the gate counters.
     if (stateRef.current.isTonePlaying) recordSessionCompleted().catch(() => {});
     if (Platform.OS === 'web') {
+      // Same gentle ending as native: ease both lanes down before stopping.
+      await Promise.all([
+        webToneRef.current?.fadeOut(SLEEP_FADE_MS) ?? Promise.resolve(),
+        webSoundscapeRef.current?.fadeOut(SLEEP_FADE_MS) ?? Promise.resolve(),
+      ]);
       stopTones();
       stopSoundscape();
+      // The engines restart from their configured levels on the next play.
+      webToneRef.current?.setVolume(toneVolumeRef.current);
+      webSoundscapeRef.current?.setVolume(soundscapeVolume);
     } else {
       await Promise.all([
         fadeNativePlayer(tone, 0),
