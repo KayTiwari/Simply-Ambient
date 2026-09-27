@@ -1152,49 +1152,66 @@ class WebToneEngine {
   }
 }
 
+// Soundscape switches on every platform cross over this long, old fading
+// out as new fades in, so a change of scene never snaps.
+const SOUNDSCAPE_CROSSFADE_MS = 900;
+
 class WebSoundscapeEngine {
   private ctx: AudioContext | null = null;
+  // The synth lane: one processor, gain = user volume. Per-scene loudness is
+  // applied inside nextSample so two voices can cross over at their own
+  // levels while the node ramps only between user volumes.
   private gain: GainNode | null = null;
   private processor: ScriptProcessorNode | null = null;
+  private syntheticStopTimer: ReturnType<typeof setTimeout> | null = null;
   private voice: SoundscapeVoice | null = null;
   private voiceKey: string | null = null;
+  private voiceGain = 1;
   private phase = 0;
   private index = 0;
+  private outgoingVoice: SoundscapeVoice | null = null;
+  private outgoingGain = 1;
+  private outgoingPhase = 0;
+  private outgoingIndex = 0;
+  private crossfade = 1;
   private kind: SoundscapeKey = 'rain';
+  private volume = 1;
+  // The media lane for bundled recordings, plus any elements still fading out.
   private media: any = null;
   private mediaSource: string | null = null;
+  private mediaTimers = new Set<ReturnType<typeof setInterval>>();
 
   async play(kind: SoundscapeKey, volume: number, speed: FanSpeed = DEFAULT_FAN_SPEED) {
     this.kind = kind;
-    // A fresh voice per scene (and per fan speed) so filter state from the
-    // previous scene never bleeds into the new one.
-    const voiceKey = soundscapeSourceKey(kind, speed);
-    if (this.voiceKey !== voiceKey) {
-      this.voice = createSoundscapeVoice(kind, { seed: 421337, speed });
-      this.voiceKey = voiceKey;
-      this.phase = 0;
-      this.index = 0;
-    }
+    this.volume = clamp01(volume);
     const bundled = BUNDLED_SOUNDSCAPES[kind];
     const AudioCtor = (globalThis as any).Audio;
     if (bundled && typeof AudioCtor === 'function') {
       const asset = Asset.fromModule(bundled);
       const src = asset.localUri ?? asset.uri;
-      this.stopSynthetic();
-      if (!this.media || this.mediaSource !== src) {
-        this.stopMedia();
-        this.media = new AudioCtor(src);
-        this.mediaSource = src;
-        this.media.loop = true;
-        this.media.preload = 'auto';
-        this.media.load?.();
+      this.fadeSyntheticOut(SOUNDSCAPE_CROSSFADE_MS);
+      const target = effectiveSoundscapeVolume(kind, this.volume);
+      if (this.media && this.mediaSource === src) {
+        // Resuming the same recording: no crossfade partner, just level.
+        this.rampMedia(this.media, target, 120);
+        await this.media.play();
+        return;
       }
-      this.media.volume = effectiveSoundscapeVolume(kind, volume);
-      await this.media.play();
+      this.releaseMedia(SOUNDSCAPE_CROSSFADE_MS);
+      const media = new AudioCtor(src);
+      this.media = media;
+      this.mediaSource = src;
+      media.loop = true;
+      media.preload = 'auto';
+      media.volume = 0;
+      media.load?.();
+      await media.play();
+      if (this.media !== media) return; // superseded while loading
+      this.rampMedia(media, target, SOUNDSCAPE_CROSSFADE_MS);
       return;
     }
 
-    this.stopMedia();
+    this.releaseMedia(SOUNDSCAPE_CROSSFADE_MS);
     if (!this.ctx) {
       const AC: typeof AudioContext =
         (window as any).AudioContext || (window as any).webkitAudioContext;
@@ -1202,7 +1219,31 @@ class WebSoundscapeEngine {
     }
     const ctx = this.ctx;
     if (ctx.state === 'suspended') await ctx.resume();
+    if (this.syntheticStopTimer) {
+      clearTimeout(this.syntheticStopTimer);
+      this.syntheticStopTimer = null;
+    }
 
+    // A fresh voice per scene (and per fan speed) so filter state from the
+    // previous scene never bleeds into the new one. If one is already
+    // sounding, it becomes the outgoing half of a crossfade.
+    const voiceKey = soundscapeSourceKey(kind, speed);
+    if (this.voiceKey !== voiceKey) {
+      if (this.voice && this.processor) {
+        this.outgoingVoice = this.voice;
+        this.outgoingGain = this.voiceGain;
+        this.outgoingPhase = this.phase;
+        this.outgoingIndex = this.index;
+        this.crossfade = 0;
+      }
+      this.voice = createSoundscapeVoice(kind, { seed: 421337, speed });
+      this.voiceKey = voiceKey;
+      this.phase = 0;
+      this.index = 0;
+    }
+    this.voiceGain = SOUNDSCAPE_GAIN[kind];
+
+    let fadeIn = false;
     if (!this.processor || !this.gain) {
       const gain = ctx.createGain();
       gain.gain.value = 0;
@@ -1223,88 +1264,128 @@ class WebSoundscapeEngine {
       processor.connect(gain);
       this.gain = gain;
       this.processor = processor;
+      fadeIn = true;
     }
 
-    this.setVolume(volume);
+    this.rampGain(this.volume, fadeIn ? SOUNDSCAPE_CROSSFADE_MS : 50);
   }
 
   setVolume(volume: number) {
+    this.volume = clamp01(volume);
     if (this.media) {
-      this.media.volume = effectiveSoundscapeVolume(this.kind, volume);
+      this.clearMediaTimers();
+      this.media.volume = effectiveSoundscapeVolume(this.kind, this.volume);
       return;
     }
+    this.rampGain(this.volume, 50);
+  }
+
+  fadeOut(durationMs: number): Promise<void> {
+    if (this.media) {
+      const media = this.media;
+      return new Promise(resolve => this.rampMedia(media, 0, durationMs, resolve));
+    }
+    if (!this.ctx || !this.gain) return Promise.resolve();
+    this.rampGain(0, durationMs);
+    return new Promise(resolve => setTimeout(resolve, durationMs));
+  }
+
+  stop() {
+    this.releaseMedia(80);
+    this.fadeSyntheticOut(80);
+  }
+
+  private rampGain(target: number, ms: number) {
     const ctx = this.ctx;
     const gain = this.gain;
     if (!ctx || !gain) return;
     const t = ctx.currentTime;
     try { gain.gain.cancelScheduledValues(t); } catch {}
     try { gain.gain.setValueAtTime(gain.gain.value, t); } catch {}
-    try { gain.gain.linearRampToValueAtTime(effectiveSoundscapeVolume(this.kind, volume), t + 0.05); } catch {}
+    try { gain.gain.linearRampToValueAtTime(target, t + Math.max(0.01, ms / 1000)); } catch {}
   }
 
-  fadeOut(durationMs: number): Promise<void> {
-    const seconds = Math.max(0.05, durationMs / 1000);
-    if (this.media) {
-      // HTMLAudio has no ramp; step the volume down on a short interval.
-      const media = this.media;
-      const start = typeof media.volume === 'number' ? media.volume : 1;
-      const steps = Math.max(1, Math.round(durationMs / 50));
-      let i = 0;
-      return new Promise(resolve => {
-        const interval = setInterval(() => {
-          i += 1;
-          try { media.volume = Math.max(0, start * (1 - i / steps)); } catch {}
-          if (i >= steps) { clearInterval(interval); resolve(); }
-        }, durationMs / steps);
-      });
-    }
-    const ctx = this.ctx;
-    const gain = this.gain;
-    if (!ctx || !gain) return Promise.resolve();
-    const now = ctx.currentTime;
-    try { gain.gain.cancelScheduledValues(now); } catch {}
-    try { gain.gain.setValueAtTime(gain.gain.value, now); } catch {}
-    try { gain.gain.linearRampToValueAtTime(0, now + seconds); } catch {}
-    return new Promise(resolve => setTimeout(resolve, durationMs));
+  // HTMLAudio has no gain ramp, so volume is stepped on a short interval.
+  private rampMedia(media: any, target: number, ms: number, onDone?: () => void) {
+    const start = typeof media.volume === 'number' ? media.volume : 1;
+    const steps = Math.max(1, Math.round(ms / 40));
+    let i = 0;
+    const interval = setInterval(() => {
+      i += 1;
+      try { media.volume = Math.max(0, Math.min(1, start + (target - start) * (i / steps))); } catch {}
+      if (i >= steps) {
+        clearInterval(interval);
+        this.mediaTimers.delete(interval);
+        onDone?.();
+      }
+    }, ms / steps);
+    this.mediaTimers.add(interval);
   }
 
-  stop() {
-    this.stopMedia();
-    this.stopSynthetic();
+  private clearMediaTimers() {
+    this.mediaTimers.forEach(clearInterval);
+    this.mediaTimers.clear();
   }
 
-  private stopMedia() {
+  // Hands the current recording off to a fade-out and forgets it, so a new
+  // lane can start underneath while it is still audible.
+  private releaseMedia(fadeMs: number) {
     const media = this.media;
     this.media = null;
     this.mediaSource = null;
     if (!media) return;
-    try { media.pause(); } catch {}
-    try { media.currentTime = 0; } catch {}
+    this.rampMedia(media, 0, fadeMs, () => {
+      try { media.pause(); } catch {}
+      try { media.currentTime = 0; } catch {}
+    });
   }
 
-  private stopSynthetic() {
+  private fadeSyntheticOut(fadeMs: number) {
     const ctx = this.ctx;
     const gain = this.gain;
     const processor = this.processor;
-    this.gain = null;
-    this.processor = null;
-    if (!ctx) return;
-    const t = ctx.currentTime;
-    try { gain?.gain.linearRampToValueAtTime(0, t + 0.06); } catch {}
-    setTimeout(() => {
-      try { processor?.disconnect(); } catch {}
-      try { gain?.disconnect(); } catch {}
-    }, 90);
+    if (!ctx || !processor || !gain) return;
+    this.rampGain(0, fadeMs);
+    if (this.syntheticStopTimer) clearTimeout(this.syntheticStopTimer);
+    this.syntheticStopTimer = setTimeout(() => {
+      this.syntheticStopTimer = null;
+      // Only tear down if nothing restarted the lane during the fade.
+      if (this.processor !== processor) return;
+      this.gain = null;
+      this.processor = null;
+      this.voice = null;
+      this.voiceKey = null;
+      this.outgoingVoice = null;
+      try { processor.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
+    }, fadeMs + 30);
   }
 
   private nextSample(sampleRate: number): [number, number] {
     if (!this.voice) {
       this.voice = createSoundscapeVoice(this.kind, { seed: 421337 });
       this.voiceKey = soundscapeSourceKey(this.kind, DEFAULT_FAN_SPEED);
+      this.voiceGain = SOUNDSCAPE_GAIN[this.kind];
     }
     const t = this.phase;
     this.phase += 1 / sampleRate;
-    return this.voice.next(t, this.index++);
+    const [l, r] = this.voice.next(t, this.index++);
+    const outgoing = this.outgoingVoice;
+    if (!outgoing) return [l * this.voiceGain, r * this.voiceGain];
+
+    // Equal-power crossfade between the two voices at their own levels.
+    const ot = this.outgoingPhase;
+    this.outgoingPhase += 1 / sampleRate;
+    const [ol, or] = outgoing.next(ot, this.outgoingIndex++);
+    const x = this.crossfade;
+    const inW = Math.sin(x * Math.PI / 2) * this.voiceGain;
+    const outW = Math.cos(x * Math.PI / 2) * this.outgoingGain;
+    this.crossfade += 1000 / (SOUNDSCAPE_CROSSFADE_MS * sampleRate);
+    if (this.crossfade >= 1) {
+      this.crossfade = 1;
+      this.outgoingVoice = null;
+    }
+    return [l * inW + ol * outW, r * inW + or * outW];
   }
 }
 
@@ -1946,10 +2027,10 @@ function AppContent() {
   }, [toneVolume]);
 
   // Refs that always reflect latest values, for use inside throttle callbacks.
-  const stateRef = useRef({ leftHz, rightHz, isTonePlaying });
+  const stateRef = useRef({ leftHz, rightHz, isTonePlaying, isSoundscapePlaying });
   useEffect(() => {
-    stateRef.current = { leftHz, rightHz, isTonePlaying };
-  }, [leftHz, rightHz, isTonePlaying]);
+    stateRef.current = { leftHz, rightHz, isTonePlaying, isSoundscapePlaying };
+  }, [leftHz, rightHz, isTonePlaying, isSoundscapePlaying]);
 
   // Listening for five minutes or more marks the day as practiced. The timer
   // logs it mid-session; the stop path re-checks by wall clock in case Doze
@@ -2861,19 +2942,32 @@ function AppContent() {
         pendingSoundscapeSourcesRef.current.delete(sourcePromise);
       }
       if (myGeneration !== soundscapePlayGenRef.current) return;
-      if (!soundscapePlayerRef.current || soundscapeSourceKeyRef.current !== sourceKey) {
-        releaseLockScreen(soundscapePlayerRef.current);
-        try { soundscapePlayerRef.current?.release(); } catch {}
-        try { soundscapePlayerRef.current?.remove?.(); } catch {}
+      const target = effectiveSoundscapeVolume(id, soundscapeVolume);
+      const current = soundscapePlayerRef.current;
+      if (!current || soundscapeSourceKeyRef.current !== sourceKey) {
         const p = createAudioPlayer(source);
         p.loop = true;
-        p.volume = effectiveSoundscapeVolume(id, soundscapeVolume);
         soundscapePlayerRef.current = p;
         soundscapeSourceKeyRef.current = sourceKey;
+        if (current && stateRef.current.isSoundscapePlaying) {
+          // Cross over: the old scene keeps sounding while the new one rises.
+          releaseLockScreen(current);
+          retireSoundscapePlayer(current, SOUNDSCAPE_CROSSFADE_MS);
+          p.volume = 0;
+          p.play();
+          fadeNativePlayer(p, target, SOUNDSCAPE_CROSSFADE_MS).catch(() => {});
+        } else {
+          if (current) {
+            releaseLockScreen(current);
+            retireSoundscapePlayer(current, 0);
+          }
+          p.volume = target;
+          p.play();
+        }
       } else {
-        soundscapePlayerRef.current.volume = effectiveSoundscapeVolume(id, soundscapeVolume);
+        current.volume = target;
+        current.play();
       }
-      soundscapePlayerRef.current.play();
       setActiveSoundscapeId(id);
       setIsSoundscapePlaying(true);
     } catch (e) {
@@ -2881,8 +2975,26 @@ function AppContent() {
     }
   }
 
+  // Players fading out after a scene change. Stopping the lane silences them
+  // too, and each one releases itself once its fade lands.
+  const outgoingSoundscapePlayersRef = useRef(new Set<AudioPlayer>());
+  function retireSoundscapePlayer(player: AudioPlayer, fadeMs: number) {
+    const release = () => {
+      outgoingSoundscapePlayersRef.current.delete(player);
+      try { player.pause(); } catch {}
+      try { player.release(); } catch {}
+      try { player.remove?.(); } catch {}
+    };
+    if (fadeMs <= 0) { release(); return; }
+    outgoingSoundscapePlayersRef.current.add(player);
+    fadeNativePlayer(player, 0, fadeMs).then(release, release);
+  }
+
   function stopSoundscape() {
     soundscapePlayGenRef.current += 1;
+    outgoingSoundscapePlayersRef.current.forEach(player => {
+      try { player.pause(); } catch {}
+    });
     if (Platform.OS === 'web') {
       try { webSoundscapeRef.current?.stop(); } catch {}
       setIsSoundscapePlaying(false);

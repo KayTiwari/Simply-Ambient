@@ -1153,8 +1153,62 @@ export function SoundscapeScene({
   const SceneIcon = soundscape?.Icon ?? Waveform;
   const [size, setSize] = useState({ w: 0, h: 0 });
 
+  // A scene change dissolves: the previous art stays underneath for the
+  // length of the audio crossfade while the new one fades over it.
+  const [outgoing, setOutgoing] = useState<{ id: string; color: string } | null>(null);
+  const dissolve = useRef(new Animated.Value(1)).current;
+  const lastRef = useRef({ id, color });
+  useEffect(() => {
+    const last = lastRef.current;
+    lastRef.current = { id, color };
+    if (last.id === id) return;
+    setOutgoing(last);
+    dissolve.stopAnimation();
+    dissolve.setValue(0);
+    Animated.timing(dissolve, {
+      toValue: 1, duration: 700, easing: Easing.inOut(Easing.sin), useNativeDriver: true,
+    }).start(({ finished }) => { if (finished) setOutgoing(null); });
+  }, [id, color, dissolve]);
+
   const props: SceneProps = { color, playing, w: size.w, h: size.h };
-  const scene = (() => {
+  const scene = renderScene(id, props, fanSpeed);
+  const outgoingScene = outgoing
+    ? renderScene(outgoing.id, { color: outgoing.color, playing, w: size.w, h: size.h }, fanSpeed)
+    : null;
+
+  return (
+    <View
+      style={[styles.scene, { backgroundColor: color + '0D' }]}
+      pointerEvents="none"
+      onLayout={e => {
+        const { width, height } = e.nativeEvent.layout;
+        setSize(prev => (prev.w === width && prev.h === height ? prev : { w: width, h: height }));
+      }}
+    >
+      <TintGradient
+        colors={[color + '24', color + '08', 'transparent']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {outgoingScene ? (
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: dissolve.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}>
+          {outgoingScene}
+        </Animated.View>
+      ) : null}
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: outgoing ? dissolve : 1 }]}>
+        {scene}
+      </Animated.View>
+      <View style={[styles.sceneIcon, { borderColor: color + '55', backgroundColor: color + '16' }]}>
+        <SceneIcon size={28} color={color} weight="duotone" />
+      </View>
+    </View>
+  );
+}
+
+function renderScene(id: string, props: SceneProps, fanSpeed: FanSpeed) {
+  const { color, playing } = props;
+  return (() => {
     switch (id) {
       case 'rain': return <RainScene {...props} />;
       case 'ocean': return <OceanScene {...props} />;
@@ -1176,28 +1230,6 @@ export function SoundscapeScene({
       default: return <IdleScene color={color} />;
     }
   })();
-
-  return (
-    <View
-      style={[styles.scene, { backgroundColor: color + '0D' }]}
-      pointerEvents="none"
-      onLayout={e => {
-        const { width, height } = e.nativeEvent.layout;
-        setSize(prev => (prev.w === width && prev.h === height ? prev : { w: width, h: height }));
-      }}
-    >
-      <TintGradient
-        colors={[color + '24', color + '08', 'transparent']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      {scene}
-      <View style={[styles.sceneIcon, { borderColor: color + '55', backgroundColor: color + '16' }]}>
-        <SceneIcon size={28} color={color} weight="duotone" />
-      </View>
-    </View>
-  );
 }
 
 // ---------------------------------------------------------------------------
