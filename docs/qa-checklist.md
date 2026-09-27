@@ -21,7 +21,7 @@ catches types and content invariants; everything below needs eyes and ears.
       fade smoothly back to their resting position after pause.
 - [ ] Layer a soundscape and imported background music; three lanes play
       together, each volume slider works.
-- [ ] Compare all 13 soundscapes at the same app/system volume. White and Pink
+- [ ] Compare all 17 soundscapes at the same app/system volume. White and Pink
       Noise never jump in level, and Night Breeze, Summer Night, Airplane Cabin,
       and Night Train remain audible without a sudden boost.
 - [ ] Set a 5-minute sleep timer, background the app, screen off; audio fades

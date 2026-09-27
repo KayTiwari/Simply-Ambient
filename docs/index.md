@@ -7,12 +7,12 @@ title: Simply Ambient
 
 > A calm, private space for sound, breath, and daily reflection.
 
-Simply Ambient 2.0 is a mobile-first ambient wellness studio for Android and the web. Build a binaural tone, layer one of 13 offline soundscapes, follow a guided breath or listening routine, and keep private reflection tools close without creating an account.
+Simply Ambient 2.0 is a mobile-first ambient wellness studio for Android and the web. Build a binaural tone, layer one of 17 offline soundscapes, follow a guided breath or listening routine, and keep private reflection tools close without creating an account.
 
 ## In 2.0
 
 - Beat-first binaural controls with independent tone volume and animated frequency orbits
-- Thirteen offline soundscapes with independent volume and scene-specific atmosphere
+- Seventeen offline soundscapes with independent volume and scene-specific atmosphere, including four fans and vents with a speed setting
 - Morning Focus, Evening Wind-down, and Deep Sleep paths that advance automatically
 - Eighteen guided breathing practices with optional eyes-closed phase cues
 - Chakra sigils and tone actions, live daily/weekly/monthly sky readings, lunar countdowns, and tarot spreads

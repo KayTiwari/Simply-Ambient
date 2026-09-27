@@ -7,7 +7,7 @@ Companion to [`store-listing.md`](store-listing.md). This replaces the pre-2.0 t
 Simply Ambient 2.0 is no longer only a binaural generator with supporting breath cards. The store story should lead with a private ambient studio:
 
 1. Shape a real-time binaural tone.
-2. Layer 13 offline soundscapes and imported audio.
+2. Layer 17 offline soundscapes and imported audio.
 3. Follow a guided breath or an auto-advancing listening path.
 4. Keep local reflection and sky tools nearby without an account.
 
@@ -62,6 +62,10 @@ Draft web captures in `docs/screenshots/` are useful for framing but are not sub
 `assets/feature-graphic.svg` and `.png` now use the 2.0 dark ambient system, frequency orbits, and the current value proposition. Confirm the PNG remains exactly 1024x500 before uploading.
 
 ## Release notes for Play Console
+
+### 2.1.0
+
+> Four new fan and vent soundscapes with a speed setting, saved mixes that remember your soundscape, lock screen controls, a practice calendar on your Profile, and home screen shortcuts for Deep Sleep, Morning Focus, Box Breathing, and Soundscapes. The app is also about 40 MB smaller.
 
 ### 2.0.1
 

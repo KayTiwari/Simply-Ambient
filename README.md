@@ -2,9 +2,9 @@
 
 > A calm, private space for sound, breath, and daily reflection.
 
-Simply Ambient is a mobile-first ambient wellness studio built with React Native and Expo. It combines a real-time binaural frequency generator, 13 offline soundscapes, guided breathing, auto-advancing listening routines, chakra references, live horoscope readings, tarot, and local-first reflection tools in one fluid interface.
+Simply Ambient is a mobile-first ambient wellness studio built with React Native and Expo. It combines a real-time binaural frequency generator, 17 offline soundscapes, guided breathing, auto-advancing listening routines, chakra references, live horoscope readings, tarot, and local-first reflection tools in one fluid interface.
 
-**Current release:** 2.0.1, live on [Google Play](https://play.google.com/store/apps/details?id=com.likechess.simplyambient)
+**Current release:** 2.1.0 in development; 2.0.1 is live on [Google Play](https://play.google.com/store/apps/details?id=com.likechess.simplyambient)
 **Also available:** [playable web build](https://binaural.vercel.app)
 **Platforms:** Android and web today, with the React Native codebase prepared for iOS
 
@@ -16,6 +16,15 @@ Simply Ambient is a mobile-first ambient wellness studio built with React Native
 </p>
 
 [Get it on Google Play](https://play.google.com/store/apps/details?id=com.likechess.simplyambient) · [Try the web app](https://binaural.vercel.app) · [Privacy policy](https://kaytiwari.github.io/Simply-Ambient/privacy-policy.html)
+
+## What changed in 2.1.0
+
+- Four fan and vent soundscapes (Box Fan, Ceiling Fan, Desk Fan, Vent Hum) with a Low/Medium/High fan speed, each with its own animated scene.
+- Saved mixes: a preset can carry its soundscape, volumes, and fan speed.
+- Lock screen and media notification controls with external pause mirroring.
+- A practice calendar and streak on the Profile page.
+- Home screen quick actions and a `simplyambient://` URL scheme for Shortcuts and automations.
+- Seamless three-minute loops for the long nature recordings, cutting bundled audio from about 60 MB to 18 MB.
 
 ## What changed in 2.0.0
 
@@ -55,7 +64,25 @@ The primary interface is beat-first: choose a perceived beat from 0 to 40 Hz, th
 
 ### Offline soundscapes
 
-Soft Rain, Ocean Tide, Forest Air, Trickling Stream, Hearth, White Noise, Pink Noise, Brown Noise, Night Breeze, Summer Night, Distant Thunder, Airplane Cabin, and Night Train are available without an account. The active panel changes atmosphere to match the selected scene.
+Soft Rain, Ocean Tide, Forest Air, Trickling Stream, Hearth, White Noise, Pink Noise, Brown Noise, Night Breeze, Summer Night, Distant Thunder, Airplane Cabin, Night Train, Box Fan, Ceiling Fan, Desk Fan, and Vent Hum are available without an account. The active panel changes atmosphere to match the selected scene, and the three fans take a Low, Medium, or High speed.
+
+Seven scenes are bundled recordings (the long nature beds ship as seamless three-minute loops). The rest are generated on the device by `lib/soundscapeSynth.ts`, which the native WAV renderer and the web engine share, so both platforms produce the same sound.
+
+### Saved mixes
+
+Saving a preset while a soundscape plays offers to include it. The saved mix restores the soundscape, its volume, the tone volume, and the fan speed when applied.
+
+### Lock screen and shortcuts
+
+On Android and iOS the playing tone, or the soundscape when no tone runs, owns the lock screen and media notification controls. Long-pressing the app icon offers Deep Sleep, Morning Focus, Box Breathing, and Soundscapes, and the app answers `simplyambient://` links:
+
+```text
+simplyambient://tones
+simplyambient://breathe/box
+simplyambient://routine/deep-sleep
+simplyambient://soundscape/boxfan
+simplyambient://more/mood
+```
 
 ### Session paths
 
@@ -94,6 +121,7 @@ AI Insights is optional. It uses a Gemini API key supplied by the user and sends
 - React Native SVG and Phosphor icons
 - AsyncStorage for local data and Expo SecureStore for the native Gemini key
 - Expo Notifications, Haptics, Store Review, and Document Picker
+- `expo-quick-actions` for home screen shortcuts and React Native Linking for the `simplyambient://` scheme
 - Sentry for filtered anonymous crash diagnostics
 - Google Gemini API for opt-in journal and tarot reflections
 - Jest, TypeScript, Playwright capture checks, and GitHub Actions
@@ -141,7 +169,7 @@ MoreUI.tsx              Shared More-room cards and visual primitives
 SoundscapeScenes.tsx    Animated art for each soundscape
 OnboardingView.tsx      First-run intent, guidance, privacy, and tips
 moreNavigation.ts       Pinnable More-page metadata and navbar labels
-lib/                    Audio math, content, lunar math, review gate, utilities
+lib/                    Audio math, soundscape synth, practice log, shortcuts, content, lunar math, review gate
 api/                    Stateless web proxies for public horoscope/tarot APIs
 assets/soundscapes/     Bundled offline recordings
 __tests__/              Unit and content regression tests
@@ -155,6 +183,7 @@ Current priorities are distribution and reliability rather than adding another l
 - Complete Play testing and production review
 - Finish Natal Chart and Compatibility before enabling them
 - Add export or backup for local journals and presets
+- Ship the iOS build (bundle id, background audio, and URL scheme are already configured)
 - Explore home-screen widgets and wearable controls
 - Continue audio-level, device, accessibility, and battery testing
 

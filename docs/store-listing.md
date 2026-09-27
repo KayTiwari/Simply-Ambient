@@ -12,7 +12,7 @@ Copy-ready source for Google Play Console and future App Store Connect metadata.
 
 ## Promotional description (170 characters maximum)
 
-> Shape a binaural tone, layer 13 offline soundscapes, follow guided breathwork or a listening path, and keep reflection tools close without an account.
+> Shape a binaural tone, layer 17 offline soundscapes, follow guided breathwork or a listening path, and keep reflection tools close without an account.
 
 ## Full description
 
@@ -27,11 +27,12 @@ Simply Ambient is a calm, private space for sound and breath. Shape your own bin
 • Layer a binaural tone, a built-in soundscape, and your own audio file
 • Choose a preset or custom sleep timer
 
-**Thirteen offline soundscapes**
+**Seventeen offline soundscapes**
 
 • Soft Rain, Ocean Tide, Forest Air, Trickling Stream, and Hearth
 • White, Pink, and Brown Noise
 • Night Breeze, Summer Night, Distant Thunder, Airplane Cabin, and Night Train
+• Box Fan, Ceiling Fan, Desk Fan, and Vent Hum, with Low, Medium, and High fan speeds
 • Independent volume and animated atmosphere that matches the active scene
 
 **Listening paths**

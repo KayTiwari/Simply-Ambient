@@ -2,6 +2,17 @@
 
 This file records user-facing Simply Ambient releases. Version 2.0.0 is compared with the previous finished Android production build, 1.0.5.
 
+## 2.1.0 · September 2026
+
+- Four new soundscapes: Box Fan, Ceiling Fan, Desk Fan, and Vent Hum, grouped under FANS & VENTS. The three fans take a Low, Medium, or High speed from the player card; the setting is remembered and a fan that is already turning changes speed in place. Each has its own animated scene: spinning rotors, an oscillating desk fan, and breathing vent slats.
+- Saving a preset while a soundscape plays now offers to save it as a mix. The mix keeps the soundscape, its volume, the tone volume, and the fan speed, and applying it brings the soundscape lane back.
+- Lock screen and media notification controls on Android and iOS show the current band and beat, or the soundscape, and a pause from the lock screen or a headphone button is reflected in the app.
+- The Profile page keeps a practice calendar: days with five minutes or more of listening, a finished breath session, a mood check-in, or a gratitude entry, plus the current streak and days logged. Mood and gratitude days from earlier versions appear too.
+- Long-press the app icon for Deep Sleep, Morning Focus, Box Breathing, or Soundscapes. The app also answers `simplyambient://` links such as `simplyambient://routine/deep-sleep` and `simplyambient://breathe/box`, so the iOS Shortcuts app and Android automations can start a session.
+- The sleep timer eases audio out on the web build the way it already did on native.
+- Soft Rain, Trickling Stream, and Forest Air ship as seamless three-minute loops instead of the full-length recordings, taking bundled audio from about 60 MB to 18 MB with no change in level.
+- Under the hood, every procedural soundscape now comes from one shared generator on native and web, so the two platforms produce the same sound.
+
 ## 2.0.1 · July 2026
 
 - Soundscapes now starts pinned in the navbar, so it is one tap away on a fresh install. Tap the pin on its page to remove it; the choice sticks across launches.
