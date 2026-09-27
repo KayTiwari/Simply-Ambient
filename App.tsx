@@ -621,7 +621,7 @@ const SOUNDSCAPE_GAIN: Record<SoundscapeKey, number> = {
   train: 1,
   // Fans and the vent land near -20 dBFS effective at medium speed, between
   // Airplane Cabin and Night Train; see __tests__/soundscapeSynth.test.ts.
-  boxfan: 0.65,
+  boxfan: 0.62,
   ceilingfan: 0.60,
   deskfan: 1,
   vent: 0.72,

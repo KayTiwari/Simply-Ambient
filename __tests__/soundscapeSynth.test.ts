@@ -20,7 +20,7 @@ const FAN_KEYS = ['boxfan', 'ceilingfan', 'deskfan'] as const;
 
 // Mirrors SOUNDSCAPE_GAIN in App.tsx for the generated scenes under test.
 const GAIN: Partial<Record<SoundscapeKey, number>> = {
-  cabin: 0.90, train: 1, boxfan: 0.65, ceilingfan: 0.60, deskfan: 1, vent: 0.72,
+  cabin: 0.90, train: 1, boxfan: 0.62, ceilingfan: 0.60, deskfan: 1, vent: 0.72,
 };
 
 type Stats = { rms: number; peak: number; leftRms: number; rightRms: number };

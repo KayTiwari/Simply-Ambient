@@ -153,27 +153,30 @@ type FanProfile = {
   breath: number;       // brighter noise on top of the bed
   hum: number;          // motor tone level
   lowPass: number;      // one-pole coefficient for the bed (higher is darker)
+  hiss: number;         // raw white noise as a fraction of breath (static)
 };
 
 const BOX_FAN: Record<FanSpeed, FanProfile> = {
   // 4-second loop: rotation rates are multiples of 0.25 Hz.
-  low:    { rotationHz: 14, blades: 5, chop: 0.16, wobble: 0.05, air: 0.30, breath: 0.030, hum: 0.014, lowPass: 0.9975 },
-  medium: { rotationHz: 18, blades: 5, chop: 0.18, wobble: 0.06, air: 0.34, breath: 0.046, hum: 0.018, lowPass: 0.9965 },
-  high:   { rotationHz: 22, blades: 5, chop: 0.20, wobble: 0.07, air: 0.38, breath: 0.066, hum: 0.022, lowPass: 0.9950 },
+  // Mostly moving air: the bright breath and raw hiss stay low so the
+  // blade chop reads as air, never as static.
+  low:    { rotationHz: 14, blades: 5, chop: 0.16, wobble: 0.05, air: 0.32, breath: 0.012, hum: 0.014, lowPass: 0.9978, hiss: 0.04 },
+  medium: { rotationHz: 18, blades: 5, chop: 0.18, wobble: 0.06, air: 0.36, breath: 0.018, hum: 0.018, lowPass: 0.9970, hiss: 0.04 },
+  high:   { rotationHz: 22, blades: 5, chop: 0.20, wobble: 0.07, air: 0.40, breath: 0.026, hum: 0.022, lowPass: 0.9960, hiss: 0.04 },
 };
 
 const CEILING_FAN: Record<FanSpeed, FanProfile> = {
   // 6-second loop: rotation rates are multiples of 1/6 Hz.
-  low:    { rotationHz: 1,   blades: 5, chop: 0.34, wobble: 0.10, air: 0.40, breath: 0.010, hum: 0.006, lowPass: 0.9985 },
-  medium: { rotationHz: 1.5, blades: 5, chop: 0.38, wobble: 0.12, air: 0.42, breath: 0.016, hum: 0.008, lowPass: 0.9980 },
-  high:   { rotationHz: 2.5, blades: 5, chop: 0.42, wobble: 0.14, air: 0.44, breath: 0.024, hum: 0.010, lowPass: 0.9975 },
+  low:    { rotationHz: 1,   blades: 5, chop: 0.34, wobble: 0.10, air: 0.40, breath: 0.010, hum: 0.006, lowPass: 0.9985, hiss: 0.18 },
+  medium: { rotationHz: 1.5, blades: 5, chop: 0.38, wobble: 0.12, air: 0.42, breath: 0.016, hum: 0.008, lowPass: 0.9980, hiss: 0.18 },
+  high:   { rotationHz: 2.5, blades: 5, chop: 0.42, wobble: 0.14, air: 0.44, breath: 0.024, hum: 0.010, lowPass: 0.9975, hiss: 0.18 },
 };
 
 const DESK_FAN: Record<FanSpeed, FanProfile> = {
   // 10-second loop (one oscillation sweep): rotation rates are multiples of 0.1 Hz.
-  low:    { rotationHz: 18, blades: 3, chop: 0.14, wobble: 0.04, air: 0.26, breath: 0.040, hum: 0.012, lowPass: 0.9970 },
-  medium: { rotationHz: 24, blades: 3, chop: 0.16, wobble: 0.05, air: 0.28, breath: 0.056, hum: 0.016, lowPass: 0.9960 },
-  high:   { rotationHz: 30, blades: 3, chop: 0.18, wobble: 0.06, air: 0.30, breath: 0.076, hum: 0.020, lowPass: 0.9950 },
+  low:    { rotationHz: 18, blades: 3, chop: 0.14, wobble: 0.04, air: 0.26, breath: 0.040, hum: 0.012, lowPass: 0.9970, hiss: 0.18 },
+  medium: { rotationHz: 24, blades: 3, chop: 0.16, wobble: 0.05, air: 0.28, breath: 0.056, hum: 0.016, lowPass: 0.9960, hiss: 0.18 },
+  high:   { rotationHz: 30, blades: 3, chop: 0.18, wobble: 0.06, air: 0.30, breath: 0.076, hum: 0.020, lowPass: 0.9950, hiss: 0.18 },
 };
 
 export const DESK_FAN_SWEEP_SECONDS = 10;
@@ -327,7 +330,7 @@ export function createSoundscapeVoice(kind: SoundscapeKey, options: VoiceOptions
           // Motor hum sits at twice the rotation rate (a two-pole motor) with
           // a softer octave above it.
           const hum = (Math.sin(rotation * 2) * 0.7 + Math.sin(rotation * 4 + 0.6) * 0.3) * p.hum;
-          const bed = fanLow * p.air * 1.7 + pink * p.breath + white * p.breath * 0.18;
+          const bed = fanLow * p.air * 1.7 + pink * p.breath + white * p.breath * p.hiss;
           const body = bed * chop * wobble + hum;
 
           if (kind === 'ceilingfan') {
