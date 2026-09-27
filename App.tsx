@@ -5,6 +5,7 @@ import {
   Alert,
   Animated,
   AppState,
+  Linking,
   Easing,
   Keyboard,
   KeyboardAvoidingView,
@@ -134,10 +135,17 @@ import BreathworkView from './BreathworkView';
 import ChakrasView from './ChakrasView';
 import HoroscopesView from './HoroscopesView';
 import MoreView, {
+  findRoutine,
   type NotifPref,
   type RoutinePathPayload,
   type RoutinePathStep,
 } from './MoreView';
+import {
+  parseQuickAction,
+  parseShortcutUrl,
+  QUICK_ACTIONS,
+  type ShortcutTarget,
+} from './lib/shortcuts';
 import OnboardingView from './OnboardingView';
 import {
   DEFAULT_PINNED_MORE_PAGES,
@@ -1584,6 +1592,8 @@ function AppContent() {
   const [moreActivePage, setMoreActivePage] = useState<MorePageId | null>(null);
   // Deep links into any More room; `hub` returns from a room to More's index.
   const [morePageRequest, setMorePageRequest] = useState<MorePageId | 'hub' | null>(null);
+  // A technique a deep link or quick action asked the Breathe tab to open.
+  const [breathRequest, setBreathRequest] = useState<string | null>(null);
   // Tab crossfade, as the released app had it. The incoming tab is reset to
   // invisible during the render that swaps tabs, and the fade starts one
   // frame after it commits, so a slow mount never paints a bright flash or
@@ -2262,6 +2272,81 @@ function AppContent() {
   function requestStopRoutine() {
     stopTones();
   }
+
+  // --- Deep links and home screen quick actions ------------------------------
+
+  function applyShortcut(target: ShortcutTarget) {
+    switch (target.kind) {
+      case 'tones':
+        switchTab('frequencies');
+        return;
+      case 'breathe':
+        switchTab('breath', () => { if (target.techniqueId) setBreathRequest(target.techniqueId); });
+        return;
+      case 'routine': {
+        const path = findRoutine(target.id);
+        switchTab('more', () => setMorePageRequest('routines'));
+        if (path) requestStartRoutine(path);
+        return;
+      }
+      case 'soundscape': {
+        const scape = SOUNDSCAPES.find(s => s.id === target.id);
+        switchTab('more', () => setMorePageRequest('soundscapes'));
+        if (scape) playSoundscape(scape.id);
+        return;
+      }
+      case 'more': {
+        if (target.page === 'hub') { openMoreHub(); return; }
+        if (target.page in MORE_PAGE_META) {
+          switchTab('more', () => setMorePageRequest(target.page as MorePageId));
+        } else {
+          openMoreHub();
+        }
+        return;
+      }
+    }
+  }
+
+  const applyShortcutRef = useRef(applyShortcut);
+  useEffect(() => { applyShortcutRef.current = applyShortcut; });
+
+  useEffect(() => {
+    let cancelled = false;
+    const handleUrl = (url: string | null) => {
+      const target = parseShortcutUrl(url);
+      if (target && !cancelled) applyShortcutRef.current(target);
+    };
+    Linking.getInitialURL().then(handleUrl).catch(() => {});
+    const urlSub = Linking.addEventListener('url', event => handleUrl(event.url));
+
+    // Quick actions are native only. The module is required lazily so the web
+    // bundle and Expo Go, which lack the native side, never evaluate it.
+    let quickSub: { remove(): void } | null = null;
+    if (Platform.OS !== 'web') {
+      try {
+        const QuickActions = require('expo-quick-actions') as typeof import('expo-quick-actions');
+        QuickActions.setItems(QUICK_ACTIONS.map(item => ({
+          id: item.id,
+          title: item.title,
+          subtitle: item.subtitle,
+          // SF Symbols exist only on iOS; Android falls back to the app icon.
+          icon: Platform.OS === 'ios' ? item.icon : undefined,
+          params: item.params,
+        }))).catch(() => {});
+        const initial = parseQuickAction(QuickActions.initial);
+        if (initial) setTimeout(() => { if (!cancelled) applyShortcutRef.current(initial); }, 0);
+        quickSub = QuickActions.addListener(action => {
+          const target = parseQuickAction(action);
+          if (target && !cancelled) applyShortcutRef.current(target);
+        });
+      } catch {}
+    }
+    return () => {
+      cancelled = true;
+      urlSub.remove();
+      quickSub?.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', nextState => {
@@ -3068,6 +3153,8 @@ function AppContent() {
                 beatHz={beat}
                 bandName={displayBandName}
                 bandColor={beatColor}
+                requestedTechniqueId={breathRequest}
+                onRequestedTechniqueHandled={() => setBreathRequest(null)}
               />
             )}
             {tab === 'chakras' && (

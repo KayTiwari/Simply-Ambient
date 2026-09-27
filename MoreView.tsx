@@ -4761,6 +4761,11 @@ function NatalChartPage({ onBack }: { onBack: () => void }) {
 
 type Routine = RoutinePathPayload & { description: string; color: string };
 
+// Deep links and quick actions name a path by id; App starts it from here.
+export function findRoutine(id: string): RoutinePathPayload | null {
+  return SAMPLE_ROUTINES.find(r => r.id === id) ?? null;
+}
+
 const ROUTINE_BAND_LABELS: Record<RoutineBandTarget, string> = {
   delta: 'Delta',
   theta: 'Theta',

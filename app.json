@@ -2,6 +2,7 @@
   "expo": {
     "name": "Simply Ambient",
     "slug": "simply-ambient",
+    "scheme": "simplyambient",
     "version": "2.0.1",
     "description": "A calm, private space for binaural tones, offline soundscapes, guided breathing, and daily reflection.",
     "orientation": "portrait",
@@ -70,7 +71,8 @@
           "organization": "like-chess"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-quick-actions"
     ],
     "extra": {
       "eas": {

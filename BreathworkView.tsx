@@ -47,10 +47,20 @@ type Props = {
   beatHz: number;
   bandName: string;
   bandColor: string;
+  requestedTechniqueId?: string | null;
+  onRequestedTechniqueHandled?: () => void;
 };
 
-export default function BreathworkView({ toneIsPlaying, beatHz, bandName, bandColor }: Props) {
+export default function BreathworkView({
+  toneIsPlaying, beatHz, bandName, bandColor, requestedTechniqueId = null, onRequestedTechniqueHandled,
+}: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  // A deep link or quick action can open straight into a technique.
+  useEffect(() => {
+    if (!requestedTechniqueId) return;
+    if (TECHNIQUES.some(t => t.id === requestedTechniqueId)) setActiveId(requestedTechniqueId);
+    onRequestedTechniqueHandled?.();
+  }, [requestedTechniqueId, onRequestedTechniqueHandled]);
   const libraryOffset = useRef(0);
   const technique = TECHNIQUES.find(t => t.id === activeId) ?? null;
   const accent = technique?.color ?? bandColor;
