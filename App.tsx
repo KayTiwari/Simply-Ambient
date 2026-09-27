@@ -513,7 +513,17 @@ type UserPreset = {
   leftHz: number;
   rightHz: number;
   createdAt: number;
+  // A saved mix also captures the soundscape lane. Older presets have none of
+  // these and apply exactly as before.
+  soundscapeId?: SoundscapeKey;
+  soundscapeVolume?: number;
+  fanSpeed?: FanSpeed;
+  toneVolume?: number;
 };
+
+function presetSoundscape(p: UserPreset): Soundscape | null {
+  return p.soundscapeId ? SOUNDSCAPES.find(s => s.id === p.soundscapeId) ?? null : null;
+}
 
 type TuningPreset = {
   id: string;
@@ -1651,6 +1661,7 @@ function AppContent() {
   const [userPresets, setUserPresets] = useState<UserPreset[]>([]);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveName, setSaveName] = useState('');
+  const [saveIncludesSoundscape, setSaveIncludesSoundscape] = useState(true);
 
   const [bgFileName, setBgFileName] = useState<string | null>(null);
   const [bgUri, setBgUri] = useState<string | null>(null);
@@ -2374,6 +2385,19 @@ function AppContent() {
     const beatHz = Math.abs(p.leftHz - p.rightHz);
     setActiveBand(beatHz === 0 ? 'tuning' : bandFor(beatHz).key);
     if (stateRef.current.isTonePlaying) loadAndPlay(p.leftHz, p.rightHz);
+    // A saved mix restores its soundscape lane too. The tone keeps the preset
+    // rule above: it changes if it is playing and waits for Play otherwise.
+    const mixScape = presetSoundscape(p);
+    if (mixScape) {
+      if (typeof p.toneVolume === 'number') changeToneVolume(p.toneVolume);
+      if (typeof p.soundscapeVolume === 'number') changeSoundscapeVolume(clamp01(p.soundscapeVolume));
+      if (isFanSoundscape(mixScape.id) && isFanSpeed(p.fanSpeed) && p.fanSpeed !== fanSpeedRef.current) {
+        fanSpeedRef.current = p.fanSpeed;
+        setFanSpeed(p.fanSpeed);
+        AsyncStorage.setItem(STORAGE_KEY_FAN_SPEED, p.fanSpeed).catch(() => {});
+      }
+      playSoundscape(mixScape.id);
+    }
   }
 
   function applyTuning(t: TuningPreset) {
@@ -2439,7 +2463,8 @@ function AppContent() {
   }
 
   function openSaveModal() {
-    setSaveName(`${beat} Hz mix`);
+    setSaveName(activeSoundscape ? `${beat} Hz · ${activeSoundscape.name}` : `${beat} Hz mix`);
+    setSaveIncludesSoundscape(true);
     setShowSaveModal(true);
   }
 
@@ -2450,6 +2475,12 @@ function AppContent() {
       id: `u_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       name, leftHz, rightHz, createdAt: Date.now(),
     };
+    if (activeSoundscape && saveIncludesSoundscape) {
+      preset.soundscapeId = activeSoundscape.id;
+      preset.soundscapeVolume = soundscapeVolume;
+      preset.toneVolume = toneVolume;
+      if (isFanSoundscape(activeSoundscape.id)) preset.fanSpeed = fanSpeed;
+    }
     setUserPresets(curr => [preset, ...curr]);
     setActivePresetId(preset.id);
     setShowSaveModal(false);
@@ -3004,8 +3035,25 @@ function AppContent() {
           <View style={styles.modalBackdrop}>
             <TouchableWithoutFeedback>
               <View style={styles.modalCard}>
-                <Text style={styles.modalTitle}>Save preset</Text>
+                <Text style={styles.modalTitle}>{activeSoundscape && saveIncludesSoundscape ? 'Save mix' : 'Save preset'}</Text>
                 <Text style={styles.modalSub}>L {leftHz} Hz · R {rightHz} Hz · beat {beat} Hz</Text>
+                {activeSoundscape ? (
+                  <TouchableOpacity
+                    onPress={() => setSaveIncludesSoundscape(v => !v)}
+                    style={styles.modalToggleRow}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: saveIncludesSoundscape }}
+                    accessibilityLabel={`Include ${activeSoundscape.name} in this mix`}
+                  >
+                    <View style={[styles.modalCheck, saveIncludesSoundscape && { backgroundColor: activeSoundscape.color, borderColor: activeSoundscape.color }]}>
+                      {saveIncludesSoundscape ? <Text style={styles.modalCheckMark}>✓</Text> : null}
+                    </View>
+                    <Text style={styles.modalToggleText}>
+                      Include {activeSoundscape.name}
+                      {isFanSoundscape(activeSoundscape.id) ? ` (${fanSpeed})` : ''} at {Math.round(soundscapeVolume * 100)}%
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
                 <TextInput
                   style={styles.modalInput}
                   value={saveName}
@@ -4003,12 +4051,16 @@ function FrequenciesView(props: FreqViewProps) {
                 onLongPress={() => props.onDeleteUser(p)}
                 style={styles.userPresetApply}
                 accessibilityRole="button"
-                accessibilityLabel={`Apply preset ${p.name}`}
+                accessibilityLabel={presetSoundscape(p) ? `Apply mix ${p.name} with ${presetSoundscape(p)!.name}` : `Apply preset ${p.name}`}
                 accessibilityState={{ selected: active }}
               >
                 <Text style={[styles.presetName, { color: active ? '#0B0B1F' : '#fff' }]}>{p.name}</Text>
                 <Text style={[styles.presetRange, { color: active ? '#0B0B1F99' : '#ffffff88' }]}>L {p.leftHz} · R {p.rightHz}</Text>
-                <Text style={[styles.presetBlurb, { color: active ? '#0B0B1F99' : '#ffffff66' }]}>beat {Math.abs(p.rightHz - p.leftHz)} Hz</Text>
+                <Text style={[styles.presetBlurb, { color: active ? '#0B0B1F99' : '#ffffff66' }]} numberOfLines={1}>
+                  {presetSoundscape(p)
+                    ? `beat ${Math.abs(p.rightHz - p.leftHz)} Hz + ${presetSoundscape(p)!.name}`
+                    : `beat ${Math.abs(p.rightHz - p.leftHz)} Hz`}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => props.onDeleteUser(p)}
@@ -4872,6 +4924,13 @@ const styles = StyleSheet.create({
     marginTop: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
   },
   modalRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14 },
+  modalToggleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, minHeight: 32 },
+  modalCheck: {
+    width: 20, height: 20, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
+    alignItems: 'center', justifyContent: 'center', marginRight: 10,
+  },
+  modalCheckMark: { color: '#0B0B1F', fontSize: 13, fontWeight: '800', lineHeight: 15 },
+  modalToggleText: { color: '#ffffffcc', fontSize: 13, flex: 1 },
   modalBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12, marginLeft: 8 },
   modalBtnGhost: { backgroundColor: 'rgba(255,255,255,0.08)' },
   modalBtnGhostText: { color: '#fff', fontWeight: '600' },
