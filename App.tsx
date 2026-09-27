@@ -323,6 +323,12 @@ import {
   type SoundscapeKey,
   type SoundscapeVoice,
 } from './lib/soundscapeSynth';
+import {
+  loadPracticeLog,
+  recordPractice,
+  type PracticeKind,
+  type PracticeLog,
+} from './lib/practiceLog';
 const STORAGE_KEY = '@binaural_user_presets_v1';
 const STORAGE_KEY_ZODIAC = '@simply_ambient_zodiac_v1';
 const STORAGE_KEY_STREAK = '@simply_ambient_streak_v1';
@@ -357,6 +363,16 @@ export async function recordActivity() {
     const next = { lastDate: today, count: lastDate === yKey ? count + 1 : 1 };
     await AsyncStorage.setItem(STORAGE_KEY_STREAK, JSON.stringify(next));
   } catch {}
+}
+
+// Practice history behind the Profile calendar: listening sessions, breath
+// sessions, mood check-ins, and gratitude entries, one flag per local day.
+export function logPractice(kind: PracticeKind, date: Date = new Date()): Promise<void> {
+  return recordPractice(AsyncStorage, kind, date);
+}
+
+export function getPracticeLog(): Promise<PracticeLog> {
+  return loadPracticeLog(AsyncStorage);
 }
 
 // Returns the current streak (0 if last activity was before yesterday).
@@ -1924,6 +1940,35 @@ function AppContent() {
   useEffect(() => {
     stateRef.current = { leftHz, rightHz, isTonePlaying };
   }, [leftHz, rightHz, isTonePlaying]);
+
+  // Listening for five minutes or more marks the day as practiced. The timer
+  // logs it mid-session; the stop path re-checks by wall clock in case Doze
+  // deferred the timer while the screen was off.
+  const LISTEN_PRACTICE_MS = 5 * 60 * 1000;
+  const listenStartedAtRef = useRef<number | null>(null);
+  const listenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const anyAudioPlaying = isTonePlaying || isSoundscapePlaying;
+  useEffect(() => {
+    if (anyAudioPlaying) {
+      if (listenStartedAtRef.current == null) {
+        listenStartedAtRef.current = Date.now();
+        listenTimerRef.current = setTimeout(() => {
+          listenTimerRef.current = null;
+          logPractice('listen').catch(() => {});
+        }, LISTEN_PRACTICE_MS);
+      }
+      return;
+    }
+    if (listenTimerRef.current) {
+      clearTimeout(listenTimerRef.current);
+      listenTimerRef.current = null;
+    }
+    const startedAt = listenStartedAtRef.current;
+    listenStartedAtRef.current = null;
+    if (startedAt != null && Date.now() - startedAt >= LISTEN_PRACTICE_MS) {
+      logPractice('listen').catch(() => {});
+    }
+  }, [anyAudioPlaying]);
 
   const slideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const slideLastFireRef = useRef(0);

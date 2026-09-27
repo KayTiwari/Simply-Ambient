@@ -53,7 +53,16 @@ import { FAN_SPEEDS, isFanSoundscape, type FanSpeed } from './lib/soundscapeSynt
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CornerRipples, HeaderGlass } from './AmbientUI';
 
-import { recordActivity, getStreak, notify, scheduleGratitudeReminder } from './App';
+import { recordActivity, getStreak, notify, scheduleGratitudeReminder, logPractice, getPracticeLog } from './App';
+import {
+  PRACTICE_KINDS,
+  mergePracticeTimestamps,
+  practiceDayKey,
+  practiceStreak,
+  practicedDaysInMonth,
+  type PracticeKind,
+  type PracticeLog,
+} from './lib/practiceLog';
 import {
   buildTarotInterpretationPrompt,
   GEMINI_ERRORS,
@@ -465,6 +474,7 @@ export default function MoreView({
       .slice(0, 365);
     setMoodLog(next);
     AsyncStorage.setItem(STORAGE_MOOD, JSON.stringify(next)).catch(() => {});
+    logPractice('mood').catch(() => {});
   }
 
   // Retroactive mood logging from the calendar. Replaces any entries on the
@@ -477,6 +487,7 @@ export default function MoreView({
       .slice(0, 365);
     setMoodLog(next);
     AsyncStorage.setItem(STORAGE_MOOD, JSON.stringify(next)).catch(() => {});
+    logPractice('mood', new Date(ts)).catch(() => {});
   }
 
   // Removes every mood entry on the given local day (History delete).
@@ -493,6 +504,7 @@ export default function MoreView({
     setGratitude(next);
     AsyncStorage.setItem(STORAGE_GRAT, JSON.stringify(next)).catch(() => {});
     recordActivity().then(() => getStreak().then(setStreak)).catch(() => {});
+    logPractice('gratitude').catch(() => {});
   }
 
   function saveRant(text: string) {
@@ -825,6 +837,8 @@ export default function MoreView({
             <ProfilePage
               onBack={close}
               onProfileChange={next => setProfileName(next.name?.trim() || null)}
+              moodLog={moodLog}
+              gratitude={gratitude}
             />
           )}
           {page === 'natal' && (
@@ -4356,12 +4370,29 @@ function SunSignCard({
 function ProfilePage({
   onBack,
   onProfileChange,
+  moodLog,
+  gratitude,
 }: {
   onBack: () => void;
   onProfileChange?: (profile: Profile) => void;
+  moodLog: MoodEntry[];
+  gratitude: GratEntry[];
 }) {
   const subBodyPad = useSubBodyPad();
   const [profile, setProfile] = useState<Profile>({});
+  // Listening and breath days come from the practice log; mood and gratitude
+  // days are folded in from their own stores so history before the log
+  // existed still shows.
+  const [practiceLog, setPracticeLog] = useState<PracticeLog>({});
+  useEffect(() => {
+    getPracticeLog().then(setPracticeLog).catch(() => {});
+  }, []);
+  const practiceView = useMemo(() => mergePracticeTimestamps(practiceLog, [
+    ...moodLog.map(m => ({ ts: m.ts, kind: 'mood' as const })),
+    ...gratitude.map(g => ({ ts: g.ts, kind: 'gratitude' as const })),
+  ]), [practiceLog, moodLog, gratitude]);
+  const streakDays = practiceStreak(practiceView);
+  const totalDays = Object.keys(practiceView).length;
   const [answers, setAnswers] = useState<Array<0 | 1 | null>>([null, null, null, null]);
 
   useEffect(() => {
@@ -4439,6 +4470,23 @@ function ProfilePage({
             </View>
           </View>
         </GlowCard>
+
+        <Text style={styles.sectionLabel}>YOUR PRACTICE</Text>
+        <Text style={styles.sectionSub}>
+          Days you listened for five minutes or more, finished a breath session, checked in a
+          mood, or wrote a gratitude. Kept on this device.
+        </Text>
+        <View style={styles.pulseRow}>
+          <View style={styles.pulseChip}>
+            <Text style={[styles.pulseNum, { color: '#9DC7AC' }]}>{streakDays}</Text>
+            <Text style={styles.pulseCap}>DAY STREAK</Text>
+          </View>
+          <View style={styles.pulseChip}>
+            <Text style={[styles.pulseNum, { color: '#8FB8DE' }]}>{totalDays}</Text>
+            <Text style={styles.pulseCap}>{totalDays === 1 ? 'DAY LOGGED' : 'DAYS LOGGED'}</Text>
+          </View>
+        </View>
+        <PracticeCalendar log={practiceView} />
 
         <Text style={styles.sectionLabel}>YOUR COORDINATES</Text>
         <Text style={styles.sectionSub}>
@@ -5132,6 +5180,122 @@ function SoundscapesPage({
         <View style={styles.soundscapeGrid}>{machineScapes.map(renderCard)}</View>
       </StickySubpageScroll>
     </AmbientPageShell>
+  );
+}
+
+// ===========================================================================
+//   Practice calendar (Profile)
+// ===========================================================================
+
+const PRACTICE_COLORS: Record<PracticeKind, string> = {
+  listen: '#8FB8DE',
+  breath: '#9DC7AC',
+  mood: '#8F97DE',
+  gratitude: '#E0A470',
+};
+const PRACTICE_LABELS: Record<PracticeKind, string> = {
+  listen: 'Listening',
+  breath: 'Breath',
+  mood: 'Mood',
+  gratitude: 'Gratitude',
+};
+
+// Read-only month grid: a dot per kind of practice on each day. Same frame
+// as the mood backfill calendar so the two read as one family.
+function PracticeCalendar({ log }: { log: PracticeLog }) {
+  const [monthAnchor, setMonthAnchor] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+  const year = monthAnchor.getFullYear();
+  const month = monthAnchor.getMonth();
+  const now = new Date();
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: Array<number | null> = [
+    ...Array.from({ length: firstDow }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  const monthTitle = monthAnchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const monthCount = practicedDaysInMonth(log, year, month);
+
+  function shiftMonth(delta: number) {
+    setMonthAnchor(prev => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  }
+
+  return (
+    <View style={styles.calCard}>
+      <View style={styles.calHeader}>
+        <TouchableOpacity
+          onPress={() => shiftMonth(-1)}
+          style={styles.calNavBtn}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Previous month"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <CaretLeft size={16} color="#ffffff88" weight="regular" />
+        </TouchableOpacity>
+        <Text style={styles.calTitle}>{monthTitle}</Text>
+        <TouchableOpacity
+          onPress={() => shiftMonth(1)}
+          style={[styles.calNavBtn, isCurrentMonth && { opacity: 0.25 }]}
+          activeOpacity={0.7}
+          disabled={isCurrentMonth}
+          accessibilityRole="button"
+          accessibilityLabel="Next month"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <CaretRight size={16} color="#ffffff88" weight="regular" />
+        </TouchableOpacity>
+      </View>
+      <View style={styles.calGrid}>
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+          <Text key={`${d}${i}`} style={styles.calWeekday}>{d}</Text>
+        ))}
+        {cells.map((day, i) => {
+          if (day === null) return <View key={`b${i}`} style={styles.calCell} />;
+          const date = new Date(year, month, day, 12, 0, 0, 0);
+          const kinds = log[practiceDayKey(date)] ?? [];
+          const future = date.getTime() > Date.now() && date.toDateString() !== now.toDateString();
+          const isToday = date.toDateString() === now.toDateString();
+          const summary = kinds.length
+            ? kinds.map(k => PRACTICE_LABELS[k]).join(', ')
+            : 'no practice logged';
+          return (
+            <View
+              key={day}
+              style={[styles.calCell, isToday && styles.practiceToday]}
+              accessible
+              accessibilityLabel={`${date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}: ${summary}`}
+            >
+              <Text style={[styles.calDay, future && { color: '#ffffff28' }, kinds.length > 0 && { color: '#ffffff' }]}>
+                {day}
+              </Text>
+              <View style={styles.practiceDots}>
+                {kinds.slice(0, 4).map(k => (
+                  <View key={k} style={[styles.practiceDot, { backgroundColor: PRACTICE_COLORS[k] }]} />
+                ))}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      <View style={styles.practiceLegend}>
+        <Text style={styles.practiceLegendCount}>
+          {monthCount === 0 ? 'No days yet this month' : `${monthCount} ${monthCount === 1 ? 'day' : 'days'} this month`}
+        </Text>
+        {PRACTICE_KINDS.map(k => (
+          <View key={k} style={styles.practiceLegendItem}>
+            <View style={[styles.practiceDot, { backgroundColor: PRACTICE_COLORS[k] }]} />
+            <Text style={styles.practiceLegendText}>{PRACTICE_LABELS[k]}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -6347,6 +6511,16 @@ const styles = StyleSheet.create({
   calCellSelected: { backgroundColor: '#8FB8DE22', borderWidth: 1, borderColor: '#8FB8DE' },
   calDay: { color: '#ffffffcc', fontSize: 12, fontVariant: ['tabular-nums'] },
   calDot: { width: 4, height: 4, borderRadius: 2, marginTop: 2 },
+  practiceToday: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)' },
+  practiceDots: { flexDirection: 'row', gap: 2, marginTop: 3, minHeight: 4 },
+  practiceDot: { width: 4, height: 4, borderRadius: 2 },
+  practiceLegend: {
+    flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10,
+    marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  practiceLegendCount: { color: '#ffffffaa', fontSize: 11, marginRight: 'auto' },
+  practiceLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  practiceLegendText: { color: '#ffffff77', fontSize: 10, letterSpacing: 0.4 },
 
   graphLabelRow: {
     position: 'absolute', bottom: 6, left: 18, right: 18,

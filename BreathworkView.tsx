@@ -18,6 +18,7 @@ import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 import { buildCueWav } from './lib/binauralMath';
 import { maybeRequestReview, recordSessionCompleted } from './lib/rateApp';
+import { logPractice } from './App';
 import { TECHNIQUES, type Technique } from './lib/content';
 import {
   AmbientSurface,
@@ -604,6 +605,7 @@ function BreathSession({ technique, onBack }: { technique: Technique; onBack: ()
         } catch {}
       }
       recordSessionCompleted().catch(() => {});
+      logPractice('breath').catch(() => {});
       // A finished breath session is the calmest good moment in the app, so
       // it is the one place the (heavily gated, once-ever) review dialog may
       // appear. Delayed so the "Complete" state lands first.
